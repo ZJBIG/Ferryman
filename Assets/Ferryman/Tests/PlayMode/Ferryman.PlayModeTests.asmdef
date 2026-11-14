@@ -1,0 +1,6 @@
+{
+    "name": "Ferryman.PlayModeTests",
+    "rootNamespace": "Ferryman.Tests",
+    "references": ["Ferryman.Runtime"],
+    "optionalUnityReferences": ["TestAssemblies"]
+}
