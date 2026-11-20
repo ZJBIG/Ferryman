@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3eeb26cf30da4f699db1c5050fa24012, type: 3}
+  m_Name: DefaultVoyage
+  m_EditorClassIdentifier: 
+  id: prototype-route-v1
+  displayName: "\u8FD1\u6D77\u6446\u6E21\u822A\u7EBF"
+  vesselPrefab: {fileID: 7173089943932599496, guid: 25c59fd46a9b0b84daac789e91482640, type: 3}
+  stops:
+  - kind: 0
+    displayName: "\u51FA\u53D1\u5C9B"
+    sceneName: Departure
+    fixedEncounter: {fileID: 0}
+    fixedSpecialEvent: {fileID: 0}
+    boardingChance: 0.75
+    maxBoardingPassengers: 0
+  - kind: 1
+    displayName: "\u8FD1\u6D77\u822A\u6BB5"
+    sceneName: Sea
+    fixedEncounter: {fileID: 11400000, guid: 69cca0bc89ee33a4f9fc306aa358191e, type: 2}
+    fixedSpecialEvent: {fileID: 0}
+    boardingChance: 0.75
+    maxBoardingPassengers: 1
+  - kind: 0
+    displayName: "\u9014\u4E2D\u5C9B"
+    sceneName: Island
+    fixedEncounter: {fileID: 0}
+    fixedSpecialEvent: {fileID: 0}
+    boardingChance: 0.75
+    maxBoardingPassengers: 1
+  - kind: 1
+    displayName: "\u5916\u6D77\u822A\u6BB5"
+    sceneName: Sea
+    fixedEncounter: {fileID: 0}
+    fixedSpecialEvent: {fileID: 0}
+    boardingChance: 0.75
+    maxBoardingPassengers: 1
+  - kind: 0
+    displayName: "\u6700\u7EC8\u5C9B"
+    sceneName: FinalIsland
+    fixedEncounter: {fileID: 0}
+    fixedSpecialEvent: {fileID: 0}
+    boardingChance: 0.75
+    maxBoardingPassengers: 0
+  initialPassengers:
+  - {fileID: 11400000, guid: 54749bfdc975b38479a79c9d9786531b, type: 2}
+  - {fileID: 11400000, guid: 6703c365025ba154db65b438575a40ba, type: 2}
+  - {fileID: 11400000, guid: 56af141116db6ca4da2abd0a7ca7c5c8, type: 2}
+  - {fileID: 11400000, guid: 126dea6270cff194abd91c2ce9599f31, type: 2}
+  passengerPool:
+  - {fileID: 11400000, guid: 54749bfdc975b38479a79c9d9786531b, type: 2}
+  - {fileID: 11400000, guid: 6703c365025ba154db65b438575a40ba, type: 2}
+  - {fileID: 11400000, guid: 56af141116db6ca4da2abd0a7ca7c5c8, type: 2}
+  - {fileID: 11400000, guid: 126dea6270cff194abd91c2ce9599f31, type: 2}
+  randomEncounters:
+  - {fileID: 11400000, guid: f17a51c196a2b484ab52e84af7ca003d, type: 2}
+  specialEvents:
+  - definition: {fileID: 11400000, guid: f1d90f8d2e3fdbc4081c6dd66bf6e083, type: 2}
+    maxAppearances: 1
+  - definition: {fileID: 11400000, guid: 6f7a29485b534ea4da1e611b975ea304, type: 2}
+    maxAppearances: 1
+  enemyEncounterCount: 1
+  specialEventCount: 1
+  sailingSeconds: 8
+  transitionSeconds: 1
+  boardingNoticeSeconds: 3

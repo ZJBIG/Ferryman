@@ -6,6 +6,18 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Ferryman/Scenes/Departure.unity
+    guid: 27dd64bd0aaaf8548917ac7755408b1d
+  - enabled: 1
+    path: Assets/Ferryman/Scenes/Sea.unity
+    guid: 31682d87f3e60a1439b899c51d3bc6d0
+  - enabled: 1
+    path: Assets/Ferryman/Scenes/Island.unity
+    guid: 973376f91d85a54418a8b3b150cb1ca5
+  - enabled: 1
+    path: Assets/Ferryman/Scenes/FinalIsland.unity
+    guid: 22bccf8be26fa1c45b755716e5be166a
+  - enabled: 1
     path: Assets/Ferryman/Scenes/Prototype.unity
     guid: de4b933570bd70544933c8851a7c9013
   m_configObjects: {}

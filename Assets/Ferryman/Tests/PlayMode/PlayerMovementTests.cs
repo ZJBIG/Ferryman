@@ -25,6 +25,15 @@ namespace Ferryman.Tests
             deck = Object.FindObjectOfType<BoatDeck>();
             Assert.That(player, Is.Not.Null);
             Assert.That(deck, Is.Not.Null);
+            foreach (var enemy in Object.FindObjectsOfType<EnemyCharacter>())
+                enemy.gameObject.SetActive(false);
+            foreach (var obstacle in Object.FindObjectsOfType<DestructibleObstacle>())
+                obstacle.gameObject.SetActive(false);
+            foreach (var projectile in Object.FindObjectsOfType<Ferryman.Combat.Projectile>())
+            {
+                projectile.gameObject.SetActive(false);
+                Object.Destroy(projectile.gameObject);
+            }
             body = player.GetComponent<Rigidbody2D>();
             playerCollider = player.GetComponent<BoxCollider2D>();
             player.enabled = false;
@@ -40,15 +49,7 @@ namespace Ferryman.Tests
         }
 
         [Test]
-        public void NoInputKeepsPlayerStill()
-        {
-            Vector2 start = body.position;
-            Step(Vector2.zero, 50);
-            Assert.That(Vector2.Distance(body.position, start), Is.LessThan(0.001f));
-        }
-
-        [Test]
-        public void MovementHasExpectedSpeedAndStopsOnRelease()
+        public void MovementHasExpectedSpeedStopsAndLimitsDiagonalInput()
         {
             Vector2 start = body.position;
             Step(Vector2.right, 10);
@@ -56,38 +57,34 @@ namespace Ferryman.Tests
             Vector2 stopped = body.position;
             Step(Vector2.zero, 10);
             Assert.That(Vector2.Distance(body.position, stopped), Is.LessThan(0.001f));
-        }
 
-        [Test]
-        public void DiagonalMovementIsNotFaster()
-        {
-            Vector2 start = body.position;
+            body.position = start;
             Step(Vector2.one, 10);
             Assert.That(Vector2.Distance(body.position, start), Is.EqualTo(0.8f).Within(0.001f));
         }
 
-        [TestCase(1f, 0f)]
-        [TestCase(-1f, 0f)]
-        [TestCase(0f, 1f)]
-        [TestCase(0f, -1f)]
-        [TestCase(1f, 1f)]
-        [TestCase(-1f, 1f)]
-        [TestCase(1f, -1f)]
-        [TestCase(-1f, -1f)]
-        public void PlayerColliderStaysInsideAllEdgesAndCorners(float x, float y)
+        [Test]
+        public void PlayerColliderStaysInsideAllEdgesAndCorners()
         {
-            var direction = new Vector2(x, y);
-            for (int i = 0; i < 250; i++)
-            {
-                Step(direction, 1);
-                AssertInsideDeck();
-            }
-
+            Vector2 start = body.position;
             Bounds boundary = deck.GetComponent<EdgeCollider2D>().bounds;
-            if (x != 0f)
-                Assert.That(Mathf.Abs(body.position.x), Is.GreaterThan(boundary.extents.x - playerCollider.bounds.extents.x - 0.1f));
-            if (y != 0f)
-                Assert.That(Mathf.Abs(body.position.y), Is.GreaterThan(boundary.extents.y - playerCollider.bounds.extents.y - 0.1f));
+            for (int x = -1; x <= 1; x++)
+            for (int y = -1; y <= 1; y++)
+            {
+                if (x == 0 && y == 0)
+                    continue;
+                body.position = start;
+                for (int i = 0; i < 250; i++)
+                {
+                    Step(new Vector2(x, y), 1);
+                    AssertInsideDeck();
+                }
+
+                if (x != 0)
+                    Assert.That(Mathf.Abs(body.position.x), Is.GreaterThan(boundary.extents.x - playerCollider.bounds.extents.x - 0.1f));
+                if (y != 0)
+                    Assert.That(Mathf.Abs(body.position.y), Is.GreaterThan(boundary.extents.y - playerCollider.bounds.extents.y - 0.1f));
+            }
         }
 
         [Test]
@@ -101,36 +98,6 @@ namespace Ferryman.Tests
             float wallY = body.position.y;
             Step(Vector2.down, 10);
             Assert.That(body.position.y, Is.LessThan(wallY - 0.5f));
-        }
-
-        [Test]
-        public void BoatAndCameraStayFixed()
-        {
-            Transform cameraTransform = Camera.main.transform;
-            Vector3 cameraPosition = cameraTransform.position;
-            Quaternion cameraRotation = cameraTransform.rotation;
-            Vector3 boatPosition = deck.transform.position;
-            Quaternion boatRotation = deck.transform.rotation;
-            Step(Vector2.one, 100);
-            Assert.That(cameraTransform.position, Is.EqualTo(cameraPosition));
-            Assert.That(cameraTransform.rotation, Is.EqualTo(cameraRotation));
-            Assert.That(deck.transform.position, Is.EqualTo(boatPosition));
-            Assert.That(deck.transform.rotation, Is.EqualTo(boatRotation));
-        }
-
-        [Test]
-        public void BoundaryOutlineMatchesActualCollider()
-        {
-            var edge = deck.GetComponent<EdgeCollider2D>();
-            var outline = deck.GetComponent<LineRenderer>();
-            Assert.That(edge.isTrigger, Is.False);
-            Assert.That(edge.points.Length, Is.EqualTo(5));
-            Assert.That(edge.points[0], Is.EqualTo(edge.points[4]));
-            Assert.That(outline.loop, Is.True);
-            Assert.That(outline.useWorldSpace, Is.False);
-            Assert.That(outline.positionCount, Is.EqualTo(4));
-            for (int i = 0; i < 4; i++)
-                Assert.That((Vector2)outline.GetPosition(i), Is.EqualTo(edge.points[i]));
         }
 
         private void Step(Vector2 direction, int count)

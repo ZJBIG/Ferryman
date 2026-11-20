@@ -1,8 +1,6 @@
-using UnityEngine;
-
 namespace Ferryman.Characters
 {
-    public sealed class CrewMember : MonoBehaviour
+    public sealed class CrewMember : Character
     {
     }
 }
