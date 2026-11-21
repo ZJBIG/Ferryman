@@ -23,7 +23,7 @@
 
 ## 预制体入口
 
-资源位于 `Assets/Ferryman/Prefabs`。15 个预制体的根节点缩放均为 1，显示与物理尺寸独立。Vessel 嵌套原 Boat 与 Player，素材替换保留现有 GUID 和序列化引用；五个场景共用新增的 `Environment/SeaEnvironment.prefab`。
+资源位于 `Assets/Ferryman/Prefabs`。15 个预制体的根节点缩放均为 1，显示与物理尺寸独立。Vessel 嵌套原 Boat 与 Player，素材替换保留现有 GUID 和序列化引用；main 与五个保留场景复用 `Environment/SeaEnvironment.prefab`。
 
 | 预制体 | 接入位置 | 用法 |
 | --- | --- | --- |
@@ -90,7 +90,9 @@
 
 ## 场景、航程和 UI
 
-Departure、Sea、Island、FinalIsland 和 Prototype 均使用共享 `Environment` 海面预制体。`Sea Motion/Sea Surface -1..2` 为海图，`Sailing Wake` 为船浪；三个岛屿场景另有 `Island and Dock/Ground`、`Landmarks`、`Shore Waves` 和 `Dock`。显示图层与甲板碰撞独立。
+完整游戏入口是 `Assets/Ferryman/Scenes/main.unity`。它只有一台相机，共享 `Environment/Sea Motion` 海面与 `Environment/Sailing Wake` 船浪。`Environment/Island Stops` 下的 Departure、Island、FinalIsland 分别包含 `Ground`、`Landmarks`、`Shore Waves` 和 `Dock`；航程只启用当前岛屿，海路关闭整个 Island Stops。出发、航行、停靠、结算和返家始终留在 main。
+
+Departure、Sea、Island、FinalIsland 和 Prototype 保留为原区域演示与回归夹具，也使用共享海面预制体。旧岛屿场景仍采用 `Environment/Island and Dock` 层级。`Sea Motion/Sea Surface -1..2` 为海图，`Sailing Wake` 为船浪；显示图层与甲板碰撞独立。
 
 交付素材位于 `Assets/Ferryman/Art/Scene`，共 15 张图片：
 
@@ -103,11 +105,11 @@ Departure、Sea、Island、FinalIsland 和 Prototype 均使用共享 `Environmen
 | 岛岸/岛屿海浪/岛屿海浪-1..3 | `Islands/ShoreWave1..3.png` | 同画布中心 Pivot、240 PPU，三帧循环 |
 | 岛岸/111岛岸示意 | `Islands/Ground.png` | 原包无独立地面；从示意图拆出公共地面，去除烘焙建筑、码头和岸浪，仅用同图地面克隆补齐遮挡区域；原图不修改 |
 
-船浪与岸浪各使用 6 FPS 的三帧循环 Animator。船浪与船只共用世界原点；岛岸各图层共用局部位置 `(1.278,7.1)`，避免帧间抖动。单独替换岛屿地面时保持其与建筑、码头及岸浪的画布对齐。
+船浪与岸浪各使用 6 FPS 的三帧循环 Animator，这是交付包中的全部帧动画。main 的三站岸浪分别绑定同一岸浪 Controller；船体、翅膀、建筑和码头保持交付的静态图。船浪与船只共用世界原点；岛岸各图层共用局部位置 `(1.278,7.1)`，避免帧间抖动。单独替换岛屿地面时保持其与建筑、码头及岸浪的画布对齐。
 
-`VoyageScenePresentation` 的 Sea Motion、Sailing Wake 和 Scroll Loop Width 决定滚动、水花启停及循环宽度。航行时滚动、事件时停止。船只进出场由 Controller 的左入/右出整体平移和 Fade 驱动；演出期间暂停角色刚体模拟，结束恢复行为。正式动画保持显示与实际甲板位置一致，避免额外动画化船根造成双重位移。
+`VoyageScenePresentation` 的 Sea Motion、Sailing Wake 和 Scroll Loop Width 决定滚动、水花启停及循环宽度。航行时滚动、事件时停止。main 另外绑定 Island Stops，按路线 `sceneName` 匹配岛屿子节点；重复海路和不同路线长度不依赖固定站点索引。区域切换在过场遮罩期间重置海面位置和镜头。船只进出场由 Controller 的左入/右出整体平移和 Fade 驱动；演出期间暂停角色刚体模拟，结束恢复行为。正式动画保持显示与实际甲板位置一致，避免额外动画化船根造成双重位移。
 
-摄像机固定 X=2.306；岛屿场景 Y=3.3、Size=8.6，Sea 的 Y=0、Size=6，Prototype 的 Y=0、Size=7。岛屿取景同时容纳建筑、码头和完整船体。Controller 读取 `VoyageScenePresentation.Camera Size` 作为场景基础尺寸并平滑切换；默认遭遇 Size=7.5，敌人移至船外 Y=6/6.5，避开新船体与翅膀构图。正式大型敌人素材仍属后续制作。
+摄像机固定 X=2.306；main 岛屿区域 Y=3.3、Size=8.6，海路 Y=0、Size=6；旧区域场景保持对应取景，Prototype 的 Y=0、Size=7。岛屿取景同时容纳建筑、码头和完整船体。main 的 Island Camera Height / Island Camera Size 与 Camera Size 配置两种基础取景。Controller 读取 `VoyageScenePresentation.CameraSize` 并平滑切换遭遇尺寸；默认遭遇 Size=7.5，敌人位于船外 Y=6/6.5，避开船体与翅膀构图。正式大型敌人素材仍属后续制作。
 
 `VoyageView` 为可停用的占位 IMGUI 显示。正式 UI 读取 `VoyageController` 的 Phase、Message、StopIndex、Passengers、Enemies、PendingReward、Progress、DeliveredPassengers 与 Fade；调用 StartVoyage、ResumeVoyage、AbandonVoyage、ReturnHome 或 RetrySettlement 对接现有流程。无需新增存档或伤害系统。
 
@@ -122,7 +124,7 @@ Departure、Sea、Island、FinalIsland 和 Prototype 均使用共享 `Environmen
 | 海面、海浪、泡沫、船尾水花 | 显示独立于碰撞，滚动与水花随 Sailing 阶段启停 |
 | 战斗岗位 NPC、维护岗位 NPC | 固定岗位，战斗不维修、维护不战斗；外观与工具用于识别岗位 |
 | 敌人投放炸弹表现 | 炸弹采用抛物线占位飞行，飞行中无碰撞，落地后开始引信；显示缩放不改变落点 |
-| 岛屿、码头、乘客及船只进出场 | 真实场景切换和自动上下客已接入，正式表现保留既有岗位/目的地和时间规则 |
+| 岛屿、码头、乘客及船只进出场 | main 内区域切换和自动上下客已接入，正式表现保留既有岗位/目的地和时间规则 |
 | 敌人 HP、眩晕、乘客、奖励和结算 UI | 读取既有状态与奖励数据；后续按用户方案接入正式表现 |
 | 大型敌人与特殊镜头 | 已提供可配置遭遇缩放，正式大型怪物素材不要求首批制作 |
 

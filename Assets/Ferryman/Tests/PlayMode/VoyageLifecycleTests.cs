@@ -27,6 +27,8 @@ namespace Ferryman.Tests
         private string directory;
         private float originalTimeScale;
         private SimulationMode2D originalSimulationMode;
+        private Scene mainScene;
+        private Transform islandStops;
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -99,7 +101,11 @@ namespace Ferryman.Tests
             directory = Path.Combine(Path.GetTempPath(), "FerrymanLifecycleTests", Guid.NewGuid().ToString("N"));
             CreateController();
             // The test controller is present before Bootstrap.Awake, so scenes never open the user's save store.
-            yield return SceneManager.LoadSceneAsync(definition.stops[0].sceneName);
+            yield return SceneManager.LoadSceneAsync("main");
+            mainScene = SceneManager.GetActiveScene();
+            islandStops = GameObject.Find("Environment").transform.Find("Island Stops");
+            Assert.That(islandStops, Is.Not.Null);
+            Assert.That(Object.FindObjectOfType<VoyageScenePresentation>().IsUnifiedScene, Is.True);
         }
 
         [UnityTearDown]
@@ -164,7 +170,7 @@ namespace Ferryman.Tests
 
             controller.ReturnHome();
             yield return WaitFor(() => controller.Phase == VoyagePhase.Departure, "return to the departure island");
-            Assert.That(SceneManager.GetActiveScene().name, Is.EqualTo(definition.stops[0].sceneName));
+            Assert.That(SceneManager.GetActiveScene().name, Is.EqualTo("main"));
             Assert.That(controller.StartVoyage(escort, 105), Is.True);
             QuiesceActors();
             Assert.That(controller.Vessel.Boat.CurrentHealth, Is.EqualTo(controller.Vessel.Boat.MaxHealth));
@@ -368,8 +374,20 @@ namespace Ferryman.Tests
 
         private void QuiesceActors()
         {
+            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(mainScene), "The complete voyage reloaded or left main.");
             if (controller == null)
                 return;
+            if (controller.Phase == VoyagePhase.Departure || controller.Phase == VoyagePhase.Island
+                || controller.Phase == VoyagePhase.Sailing || controller.Phase == VoyagePhase.Event
+                || controller.Phase == VoyagePhase.Success || controller.Phase == VoyagePhase.Failure)
+            {
+                VoyageStop stop = definition.stops[controller.StopIndex];
+                bool island = stop.kind == VoyageStopKind.Island;
+                Assert.That(islandStops.gameObject.activeSelf, Is.EqualTo(island));
+                foreach (Transform visual in islandStops)
+                    Assert.That(visual.gameObject.activeSelf, Is.EqualTo(island && visual.name == stop.sceneName),
+                        "The wrong island remains visible: " + visual.name);
+            }
             if (controller.Vessel != null)
                 foreach (var actor in controller.Vessel.GetComponentsInChildren<Character>())
                     actor.enabled = false;

@@ -1,14 +1,14 @@
 # Ferryman 项目约定
 
 - 引擎版本以 `ProjectSettings/ProjectVersion.txt` 为准：Unity 2022.3.62f3c1。项目使用现有 2D URP 和旧 Input Manager，不为本原型增加输入或镜头依赖。
-- 完整原型入口是 `Assets/Ferryman/Scenes/Departure.unity`；Sea、Island、FinalIsland 与独立回归夹具 Prototype 均已加入 Build Settings。原模板场景保留。
+- 完整游戏入口是 `Assets/Ferryman/Scenes/main.unity`，整轮在同一场景内切换海路与三站岛屿显示。main 为 Build Settings 首项；Departure、Sea、Island、FinalIsland 与独立回归夹具 Prototype 保留，共六个场景。原模板场景保留。
 - 业务代码、预制体和测试位于 `Assets/Ferryman`，脚本使用 `Ferryman` 命名空间。运行时代码与 PlayMode 测试分别使用 `Ferryman.Runtime` 和 `Ferryman.PlayModeTests` 程序集。
 - 当前已实现整个 V0.1 核心循环：战斗、投弹、船损维修、固定 NPC 岗位、自动线性航程、逐波事件、上下客、结算和检查点恢复。`Character` 共享受击/碰撞/阵营/动作开关，`CombatCharacter` 共享朝向与射击；战斗 NPC 不维修，维护 NPC 不战斗。
 - 玩家和友军受击只眩晕后恢复，不扣血或死亡；默认眩晕 1 秒，期间停止移动与攻击、免疫伤害，重复命中不延长眩晕。敌人覆写受击逻辑，生命归零后停止攻击并销毁。
 - 船体固定。甲板按交付船原画调整为 12×5，维修网格保持 1 单位。BoatDeck 用闭合 EdgeCollider2D 阻挡边缘，LineRenderer 与它共享顶点但关闭显示。不要改为覆盖整个甲板的实心碰撞箱。玩家使用无重力、锁旋转的动态刚体和完整 BoxCollider2D；朝向只旋转显示子物体，零摩擦材质保证沿边滑动。甲板石块单独提供实心碰撞。
 - 子弹使用无重力刚体与触发碰撞器，穿过甲板边界、发起者和友军；命中敌对角色后立即标记消耗并关闭碰撞器，只结算一次。眩晕目标仍消耗子弹。伤害被接受后才派发现有 UnityEvent；不新增对象池、事件总线、独立属性系统或镜头依赖。
 - 美术入口与尺寸约定见 `Docs/ArtIntegration.md`：显示放在子物体，根节点保持行为和碰撞；Muzzle 随显示转向，正式素材可关闭占位调色。死亡、清障及命中特效独立生成，特效预制体自行清理。不要让动画或视觉缩放移动根节点、改变碰撞尺寸。
-- 已接入 `Art/Scene` 的船、海面、岛岸和三帧水花，五个场景共用 `Prefabs/Environment/SeaEnvironment.prefab`。船体/翅膀/船浪保持同 PPU 和对齐 Pivot；岛屿地面从交付示意图拆层补齐，后续独立地面可替换。具体画布、Pivot 和镜头尺寸见美术说明。
+- 已接入 `Art/Scene` 的船、海面、岛岸和三帧水花，main 与五个保留场景复用 `Prefabs/Environment/SeaEnvironment.prefab`。main 的 `Environment/Island Stops` 包含 Departure、Island、FinalIsland 三组显示，由 `VoyageScenePresentation` 按路线 `sceneName` 映射，不能按固定站点索引切换；同一海路区域可重复使用。船体/翅膀/船浪保持同 PPU 和对齐 Pivot；岛屿地面从交付示意图拆层补齐，后续独立地面可替换。交付帧动画只有船浪和岸浪，船体、翅膀、建筑保持静态。具体画布、Pivot 和镜头尺寸见美术说明。
 - 用户已要求删除六块航程 HUD（状态、区域/事件、收益、乘客、操作提示和返航按钮）与 Prototype 的 Boat Status 专用脚本。不设计新 UI，后续由用户定；现有出发/恢复/结算/错误界面、敌人 HP 和业务接口保留。不要恢复被删面板或为其新增素材、脚本、测试。
 - 全文策划范围和证据见 `Docs/PrototypeAudit.md`。商店、永久成长是策划明确的首版排除项，特殊岗位能力仍待定义；未交付的人物、物品、动画和 UI 规格待确认。
 - 航程使用 ScriptableObject，入口 `Resources/Voyage/DefaultVoyage.asset`。启航一次性生成事件表；固定事件必执行并占总额度，随机只占空海路，容量不足优先敌人，特殊类型分别限额；逐波清完才生成下一波。
@@ -18,5 +18,5 @@
 - 在 Update 读取输入，在 FixedUpdate 写入刚体速度。斜向输入限制为长度 1；玩家初始位置须在甲板内。不通过 Transform 位移绕过玩法碰撞。进出场演出暂停角色刚体模拟、整体平移 Vessel，结束时同步刚体并恢复模拟。
 - 修改移动或边界后运行 `Assets/Ferryman/Tests/PlayMode` 中的测试；命令和范围见 README。测试以默认原型尺寸和速度为基准，调整默认参数时同步更新有意义的预期。
 - 小原型采用编译检查与少量关键回归；不为纯字段、默认值、简单属性访问及直白逻辑新增测试。移动测试隔离演示敌人和石块；战斗回归使用真实 Unity 帧，不能用 Physics2D.Simulate 单独推进 FixedUpdate 和眩晕计时。实机体验由用户验证，AI 负责实现、配置引用及必要的代码检查。
-- 保留 20 项回归，范围和命令见 README。`Ferryman.Editor.PrototypeValidation.Verify` 校验默认资源与引用，`VerifyAndBuild` 生成 Windows 产物。编辑器跨场景校验前先检查预制体几何，避免场景卸载使缓存的预制体子对象失效。
+- 保留 20 项回归，范围和命令见 README。完整航程回归从 main 开始，检查区域显示及场景 handle 不变，覆盖成功、失败、返家、放弃与七站检查点恢复。`Ferryman.Editor.PrototypeValidation.Verify` 校验默认资源、区域映射与动画引用，`VerifyAndBuild` 生成 Windows 产物。编辑器跨场景校验前先检查预制体几何，避免场景卸载使缓存的预制体子对象失效。
 - 提交 Unity 资源时同时提交 `.meta`。不要提交 Library、UserSettings、日志、构建产物、凭据或 `.plastic`。

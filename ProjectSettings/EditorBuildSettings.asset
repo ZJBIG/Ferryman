@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Ferryman/Scenes/main.unity
+    guid: c80ba73bf00cc454a8f3b7e7bd9be231
+  - enabled: 1
     path: Assets/Ferryman/Scenes/Departure.unity
     guid: 27dd64bd0aaaf8548917ac7755408b1d
   - enabled: 1

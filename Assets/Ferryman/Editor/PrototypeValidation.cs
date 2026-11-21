@@ -86,7 +86,7 @@ namespace Ferryman.Editor
                 Require((Vector2)line.GetPosition(i) == boundary.points[i], "Deck outline and physics edge differ.");
 
             var buildScenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).ToArray();
-            Require(buildScenes.Length == 5 && buildScenes[0].path == Root + "Scenes/Departure.unity", "Build entry or scenes differ.");
+            Require(buildScenes.Length == 6 && buildScenes[0].path == Root + "Scenes/main.unity", "Build entry or scenes differ.");
             foreach (var buildScene in buildScenes)
             {
                 var scene = EditorSceneManager.OpenScene(buildScene.path);
@@ -104,13 +104,33 @@ namespace Ferryman.Editor
                     VoyageBootstrap bootstrap = Object.FindObjectOfType<VoyageBootstrap>();
                     Require(bootstrap != null && new SerializedObject(bootstrap).FindProperty("definition").objectReferenceValue == definition,
                         "Scene bootstrap does not reference the default voyage.");
-                    Require(Object.FindObjectOfType<VoyageScenePresentation>() != null && Camera.main != null, "Scene presentation/camera is absent.");
+                    var presentation = Object.FindObjectOfType<VoyageScenePresentation>();
+                    Require(presentation != null && Camera.main != null, "Scene presentation/camera is absent.");
+                    if (buildScene.path.EndsWith("main.unity", StringComparison.Ordinal))
+                    {
+                        Require(presentation.IsUnifiedScene, "Main does not contain the full voyage environment.");
+                        var islands = (Transform)new SerializedObject(presentation).FindProperty("islandStops").objectReferenceValue;
+                        Require(islands.childCount == 3, "Main must contain the three island appearances.");
+                        foreach (VoyageStop stop in definition.stops)
+                        {
+                            Require(presentation.CanPresentStop(stop), "Main cannot display stop: " + stop.sceneName);
+                            presentation.PresentStop(stop);
+                            foreach (Transform island in islands)
+                                Require(island.gameObject.activeInHierarchy == (stop.kind == VoyageStopKind.Island && island.name == stop.sceneName),
+                                    "Main displays the wrong island: " + island.name);
+                        }
+                        var wake = (GameObject)new SerializedObject(presentation).FindProperty("sailingWake").objectReferenceValue;
+                        Require(wake != null && wake.GetComponent<Animator>()?.runtimeAnimatorController != null, "Main ship wake has no animation.");
+                        foreach (Transform island in islands)
+                            Require(island.GetComponentInChildren<Animator>(true)?.runtimeAnimatorController != null,
+                                "Main shore waves have no animation: " + island.name);
+                    }
                 }
             }
-            EditorSceneManager.OpenScene(Root + "Scenes/Departure.unity");
+            EditorSceneManager.OpenScene(Root + "Scenes/main.unity");
             Directory.CreateDirectory(".local");
             File.WriteAllText(".local/prototype-resource-observations.txt",
-                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 5 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: Departure; Prototype retained for combat/movement/repair regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed 12 x 5 edge, grid size 1.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nScene cameras, sea motion, wake and bootstrap definitions are configured.\n");
+                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed 12 x 5 edge, grid size 1.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\n");
             Debug.Log("Ferryman full prototype resource verification passed.");
         }
 

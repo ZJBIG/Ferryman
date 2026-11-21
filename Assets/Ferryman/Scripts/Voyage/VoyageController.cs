@@ -164,7 +164,7 @@ namespace Ferryman.Voyage
                 vessel.SetActionsAllowed(false, true);
                 Phase = VoyagePhase.Transition;
                 Fade = 1f;
-                if (index != firstStop || SceneManager.GetActiveScene().name != stop.sceneName)
+                if (!TryPresentStop(stop) && (index != firstStop || SceneManager.GetActiveScene().name != stop.sceneName))
                     yield return SceneManager.LoadSceneAsync(stop.sceneName);
                 Phase = VoyagePhase.Entering;
                 yield return AnimateEntry();
@@ -518,11 +518,24 @@ namespace Ferryman.Voyage
         {
             Phase = VoyagePhase.Transition;
             Fade = 1f;
-            yield return SceneManager.LoadSceneAsync(definition.stops[0].sceneName);
+            if (!TryPresentStop(definition.stops[0]))
+                yield return SceneManager.LoadSceneAsync(definition.stops[0].sceneName);
+            else
+                yield return null;
             StopIndex = 0;
             Fade = 0f;
             Phase = VoyagePhase.Departure;
             Message = "选择第一位护送乘客；启航前船只已完成整备。";
+        }
+
+        private bool TryPresentStop(VoyageStop stop)
+        {
+            Camera camera = Camera.main;
+            var presentation = camera != null ? camera.GetComponent<VoyageScenePresentation>() : null;
+            if (presentation == null || !presentation.IsUnifiedScene)
+                return false;
+            presentation.PresentStop(stop);
+            return true;
         }
 
         private void CleanupHazards()
@@ -577,8 +590,12 @@ namespace Ferryman.Voyage
                 || !(definition.transitionSeconds > 0f) || !float.IsFinite(definition.transitionSeconds)
                 || !(definition.boardingNoticeSeconds > 0f) || !float.IsFinite(definition.boardingNoticeSeconds))
                 throw new InvalidDataException("Ship bindings or voyage durations are invalid.");
+            Camera camera = Camera.main;
+            var presentation = camera != null ? camera.GetComponent<VoyageScenePresentation>() : null;
             foreach (var stop in definition.stops)
-                if (stop == null || string.IsNullOrWhiteSpace(stop.sceneName) || !Application.CanStreamedLevelBeLoaded(stop.sceneName)
+                if (stop == null || string.IsNullOrWhiteSpace(stop.sceneName)
+                    || (presentation != null && presentation.IsUnifiedScene
+                        ? !presentation.CanPresentStop(stop) : !Application.CanStreamedLevelBeLoaded(stop.sceneName))
                     || !(stop.boardingChance >= 0f && stop.boardingChance <= 1f) || stop.maxBoardingPassengers < 0)
                     throw new InvalidDataException("Voyage scene or boarding configuration is invalid.");
             var profiles = new HashSet<string>();
