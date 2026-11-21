@@ -6,6 +6,8 @@ namespace Ferryman.World
 {
     public sealed class RepairPoint : MonoBehaviour
     {
+        [SerializeField] private SpriteRenderer visual;
+        [SerializeField] private Sprite[] appearances;
         [SerializeField] private GameObject progressBar;
         [SerializeField] private Transform progressFill;
         [SerializeField] private GameObject completedEffectPrefab;
@@ -21,6 +23,12 @@ namespace Ferryman.World
         public float RequiredProgress { get; private set; }
         public bool IsComplete { get; private set; }
         public bool IsBeingRepaired => repairers.Count > 0;
+
+        private void Awake()
+        {
+            if (visual != null && appearances != null && appearances.Length > 0)
+                visual.sprite = appearances[Random.Range(0, appearances.Length)];
+        }
 
         internal void Initialize(BoatHealth owner, Vector2Int cell, float requiredProgress)
         {

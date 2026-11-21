@@ -91,6 +91,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6dad718889cf8242a3e1d641c8c9b20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  visual: {fileID: 8738040049813162887}
+  appearances:
+  - {fileID: 21300000, guid: 045c90a11cdf55749a8296a3c8226458, type: 3}
+  - {fileID: 21300000, guid: 6a9e41b4111824d4490398fd54afa93a, type: 3}
+  - {fileID: 21300000, guid: fe270747da8b42d42ad8b9c08a6a1749, type: 3}
   clearedEffectPrefab: {fileID: 0}
 --- !u!1 &4115636994183378211
 GameObject:
@@ -119,7 +124,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.75, y: 0.75, z: 0.75}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 309614416002228030}
@@ -165,8 +170,8 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 8
-  m_Sprite: {fileID: 21300000, guid: 27fbeef6f2e84b048b1aecfa5cff8e36, type: 3}
-  m_Color: {r: 0.35, g: 0.38, b: 0.4, a: 1}
+  m_Sprite: {fileID: 21300000, guid: 045c90a11cdf55749a8296a3c8226458, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0

@@ -5,9 +5,17 @@ namespace Ferryman.World
     [RequireComponent(typeof(BoxCollider2D))]
     public sealed class DestructibleObstacle : MonoBehaviour
     {
+        [SerializeField] private SpriteRenderer visual;
+        [SerializeField] private Sprite[] appearances;
         [SerializeField] private GameObject clearedEffectPrefab;
 
         public bool IsCleared { get; private set; }
+
+        private void Awake()
+        {
+            if (visual != null && appearances != null && appearances.Length > 0)
+                visual.sprite = appearances[Random.Range(0, appearances.Length)];
+        }
 
         public void Clear()
         {

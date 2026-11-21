@@ -1,6 +1,6 @@
 # 美术素材接入说明
 
-本说明对照《美术需求文档.docx》，记录完整 V0.1 原型的素材入口。`场景.zip` 的船只、海面、船浪、岛岸建筑、码头与岸浪已接入；人物、武器、物品和特效仍可通过现有挂点替换占位显示。UI 以用户后续方案为准。
+本说明对照《美术需求文档.docx》，记录完整 V0.1 原型的素材入口。`场景.zip` 的船只、海面、船浪、岛岸建筑、码头与岸浪，以及 `物品与维修.zip` 的炸弹、石块、障碍物、破损和维修条已接入。人物、武器及未交付特效仍通过现有挂点替换占位显示；UI 以用户后续方案为准。仓库首页只介绍玩家玩法，本文件记录开发接入约定。
 
 ## 当前技术基线
 
@@ -16,7 +16,7 @@
 | 玩家、基础敌人 | BoxCollider2D，0.6 × 1.2 | `Visual` |
 | 战斗/维护船员 | BoxCollider2D，0.45 × 0.7 | `Visual/Body`、`Weapon` 或 `Repair Tool` |
 | 甲壳射手变体 | BoxCollider2D，0.84 × 1.68 | `Visual`；显示局部缩放 1.4，根缩放保持 1 |
-| 石块 | BoxCollider2D，0.75 × 0.75 | `Visual`，当前局部缩放 0.75 |
+| 石块/障碍物 | BoxCollider2D，0.75 × 0.75 | `Visual`，局部缩放 1；两种石块与障碍物共用原碰撞 |
 | 子弹 | CircleCollider2D，半径 0.09 | `Visual`，当前局部缩放 0.18 |
 | 定时炸弹 | BoxCollider2D，0.5 × 0.5 | `Visual`，根缩放保持 1 |
 | 维修点 | 无碰撞器；默认甲板网格 1 单位 | `Visual`；保持根节点受击位置与格索引 |
@@ -41,6 +41,21 @@
 | `RepairPoint.prefab` | `Visual`、`Progress Bar` | 固定损坏外观；进度条放在点上方，`Progress Fill` 指向横向填充挂点，维修时缩放其 X 轴 |
 
 `Aim Marker` 白色短线和 `Melee Outline` 橙色扇形是占位反馈。接入武器和挥击特效后，可在显示层停用短线，并清空玩家的 `Melee Outline` 引用。`Deck Boundary` 的 LineRenderer 已关闭，保留整个对象及闭合 EdgeCollider2D，不添加覆盖全甲板的实心碰撞。
+
+## 物品与维修素材
+
+新包的 9 张独立图片均为静态外观，编号代表不同样式，不作为帧动画。`111维修示意.png` 只用于核对破损比例。原图画布与透明度保持交付内容，Pivot 对齐可见物品中心；物品使用 1800 PPU，破损和维修条使用 1000 PPU。
+
+| 原包资源 | 项目资源 | 显示入口 |
+| --- | --- | --- |
+| 炸弹-1、炸弹-2 | `Art/Items/BombDynamite.png`、`BombRound.png` | `TimedBomb/Visual`，两种炸弹外观 |
+| 石块-1、石块-2、障碍物 | `Art/Items/StoneWide.png`、`StoneTall.png`、`DeckObstacle.png` | `Stone/Visual`，三种可清除障碍外观 |
+| 维修处-1、维修处-2 | `Art/Repair/HoleWide.png`、`HoleSplinter.png` | `RepairPoint/Visual`，两种固定破损；旧 Crack 占位层已删除 |
+| 维修进度条-外框、Fill | `Art/Repair/ProgressFrame.png`、`ProgressFill.png` | `RepairPoint/Progress Bar/Background` 与 `Fill/Visual` |
+
+`DestructibleObstacle` 和 `RepairPoint` 的 Visual / Appearances 绑定静态样式，实例生成时选一次外观。破损贴图不随维修进度改变。SpriteRenderer 保持白色，根节点缩放和碰撞保持原规则；炸弹已移除占位显示的 45° 旋转。原引信条继续显示倒计时。
+
+维修条保留 `Progress Bar → Fill → Visual`。填充从内框左侧增长；100% 的不透明区域覆盖原画矩形 `(1090,920)–(2150,1082)`，宽高基准为 `1.06 × 0.162`，略压入手绘黑边，Frame 绘制在 Fill 上方。Fill 的局部位置为 `(-0.385,-0.0125)`，素材宽高缩放 `1060/981`、`162/122` 放在其 Visual 子层，Fill 本身仅承载进度比例，避免运行时的 `(比例,1,1)` 覆盖素材高度。松键、中断和完成的显示规则沿用原实现。
 
 ## 动画与特效触发
 
@@ -132,4 +147,4 @@ Departure、Sea、Island、FinalIsland 和 Prototype 保留为原区域演示与
 
 每项素材附资源名称、用途、文件清单、朝向与枢轴说明、世界尺寸参考、动画拆分及所需材质。批量制作前共同确定美术风格、最终比例、维修网格、NPC 数量、动画方向、UI 字段和导入规格。
 
-导入实际素材时按资源用途放入现有 `Assets/Ferryman/Art`，需要时再分子目录。提交素材、目录及预制体对应的 `.meta`，保留已有预制体 GUID。替换后确认显示方向、Muzzle 位置、动画不移动根节点、碰撞未随视觉缩放变化，以及独立特效能结束；涉及碰撞或移动基准时运行 README 中的关键回归。
+导入实际素材时按资源用途放入现有 `Assets/Ferryman/Art`，需要时再分子目录。提交素材、目录及预制体对应的 `.meta`，保留已有预制体 GUID。替换后确认显示方向、Muzzle 位置、动画不移动根节点、碰撞未随视觉缩放变化，以及独立特效能结束；涉及碰撞或移动基准时运行现有 PlayMode 关键回归，范围见 [策划覆盖与验证](PrototypeAudit.md)。

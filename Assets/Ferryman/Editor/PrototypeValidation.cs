@@ -37,6 +37,26 @@ namespace Ferryman.Editor
                 }
                 finally { PrefabUtility.UnloadPrefabContents(prefab); }
             }
+            CheckAppearances(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Stone.prefab").GetComponent<DestructibleObstacle>(),
+                "Items/StoneWide", "Items/StoneTall", "Items/DeckObstacle");
+            CheckAppearances(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/TimedBomb.prefab").GetComponent<DestructibleObstacle>(),
+                "Items/BombRound", "Items/BombDynamite");
+            var repairArt = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/RepairPoint.prefab");
+            CheckAppearances(repairArt.GetComponent<RepairPoint>(), "Repair/HoleSplinter", "Repair/HoleWide");
+            var repairFields = new SerializedObject(repairArt.GetComponent<RepairPoint>());
+            var bar = (GameObject)repairFields.FindProperty("progressBar").objectReferenceValue;
+            var fill = (Transform)repairFields.FindProperty("progressFill").objectReferenceValue;
+            Require(bar != null && fill != null && fill.parent.gameObject == bar && fill.localScale == Vector3.one,
+                "Repair bar bindings or progress container scale differ.");
+            var fillArt = fill.Find("Visual").GetComponent<SpriteRenderer>();
+            var frameArt = bar.transform.Find("Background").GetComponent<SpriteRenderer>();
+            Require(AssetDatabase.GetAssetPath(fillArt.sprite) == Root + "Art/Repair/ProgressFill.png"
+                && AssetDatabase.GetAssetPath(frameArt.sprite) == Root + "Art/Repair/ProgressFrame.png"
+                && frameArt.sortingOrder > fillArt.sortingOrder, "Supplied repair frame/fill or draw order is absent.");
+            Vector2 fullSize = Vector2.Scale(new Vector2(0.981f, 0.122f), fillArt.transform.localScale);
+            Require(Vector2.Distance(fullSize, new Vector2(1.06f, 0.162f)) < 0.0001f
+                && Vector2.Distance(fill.localPosition, new Vector2(-0.385f, -0.0125f)) < 0.0001f,
+                "Repair fill does not cover the drawn inner frame from its left edge.");
             VoyageDefinition definition = AssetDatabase.LoadAssetAtPath<VoyageDefinition>(Root + "Resources/Voyage/DefaultVoyage.asset");
             Require(definition != null && definition.stops.Length == 5, "Default voyage is absent or its route differs.");
             var vessel = definition.vesselPrefab.GetComponent<VoyageVessel>();
@@ -130,7 +150,7 @@ namespace Ferryman.Editor
             EditorSceneManager.OpenScene(Root + "Scenes/main.unity");
             Directory.CreateDirectory(".local");
             File.WriteAllText(".local/prototype-resource-observations.txt",
-                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed 12 x 5 edge, grid size 1.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\n");
+                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed 12 x 5 edge, grid size 1.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\n");
             Debug.Log("Ferryman full prototype resource verification passed.");
         }
 
@@ -181,6 +201,19 @@ namespace Ferryman.Editor
                             Require(property.objectReferenceValue != null || property.objectReferenceInstanceIDValue == 0,
                                 "Broken reference: " + transform.name + "/" + property.propertyPath);
             }
+        }
+
+        private static void CheckAppearances(Component owner, params string[] images)
+        {
+            var fields = new SerializedObject(owner);
+            var visual = fields.FindProperty("visual").objectReferenceValue as SpriteRenderer;
+            var appearances = fields.FindProperty("appearances");
+            Require(visual != null && visual.transform.parent == owner.transform && visual.color == Color.white
+                && visual.transform.localScale == Vector3.one && appearances.arraySize == images.Length,
+                "Item/repair visual or static appearance bindings differ: " + owner.name);
+            for (int i = 0; i < images.Length; i++)
+                Require(AssetDatabase.GetAssetPath(appearances.GetArrayElementAtIndex(i).objectReferenceValue)
+                    == Root + "Art/" + images[i] + ".png", "Missing supplied appearance: " + images[i]);
         }
 
         private static void CheckFloat(Object target, string field, float expected)

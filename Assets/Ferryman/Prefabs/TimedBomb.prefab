@@ -126,6 +126,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6dad718889cf8242a3e1d641c8c9b20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  visual: {fileID: 8136444767375728363}
+  appearances:
+  - {fileID: 21300000, guid: b1b284655ccb2c34e82e4a85867c7b39, type: 3}
+  - {fileID: 21300000, guid: 3bf2d93846dfb104eb03653e86e7dcb1, type: 3}
   clearedEffectPrefab: {fileID: 0}
 --- !u!114 &853591217009229110
 MonoBehaviour:
@@ -144,6 +148,8 @@ MonoBehaviour:
   damage: 100
   fuseFill: {fileID: 188403036929912260}
   explosionEffectPrefab: {fileID: 0}
+  throwSeconds: 0.6
+  throwArcHeight: 0.7
 --- !u!1 &3724975809645809721
 GameObject:
   m_ObjectHideFlags: 0
@@ -285,9 +291,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7560547080457559387}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0.38268346, w: 0.9238795}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.5, y: 0.5, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7183563909959178370}
@@ -333,8 +339,8 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 9
-  m_Sprite: {fileID: 21300000, guid: 27fbeef6f2e84b048b1aecfa5cff8e36, type: 3}
-  m_Color: {r: 0.85, g: 0.2, b: 0.15, a: 1}
+  m_Sprite: {fileID: 21300000, guid: b1b284655ccb2c34e82e4a85867c7b39, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
