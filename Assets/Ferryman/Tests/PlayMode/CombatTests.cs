@@ -53,13 +53,16 @@ namespace Ferryman.Tests
         [UnityTest]
         public IEnumerator ProjectileCrossesDeckFiltersAlliesAndAppliesEachHitOnce()
         {
-            enemy.transform.position = new Vector3(0f, 3f);
+            Bounds deckBounds = player.MovementDeck.GetComponent<EdgeCollider2D>().bounds;
+            enemy.transform.position = new Vector3(0f, deckBounds.max.y + enemy.Hitbox.bounds.extents.y + 0.4f);
             enemy.gameObject.AddComponent<BoxCollider2D>().size = new Vector2(0.6f, 1.2f);
             var crewObject = new GameObject("Test Crew");
             crewObject.transform.position = new Vector3(0f, 0.9f);
             var crew = crewObject.AddComponent<CrewMember>();
             crewObject.GetComponent<BoxCollider2D>().size = new Vector2(0.4f, 0.4f);
             Physics2D.SyncTransforms();
+
+            Assert.That(enemy.Hitbox.bounds.min.y, Is.GreaterThan(deckBounds.max.y));
 
             int received = 0;
             int sent = 0;

@@ -7,7 +7,11 @@ namespace Ferryman.Voyage
         [SerializeField] private Transform seaMotion;
         [SerializeField] private GameObject sailingWake;
         [SerializeField] private float scrollSpeed = 1.2f;
+        [SerializeField, Min(0.1f)] private float scrollLoopWidth = 6f;
+        [SerializeField, Min(0.1f)] private float cameraSize = 6f;
         private VoyageController controller;
+
+        public float CameraSize => cameraSize;
 
         private void Update()
         {
@@ -19,7 +23,7 @@ namespace Ferryman.Voyage
             if (seaMotion != null && sailing)
             {
                 Vector3 position = seaMotion.localPosition;
-                position.x = Mathf.Repeat(position.x - scrollSpeed * Time.deltaTime + 3f, 3f) - 3f;
+                position.x = -Mathf.Repeat(-position.x + scrollSpeed * Time.deltaTime, scrollLoopWidth);
                 seaMotion.localPosition = position;
             }
         }

@@ -60,9 +60,10 @@ namespace Ferryman.Characters
 
             if (aimCamera == null)
                 aimCamera = Camera.main;
-            if (aimCamera != null)
+            Vector3 mouse = Input.mousePosition;
+            // A hidden or resized Game view can report an invalid mouse position.
+            if (aimCamera != null && float.IsFinite(mouse.x) && float.IsFinite(mouse.y))
             {
-                Vector3 mouse = Input.mousePosition;
                 mouse.z = Mathf.Abs(transform.position.z - aimCamera.transform.position.z);
                 Face(aimCamera.ScreenToWorldPoint(mouse) - transform.position);
             }

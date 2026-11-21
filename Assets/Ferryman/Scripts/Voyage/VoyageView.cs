@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using Ferryman.Characters;
-using Ferryman.World;
 using UnityEngine;
 
 namespace Ferryman.Voyage
@@ -15,8 +14,6 @@ namespace Ferryman.Voyage
         private GUIStyle title;
         private GUIStyle small;
         private GUIStyle button;
-        private Vector2 passengerScroll;
-        private readonly Color accent = new Color(0.4f, 0.88f, 0.72f);
         private readonly Color muted = new Color(0.68f, 0.78f, 0.8f);
 
         private void Awake()
@@ -51,7 +48,7 @@ namespace Ferryman.Voyage
             else if (controller.Phase == VoyagePhase.Error)
                 DrawError();
             else
-                DrawVoyage(scale, offset);
+                DrawEnemyLabels(scale, offset);
 
             if (controller.Fade > 0f)
                 Fill(new Rect(0f, 0f, 1280f, 720f), new Color(0.03f, 0.08f, 0.11f, controller.Fade));
@@ -105,48 +102,10 @@ namespace Ferryman.Voyage
                 Act(controller.QuitGame);
         }
 
-        private void DrawVoyage(float scale, Vector2 offset)
+        private void DrawEnemyLabels(float scale, Vector2 offset)
         {
-            VoyageVessel vessel = controller.Vessel;
-            if (vessel == null)
+            if (controller.Vessel == null)
                 return;
-            Panel(new Rect(24f, 24f, 310f, 156f));
-            GUI.Label(new Rect(42f, 36f, 280f, 29f), $"船只 HP  {vessel.Boat.CurrentHealth:0} / {vessel.Boat.MaxHealth:0}", text);
-            Fill(new Rect(42f, 74f, 274f, 10f), new Color(0.12f, 0.2f, 0.24f));
-            Fill(new Rect(42f, 74f, 274f * vessel.Boat.CurrentHealth / vessel.Boat.MaxHealth, 10f), accent);
-            string state = vessel.Player.IsStunned ? "眩晕中，等待恢复" : vessel.Player.IsRepairing ? "正在维修" : "可以行动";
-            GUI.Label(new Rect(42f, 94f, 276f, 27f), state, text);
-            int bombs = FindObjectsOfType<TimedBomb>().Length;
-            GUI.Label(new Rect(42f, 129f, 276f, 30f), $"维修点 {vessel.Boat.RepairPoints.Count}  ·  炸弹威胁 {bombs}", small);
-
-            Panel(new Rect(352f, 24f, 550f, 120f));
-            GUI.Label(new Rect(370f, 34f, 516f, 30f),
-                $"{controller.StopIndex + 1}/{controller.Definition.stops.Length} · {controller.Definition.stops[controller.StopIndex].displayName}", text);
-            GUI.Label(new Rect(370f, 72f, 516f, 65f), controller.Message, small);
-            Panel(new Rect(924f, 24f, 332f, 126f));
-            GUI.Label(new Rect(942f, 36f, 300f, 26f), "本轮待结算", small);
-            GUI.Label(new Rect(942f, 67f, 300f, 28f),
-                $"金币 {controller.PendingReward.coins}  ·  特殊道具 {controller.PendingReward.specialItems}", text);
-            GUI.Label(new Rect(942f, 108f, 300f, 27f), $"已送达乘客 {controller.DeliveredPassengers} 人", small);
-
-            Panel(new Rect(24f, 558f, 748f, 138f));
-            GUI.Label(new Rect(42f, 568f, 706f, 28f), "船上乘客 · 固定岗位自动工作", text);
-            passengerScroll = GUI.BeginScrollView(new Rect(42f, 604f, 714f, 80f), passengerScroll,
-                new Rect(0f, 0f, 690f, Mathf.Max(74f, controller.Passengers.Count * 25f)));
-            for (int i = 0; i < controller.Passengers.Count; i++)
-            {
-                Passenger passenger = controller.Passengers[i];
-                string role = passenger.Definition.role == CrewRole.Combat ? "战斗" : "维护";
-                string status = passenger.Actor.IsStunned ? "眩晕" : "在岗";
-                GUI.Label(new Rect(0f, i * 25f, 690f, 25f),
-                    $"{passenger.Definition.displayName} · {role} / {status} → {controller.Definition.stops[passenger.DestinationStopIndex].displayName}", small);
-            }
-            GUI.EndScrollView();
-            GUI.Label(new Rect(800f, 570f, 455f, 62f),
-                "WASD 移动 · 左键连射 · 右键清障\n按住 E 维修；移动和攻击会打断维修", text);
-            if (GUI.Button(new Rect(1090f, 654f, 166f, 42f), "放弃本轮并返航", button))
-                Act(controller.AbandonVoyage);
-
             Camera camera = Camera.main;
             if (camera == null)
                 return;

@@ -44,7 +44,7 @@ namespace Ferryman.Editor
             Require(vessel.Player.MovementDeck == vessel.Boat.Deck && vessel.Player.BoatHealth == vessel.Boat
                 && vessel.Player.DamageSystem == vessel.DamageSystem, "Vessel/player combat or deck bindings differ.");
             Require(vessel.Player.ProjectilePrefab != null, "Player weapon has no projectile.");
-            Require(vessel.Boat.Deck.GridSize == new Vector2Int(12, 3), "Default deck grid differs.");
+            Require(vessel.Boat.Deck.GridSize == new Vector2Int(12, 5), "Default deck grid differs.");
             CheckFloat(vessel.Boat, "maxHealth", 1000f);
             CheckFloat(vessel.Player, "moveSpeed", 4f);
             CheckFloat(vessel.Player, "attackPower", 10f);
@@ -110,7 +110,7 @@ namespace Ferryman.Editor
             EditorSceneManager.OpenScene(Root + "Scenes/Departure.unity");
             Directory.CreateDirectory(".local");
             File.WriteAllText(".local/prototype-resource-observations.txt",
-                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 5 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: Departure; Prototype retained for combat/movement/repair regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed 12 x 3 edge, grid size 1.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nScene cameras, sea motion, wake and bootstrap definitions are configured.\n");
+                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 5 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: Departure; Prototype retained for combat/movement/repair regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed 12 x 5 edge, grid size 1.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nScene cameras, sea motion, wake and bootstrap definitions are configured.\n");
             Debug.Log("Ferryman full prototype resource verification passed.");
         }
 

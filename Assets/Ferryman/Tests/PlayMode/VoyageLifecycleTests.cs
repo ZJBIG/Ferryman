@@ -305,7 +305,7 @@ namespace Ferryman.Tests
             QuiesceActors();
             var presentation = Object.FindObjectOfType<VoyageScenePresentation>();
             Assert.That(presentation, Is.Not.Null);
-            Transform motion = presentation.transform.Find("Sea Motion");
+            Transform motion = GameObject.Find("Environment/Sea Motion")?.transform;
             Assert.That(motion, Is.Not.Null);
             Vector3 position = motion.localPosition;
             float remaining = controller.SailingRemaining;

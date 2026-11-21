@@ -18,8 +18,8 @@ MonoBehaviour:
   - enemies:
     - prefab: {fileID: 402870840139730365, guid: 42b27aa8d72f59f47be8031f07cea9f2, type: 3}
       count: 2
-      spawnPosition: {x: 0, y: 3.5}
+      spawnPosition: {x: 0, y: 6.5}
   reward:
     coins: 35
     specialItems: 1
-  cameraSize: 6
+  cameraSize: 7.5

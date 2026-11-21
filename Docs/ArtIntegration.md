@@ -1,18 +1,18 @@
 # 美术素材接入说明
 
-本说明对照《美术需求文档.docx》，记录完整 V0.1 原型的素材入口。船体、玩家、两类岗位 NPC、敌人变体、物品、维修点、环境、岛屿、乘客和结算均已接入玩法，当前占位显示可独立替换。
+本说明对照《美术需求文档.docx》，记录完整 V0.1 原型的素材入口。`场景.zip` 的船只、海面、船浪、岛岸建筑、码头与岸浪已接入；人物、武器、物品和特效仍可通过现有挂点替换占位显示。UI 以用户后续方案为准。
 
 ## 当前技术基线
 
 - Unity **2022.3.62f3c1**，现有 **2D URP**，XY 平面正俯视。文档中的“模型”没有定案为 3D 资源。
 - 角色、武器和定向投射物以本地 **+X 为正前方**，围绕 Z 轴转向。资源朝向不同时，在显示层调整局部旋转。
 - 角色根节点保留刚体、碰撞器和行为脚本；显示、武器、Animator 和角色特效放在 `Visual` 下。动画关闭 **Apply Root Motion**，不动画化角色根节点的位置、旋转或缩放。
-- 当前贴图使用 **100 Pixels Per Unit**。正式素材的 PPU、枢轴、过滤方式、压缩和动画拆分需根据实际交付确认；已有占位贴图不代表最终美术风格。
-- 以下是当前回归使用的物理基准，最终美术尺寸尚未定案。替换图片、调整显示缩放或动画时保持这些碰撞尺寸；需要修改物理基准时同步验证。
+- 已交付场景素材使用 **180 PPU**（船、翅膀、船浪、海面）和 **240 PPU**（岛岸）；角色等占位贴图仍为 **100 PPU**。场景图使用 Bilinear、完整矩形 Sprite、无 mipmap，保留透明度；三帧动画共用画布与 Pivot，不逐帧裁边。
+- 用户已确认按船原画比例调整甲板和镜头；甲板改为 12×5，移动、角色碰撞和 1 单位维修网格规则保持现有实现。后续只替换显示时保持以下物理基准；需要再改物理尺寸时同步验证。
 
 | 对象 | 当前物理基准 | 显示调整位置 |
 | --- | --- | --- |
-| 甲板 | 闭合边线，宽 12、高 3 | `Boat/Hull Visual`、`Boat/Deck Surface` |
+| 甲板 | 闭合边线，宽 12、高 5；隐藏边线显示 | `Boat/Hull Visual`、`Boat/Wing Left`、`Boat/Wing Right` |
 | 玩家、基础敌人 | BoxCollider2D，0.6 × 1.2 | `Visual` |
 | 战斗/维护船员 | BoxCollider2D，0.45 × 0.7 | `Visual/Body`、`Weapon` 或 `Repair Tool` |
 | 甲壳射手变体 | BoxCollider2D，0.84 × 1.68 | `Visual`；显示局部缩放 1.4，根缩放保持 1 |
@@ -23,7 +23,7 @@
 
 ## 预制体入口
 
-资源位于 `Assets/Ferryman/Prefabs`。14 个预制体的根节点缩放均为 1，显示与物理尺寸独立。Vessel 嵌套原 Boat 与 Player，素材替换保留现有 GUID 和序列化引用。
+资源位于 `Assets/Ferryman/Prefabs`。15 个预制体的根节点缩放均为 1，显示与物理尺寸独立。Vessel 嵌套原 Boat 与 Player，素材替换保留现有 GUID 和序列化引用；五个场景共用新增的 `Environment/SeaEnvironment.prefab`。
 
 | 预制体 | 接入位置 | 用法 |
 | --- | --- | --- |
@@ -35,11 +35,12 @@
 | 玩家、敌人 | `Visual/Muzzle` | 将挂点移至武器发射口；CombatCharacter 组件的 `Muzzle` 字段已绑定，随显示转向。未绑定时使用 `Muzzle Distance`，默认 0.75 |
 | `Projectile.prefab` | `Visual` | 放置飞弹、弹道、TrailRenderer 或飞行粒子；`Visual Root` 沿实际飞行方向旋转，根节点的圆形碰撞器保持独立 |
 | `Stone.prefab` | `Visual` | 替换障碍物显示；不改变根碰撞器的 Size |
-| `Boat.prefab` | `Hull Visual`、`Deck Surface` | 分别替换船体和甲板显示；可添加船舷、装饰及水花子物体 |
+| `Boat.prefab` | `Hull Visual`、`Wing Left`、`Wing Right` | 分别显示原画船体和左右翅膀；旧 `Deck Surface` 占位层已删除，船舱与箱子为图中装饰 |
+| `Environment/SeaEnvironment.prefab` | `Sea Motion/Sea Surface -1..2`、`Sailing Wake` | 四块海图交替镜像循环，船浪使用三帧 Animator；显示独立于甲板碰撞 |
 | `TimedBomb.prefab` | `Visual`、`Fuse Bar` | 替换炸弹与引信显示；`Fuse Fill` 指向横向填充挂点，倒计时缩放其 X 轴，清除/爆炸时随根移除 |
 | `RepairPoint.prefab` | `Visual`、`Progress Bar` | 固定损坏外观；进度条放在点上方，`Progress Fill` 指向横向填充挂点，维修时缩放其 X 轴 |
 
-`Aim Marker` 白色短线和 `Melee Outline` 橙色扇形是占位反馈。接入武器和挥击特效后，可在显示层停用短线，并清空玩家的 `Melee Outline` 引用。红色边界来自 `Deck Boundary` 的 LineRenderer；隐藏红框时只关闭该渲染组件，保留整个 `Deck Boundary` 对象及 EdgeCollider2D。
+`Aim Marker` 白色短线和 `Melee Outline` 橙色扇形是占位反馈。接入武器和挥击特效后，可在显示层停用短线，并清空玩家的 `Melee Outline` 引用。`Deck Boundary` 的 LineRenderer 已关闭，保留整个对象及闭合 EdgeCollider2D，不添加覆盖全甲板的实心碰撞。
 
 ## 动画与特效触发
 
@@ -64,7 +65,7 @@
 
 维护 NPC 动作读取 `MaintenanceCrewMember.IsRepairing` 与刚体速度，战斗 NPC 使用 CombatCharacter 的攻击事件。岗位与特色来自 `CrewDefinition`；肖像字段 `Portrait` 可单独绑定。乘客的 `Definition` 与 `DestinationStopIndex` 提供显示信息，岗位不会在航程中改变。
 
-场景中的 `Boat Status` 使用 `BoatStatusDisplay` 提供占位 HP、操作提示与状态。正式 UI 接入时停用该显示组件，读取 BoatHealth 或订阅 `Health Changed` / `Destroyed`；不需要改伤害和维修逻辑。
+船只 HP、玩家状态与操作提示的旧面板已删除。正式表现读取 BoatHealth 或订阅 `Health Changed` / `Destroyed`；伤害、维修和乘客数据继续由现有业务组件提供。
 
 正式素材自带颜色、材质或颜色动画时：
 
@@ -89,15 +90,30 @@
 
 ## 场景、航程和 UI
 
-Departure、Sea、Island、FinalIsland 使用相同环境层结构：`Environment/Sea Surface` 为基础海面，`Sea Motion/Wave` 为航行滚动层，`Sailing Wake/Foam` 为水花，岛屿场景提供 `Island and Dock/Beach`、`Land` 和 `Dock`。可以替换这些显示子层或加入环境显示预制体，不添加甲板实心碰撞。
+Departure、Sea、Island、FinalIsland 和 Prototype 均使用共享 `Environment` 海面预制体。`Sea Motion/Sea Surface -1..2` 为海图，`Sailing Wake` 为船浪；三个岛屿场景另有 `Island and Dock/Ground`、`Landmarks`、`Shore Waves` 和 `Dock`。显示图层与甲板碰撞独立。
 
-`VoyageScenePresentation` 的 Sea Motion 和 Sailing Wake 引用决定滚动与水花启停。航行时滚动、事件时停止。船只进出场由 Controller 的左入/右出整体平移和 Fade 驱动；演出期间暂停角色刚体模拟，结束恢复行为。正式动画保持显示与实际甲板位置一致，避免额外动画化船根造成双重位移。
+交付素材位于 `Assets/Ferryman/Art/Scene`，共 15 张图片：
 
-摄像机固定中心，Controller 自动控制正交缩放；`EncounterDefinition.Camera Size` 配置遭遇演出尺寸。大体型射手使用占位变体验证缩放，正式大型敌人素材仍属后续制作。
+| 原包资源 | 项目资源 | 配置 |
+| --- | --- | --- |
+| 船/船体、小翅膀左、小翅膀右 | `Ship/Hull.png`、`WingLeft.png`、`WingRight.png` | 3840×2160、180 PPU，Unity Pivot `(1600/3840, 1010/2160)`；甲板中心对应原图左上坐标 `(1600,1150)` |
+| 海/海面 | `Sea/Sea.png` | 9600 像素宽、180 PPU，四块复用图水平铺设，完整循环宽 106.6667 世界单位 |
+| 海/船海浪/船海浪-1..3 | `Sea/ShipWake1..3.png` | 5720×3240、180 PPU，Pivot `(3205/5720, 1781/3240)`；按示意图中的船体画布偏移 `(1605,309)` 对齐 |
+| 岛岸/出发点、途径点、终点、码头 | `Islands/Departure.png`、`Waypoint.png`、`Destination.png`、`Dock.png` | 同画布中心 Pivot、240 PPU，在三站替换 Landmarks 图层 |
+| 岛岸/岛屿海浪/岛屿海浪-1..3 | `Islands/ShoreWave1..3.png` | 同画布中心 Pivot、240 PPU，三帧循环 |
+| 岛岸/111岛岸示意 | `Islands/Ground.png` | 原包无独立地面；从示意图拆出公共地面，去除烘焙建筑、码头和岸浪，仅用同图地面克隆补齐遮挡区域；原图不修改 |
+
+船浪与岸浪各使用 6 FPS 的三帧循环 Animator。船浪与船只共用世界原点；岛岸各图层共用局部位置 `(1.278,7.1)`，避免帧间抖动。单独替换岛屿地面时保持其与建筑、码头及岸浪的画布对齐。
+
+`VoyageScenePresentation` 的 Sea Motion、Sailing Wake 和 Scroll Loop Width 决定滚动、水花启停及循环宽度。航行时滚动、事件时停止。船只进出场由 Controller 的左入/右出整体平移和 Fade 驱动；演出期间暂停角色刚体模拟，结束恢复行为。正式动画保持显示与实际甲板位置一致，避免额外动画化船根造成双重位移。
+
+摄像机固定 X=2.306；岛屿场景 Y=3.3、Size=8.6，Sea 的 Y=0、Size=6，Prototype 的 Y=0、Size=7。岛屿取景同时容纳建筑、码头和完整船体。Controller 读取 `VoyageScenePresentation.Camera Size` 作为场景基础尺寸并平滑切换；默认遭遇 Size=7.5，敌人移至船外 Y=6/6.5，避开新船体与翅膀构图。正式大型敌人素材仍属后续制作。
 
 `VoyageView` 为可停用的占位 IMGUI 显示。正式 UI 读取 `VoyageController` 的 Phase、Message、StopIndex、Passengers、Enemies、PendingReward、Progress、DeliveredPassengers 与 Fade；调用 StartVoyage、ResumeVoyage、AbandonVoyage、ReturnHome 或 RetrySettlement 对接现有流程。无需新增存档或伤害系统。
 
-已提供船 HP、玩家/NPC 眩晕和岗位状态、敌人 HP、炸弹数量、乘客目的地、待结算及永久奖励、恢复和结算界面。错误存档保留永久数据并显示停止状态，结算写入失败可重试。UI 布局和正式图片仍由美术交付确定。
+按截图删除六块航程 HUD：船只 HP/玩家状态/维修与炸弹数量、区域/事件、待结算收益/送达人数、乘客列表、操作提示、返航按钮；同时删除 Prototype 的 Boat Status 对象及专用脚本。面板原用内置白纹理与系统字体，没有专用美术或测试；共享 `White.png` 和 20 项玩法回归保留。
+
+现有出发选择、恢复、结算、错误界面、淡入淡出和敌人 HP 标签保留。本次不增加 UI。途中岗位/目的地及 3 秒上船等待仍在业务数据中，原 HUD 的预告文本已移除；后续 UI 和信息表现由用户定义。错误存档保留永久数据，结算写入失败可重试。
 
 ## 素材替换约束
 
@@ -107,7 +123,7 @@ Departure、Sea、Island、FinalIsland 使用相同环境层结构：`Environmen
 | 战斗岗位 NPC、维护岗位 NPC | 固定岗位，战斗不维修、维护不战斗；外观与工具用于识别岗位 |
 | 敌人投放炸弹表现 | 炸弹采用抛物线占位飞行，飞行中无碰撞，落地后开始引信；显示缩放不改变落点 |
 | 岛屿、码头、乘客及船只进出场 | 真实场景切换和自动上下客已接入，正式表现保留既有岗位/目的地和时间规则 |
-| 敌人 HP、眩晕、乘客、奖励和结算 UI | 读取既有状态与奖励数据，停用占位视图后绑定正式 UI |
+| 敌人 HP、眩晕、乘客、奖励和结算 UI | 读取既有状态与奖励数据；后续按用户方案接入正式表现 |
 | 大型敌人与特殊镜头 | 已提供可配置遭遇缩放，正式大型怪物素材不要求首批制作 |
 
 ## 交付与替换检查

@@ -649,7 +649,9 @@ namespace Ferryman.Voyage
             Camera camera = Camera.main;
             if (camera == null || definition == null)
                 return;
-            float size = Phase == VoyagePhase.Island || Phase == VoyagePhase.Departure ? 5f : 6f;
+            VoyageScenePresentation presentation = camera.GetComponent<VoyageScenePresentation>();
+            float size = presentation != null ? presentation.CameraSize
+                : Phase == VoyagePhase.Island || Phase == VoyagePhase.Departure ? 5f : 6f;
             if (Phase == VoyagePhase.Event && eventPlan[StopIndex].kind == VoyageEventKind.Combat)
                 size = eventPlan[StopIndex].encounter.cameraSize;
             camera.orthographicSize = Mathf.MoveTowards(camera.orthographicSize, size, 2f * Time.deltaTime);
