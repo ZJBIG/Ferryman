@@ -8,18 +8,18 @@
 - 角色、武器和定向投射物以本地 **+X 为正前方**，围绕 Z 轴转向。资源朝向不同时，在显示层调整局部旋转。
 - 角色根节点保留刚体、碰撞器和行为脚本；显示、武器、Animator 和角色特效放在 `Visual` 下。动画关闭 **Apply Root Motion**，不动画化角色根节点的位置、旋转或缩放。
 - 已交付场景素材使用 **180 PPU**（船、翅膀、船浪、海面）和 **240 PPU**（岛岸）；角色等占位贴图仍为 **100 PPU**。场景图使用 Bilinear、完整矩形 Sprite、无 mipmap，保留透明度；三帧动画共用画布与 Pivot，不逐帧裁边。
-- 用户已确认按船原画比例调整甲板和镜头；甲板改为 12×5，移动、角色碰撞和 1 单位维修网格规则保持现有实现。后续只替换显示时保持以下物理基准；需要再改物理尺寸时同步验证。
+- 甲板维修网格为 12×5，每格 1 单位，格索引与旧存档兼容。物理边线贴合左侧上、下通行区和船头转角，舱体、烟囱、箱子和桶各自使用局部碰撞箱。
 
 | 对象 | 当前物理基准 | 显示调整位置 |
 | --- | --- | --- |
-| 甲板 | 闭合边线，宽 12、高 5；隐藏边线显示 | `Boat/Hull Visual`、`Boat/Wing Left`、`Boat/Wing Right` |
+| 甲板 | 闭合多段边线，隐藏边线显示；`Deck Boundary` 下另有舱体和货物碰撞箱 | `Boat/Hull Visual`、`Boat/Wing Left`、`Boat/Wing Right` |
 | 玩家、基础敌人 | BoxCollider2D，0.6 × 1.2 | `Visual` |
 | 战斗/维护船员 | BoxCollider2D，0.45 × 0.7 | `Visual/Body`、`Weapon` 或 `Repair Tool` |
 | 甲壳射手变体 | BoxCollider2D，0.84 × 1.68 | `Visual`；显示局部缩放 1.4，根缩放保持 1 |
-| 石块/障碍物 | BoxCollider2D，0.75 × 0.75 | `Visual`，局部缩放 1；两种石块与障碍物共用原碰撞 |
+| 石块/障碍物 | BoxCollider2D，1.2 × 0.94 | `Visual`，平面缩放 1.25；碰撞尺寸覆盖最大外观 |
 | 子弹 | CircleCollider2D，半径 0.09 | `Visual`，当前局部缩放 0.18 |
-| 定时炸弹 | BoxCollider2D，0.5 × 0.5 | `Visual`，根缩放保持 1 |
-| 维修点 | 无碰撞器；默认甲板网格 1 单位 | `Visual`；保持根节点受击位置与格索引 |
+| 定时炸弹 | BoxCollider2D，1.22 × 1.17 | `Visual`，平面缩放 1.45；引信条位于 Y=0.68 |
+| 维修点 | 无碰撞器；默认甲板网格 1 单位 | `Visual`，平面缩放 3.08；原位置容得下完整破损时保留该位置 |
 
 ## 预制体入口
 
@@ -34,7 +34,7 @@
 | `Vessel.prefab` | 嵌套 `Boat` / `Player` | 整船由航程控制进出场；行为期间不动画化根节点 |
 | 玩家、敌人 | `Visual/Muzzle` | 将挂点移至武器发射口；CombatCharacter 组件的 `Muzzle` 字段已绑定，随显示转向。未绑定时使用 `Muzzle Distance`，默认 0.75 |
 | `Projectile.prefab` | `Visual` | 放置飞弹、弹道、TrailRenderer 或飞行粒子；`Visual Root` 沿实际飞行方向旋转，根节点的圆形碰撞器保持独立 |
-| `Stone.prefab` | `Visual` | 替换障碍物显示；不改变根碰撞器的 Size |
+| `Stone.prefab` | `Visual` | 替换障碍物显示时按最大可见外观核对根碰撞器尺寸和落地空间 |
 | `Boat.prefab` | `Hull Visual`、`Wing Left`、`Wing Right` | 分别显示原画船体和左右翅膀；旧 `Deck Surface` 占位层已删除，船舱与箱子为图中装饰 |
 | `Environment/SeaEnvironment.prefab` | `Sea Motion/Sea Surface -1..2`、`Sailing Wake` | 四块海图交替镜像循环，船浪使用三帧 Animator；显示独立于甲板碰撞 |
 | `TimedBomb.prefab` | `Visual`、`Fuse Bar` | 替换炸弹与引信显示；`Fuse Fill` 指向横向填充挂点，倒计时缩放其 X 轴，清除/爆炸时随根移除 |
@@ -44,7 +44,7 @@
 
 ## 物品与维修素材
 
-新包的 9 张独立图片均为静态外观，编号代表不同样式，不作为帧动画。`111维修示意.png` 只用于核对破损比例。原图画布与透明度保持交付内容，Pivot 对齐可见物品中心；物品使用 1800 PPU，破损和维修条使用 1000 PPU。
+新包的 9 张独立图片均为静态外观，编号代表不同样式，不作为帧动画。`111维修示意.png` 对齐船体原画后，示例破损的可见范围约 310×262 船图像素，换算后采用 3.08 倍显示比例。原图画布与透明度保持交付内容，Pivot 对齐可见物品中心；物品使用 1800 PPU，破损和维修条使用 1000 PPU。
 
 | 原包资源 | 项目资源 | 显示入口 |
 | --- | --- | --- |
@@ -55,7 +55,7 @@
 
 `DestructibleObstacle` 和 `RepairPoint` 的 Visual / Appearances 绑定静态样式，实例生成时选一次外观。破损贴图不随维修进度改变。SpriteRenderer 保持白色，根节点缩放和碰撞保持原规则；炸弹已移除占位显示的 45° 旋转。原引信条继续显示倒计时。
 
-维修条保留 `Progress Bar → Fill → Visual`。填充从内框左侧增长；100% 的不透明区域覆盖原画矩形 `(1090,920)–(2150,1082)`，宽高基准为 `1.06 × 0.162`，略压入手绘黑边，Frame 绘制在 Fill 上方。Fill 的局部位置为 `(-0.385,-0.0125)`，素材宽高缩放 `1060/981`、`162/122` 放在其 Visual 子层，Fill 本身仅承载进度比例，避免运行时的 `(比例,1,1)` 覆盖素材高度。松键、中断和完成的显示规则沿用原实现。
+维修条保留 `Progress Bar → Fill → Visual`。Progress Bar 父层平面缩放 1.25，外框和填充一起放大，位于破损上方 Y=1.02。填充从内框左侧增长；100% 的不透明区域覆盖原画矩形 `(1090,920)–(2150,1082)`，父层缩放前的宽高基准为 `1.06 × 0.162`，略压入手绘黑边，Frame 绘制在 Fill 上方。Fill 的局部位置为 `(-0.385,-0.0125)`，素材宽高缩放 `1060/981`、`162/122` 放在其 Visual 子层，Fill 本身仅承载进度比例，避免运行时的 `(比例,1,1)` 覆盖素材高度。松键、中断和完成的显示规则沿用原实现。
 
 ## 动画与特效触发
 
@@ -76,7 +76,7 @@
 
 移动动画可以读取角色 Rigidbody2D 的 `velocity`，眩晕状态读取 `Character.IsStunned`，敌人 HP 读取 `Character.Health`。已有 `DamageSystem.DamageReceived` 和 `DamageSent` 仍只在伤害被接受后派发，参数依次为发起者、目标、伤害值。
 
-玩家维修动画读取 `PlayerCharacter.IsRepairing`。维修点共享状态读取 `RepairPoint.Progress`、`RequiredProgress` 和 `IsBeingRepaired`；损坏模型不按进度变换。维修者暂时中断时只隐藏进度条，完成后移除整个点。首点显示在实际受击位置；同格后续点按网格距离逐圈随机选格并放在格心，网格占用不受视觉缩放影响。
+玩家维修动画读取 `PlayerCharacter.IsRepairing`。维修点共享状态读取 `RepairPoint.Progress`、`RequiredProgress` 和 `IsBeingRepaired`；损坏模型不按进度变换。维修者暂时中断时只隐藏进度条，完成后移除整个点。首点优先使用实际受击位置，靠近舱体、货物或边线时改用能容下破损的格心。后续点按网格距离逐圈选格。事件道具生成和炸弹落地还检查角色及同场道具占用，踢飞后的视觉可直接穿过这些区域。
 
 维护 NPC 动作读取 `MaintenanceCrewMember.IsRepairing` 与刚体速度，战斗 NPC 使用 CombatCharacter 的攻击事件。岗位与特色来自 `CrewDefinition`；肖像字段 `Portrait` 可单独绑定。乘客的 `Definition` 与 `DestinationStopIndex` 提供显示信息，岗位不会在航程中改变。
 
@@ -94,12 +94,12 @@
 | --- | --- | --- |
 | `Impact Effect Prefab` | `Projectile` | 命中敌对角色时在命中位置独立生成；目标眩晕免疫时仍生成。穿过边界、发起者、友军和石块时不生成 |
 | `Death Effect Prefab` | `EnemyCharacter` | 生命归零时在敌人位置独立生成 |
-| `Cleared Effect Prefab` | `DestructibleObstacle` | 石块被清除时在障碍物位置独立生成；同一对象只生成一次 |
+| `Cleared Effect Prefab` | `DestructibleObstacle` | 石块或炸弹被清除时在障碍物位置独立生成；同一对象只生成一次 |
 | `Explosion Effect Prefab` | `TimedBomb` | 引信爆炸时在炸弹位置独立生成；提前清除时不触发爆炸，不同时触发清除特效 |
 | `Completed Effect Prefab` | `RepairPoint` | 维修完成时独立生成，随后损坏点与进度条销毁 |
 | `Disembark Effect Prefab` | `Passenger` | 到站下船时独立生成，乘客行为与碰撞立即停用并销毁 |
 
-这些字段默认留空。特效实例位于场景中，不挂在即将销毁的对象下，使用特效预制体自身的播放设置。敌人和障碍物仍立即失去碰撞并销毁；需要死亡动画时，将相应表现放在独立死亡特效预制体中。
+这些字段默认留空。特效实例位于场景中，不挂在即将销毁的对象下，使用特效预制体自身的播放设置。玩家近战踢中石块或炸弹时，立即关闭碰撞并移除逻辑对象，引信条随炸弹根节点移除。原 `Visual` 从根节点脱离，保留当次外观，沿远离玩家的方向旋转飞出相机视口后销毁。常规清理和引信爆炸沿用原来的独立表现入口。敌人死亡动画使用独立死亡特效预制体。
 
 特效资源必须自行结束并清理：简单粒子设置 `Looping` 关闭、`Play On Awake` 开启、`Stop Action = Destroy`；动画特效由其完成回调清理。飞行特效作为子弹的显示子物体，在子弹消耗或 5 秒寿命结束时随之清理。
 
@@ -130,7 +130,18 @@ Departure、Sea、Island、FinalIsland 和 Prototype 保留为原区域演示与
 
 按截图删除六块航程 HUD：船只 HP/玩家状态/维修与炸弹数量、区域/事件、待结算收益/送达人数、乘客列表、操作提示、返航按钮；同时删除 Prototype 的 Boat Status 对象及专用脚本。面板原用内置白纹理与系统字体，没有专用美术或测试；共享 `White.png` 和 20 项玩法回归保留。
 
-现有出发选择、恢复、结算、错误界面、淡入淡出和敌人 HP 标签保留。本次不增加 UI。途中岗位/目的地及 3 秒上船等待仍在业务数据中，原 HUD 的预告文本已移除；后续 UI 和信息表现由用户定义。错误存档保留永久数据，结算写入失败可重试。
+现有出发选择、恢复、结算、错误界面、淡入淡出和敌人 HP 标签仍由 `VoyageView` 绘制。途中岗位/目的地及 3 秒上船等待仍在业务数据中。错误存档保留永久数据，结算写入失败可重试。
+
+main 的 `UI Layout` 是默认停用的空 Canvas，参考分辨率为 1280×720。挂点来自《UI界面文档》的版面与资源规格。正式素材交付后可从下表的场景节点开始绑定。
+
+| 挂点 | 接入内容及数据 |
+| --- | --- |
+| `Title Screen` | 全屏背景、顶部标题、居中纵排按钮。启航、恢复和退出沿用 `VoyageController` 接口。 |
+| `Route Map` | 中央 960×480，分别预留底图、连线和站点图标。路线读取 `Definition.stops`，启航后海路事件读取 `EventPlan`，当前位置读取 `StopIndex`。 |
+| `In-Game` | 左上船只耐久条与相邻眩晕环。耐久读取 `Vessel.Boat.CurrentHealth` / `MaxHealth`，眩晕环读取 `Vessel.Player.StunRemainingRatio`，剩余比例从 1 降至 0。 |
+| `Settlement` | 居中弹出框和内部道具区。已实现的整轮结算读取 `PendingReward`、`DeliveredPassengers` 与 `Phase`。 |
+| `Dialogue` | 底部对话框，左侧人像与右侧文本区。船员资料已有 `CrewDefinition.portrait`。 |
+| `Upgrade Options` | 中央卡牌区域。用于后续素材排版，升级规则与界面流程待定义。 |
 
 ## 素材替换约束
 

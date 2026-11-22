@@ -154,7 +154,12 @@ namespace Ferryman.Tests
             var stones = Object.FindObjectsOfType<DestructibleObstacle>();
             Assert.That(stones.Length, Is.EqualTo(special.obstacleCount));
             foreach (var stone in stones)
+            {
+                var hitbox = stone.GetComponent<BoxCollider2D>();
+                Assert.That(controller.Vessel.Boat.Deck.CanPlace(stone.transform.position, hitbox.size, hitbox), Is.True,
+                    "An event obstacle overlapped ship fixtures, another obstacle or a character.");
                 stone.Clear();
+            }
             yield return WaitFor(() => controller.Phase == VoyagePhase.Success, "successful arrival and settlement");
             int coins = encounter.reward.coins + special.reward.coins + escort.coinsReward + joining.coinsReward;
             int items = encounter.reward.specialItems + special.reward.specialItems
@@ -282,6 +287,24 @@ namespace Ferryman.Tests
             Assert.That(store.Progress.coins, Is.Zero, "Resuming a checkpoint prematurely committed temporary rewards.");
             controller.AbandonVoyage();
             yield return WaitFor(() => controller.Phase == VoyagePhase.Departure, "cleanup of the restored voyage");
+
+            Vector2 oldCabinPosition = new Vector2(-5.5f, 0f);
+            regional.playerLocalPosition = oldCabinPosition;
+            regional.passengers[0].localPosition = oldCabinPosition + Vector2.up;
+            regional.ship.points[0].localPosition = oldCabinPosition;
+            regional.ship.points[0].cell = new Vector2Int(0, 2);
+            store.SaveCheckpoint(regional);
+            Assert.That(controller.ResumeVoyage(), Is.True);
+            QuiesceActors();
+            BoatDeck deck = controller.Vessel.Boat.Deck;
+            foreach (Character actor in controller.Passengers.Select(item => item.Actor).Append(controller.Vessel.Player))
+                Assert.That(deck.HasClearFloor(actor.transform.position, actor.GetComponent<BoxCollider2D>().size), Is.True);
+            RepairPoint migrated = controller.Vessel.Boat.RepairPoints.Single();
+            Assert.That(migrated.Progress, Is.EqualTo(30f));
+            Assert.That(deck.HasClearFloor(migrated.transform.position, new Vector2(1.96f, 1.54f)), Is.True);
+            Assert.That(controller.Vessel.Boat.CurrentHealth, Is.EqualTo(850f));
+            controller.AbandonVoyage();
+            yield return WaitFor(() => controller.Phase == VoyagePhase.Departure, "cleanup of the migrated voyage");
         }
 
         private IEnumerator CompleteCombat(int stop)

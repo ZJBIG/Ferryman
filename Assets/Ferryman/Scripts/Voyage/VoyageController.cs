@@ -106,15 +106,11 @@ namespace Ferryman.Voyage
             eventPlan = VoyageEventPlanner.Build(definition, seed);
             CreateVessel();
             vessel.Boat.RestoreState(checkpoint.ship);
-            vessel.Player.transform.localPosition = checkpoint.playerLocalPosition;
-            vessel.Player.GetComponent<Rigidbody2D>().position = vessel.Player.transform.position;
+            RestoreActorPosition(vessel.Player, checkpoint.playerLocalPosition);
             foreach (PassengerState saved in checkpoint.passengers)
             {
                 Passenger passenger = BoardPassenger(FindProfile(saved.profileId), saved.destinationStopIndex);
-                passenger.transform.localPosition = saved.localPosition;
-                var body = passenger.Actor.GetComponent<Rigidbody2D>();
-                if (body != null)
-                    body.position = passenger.transform.position;
+                RestoreActorPosition(passenger.Actor, saved.localPosition);
             }
             vessel.SetActionsAllowed(false, true);
             ActiveRun = true;
@@ -305,10 +301,12 @@ namespace Ferryman.Voyage
 
         private void SpawnObstacles(SeaEventDefinition special)
         {
-            Vector2Int center = vessel.Boat.Deck.WorldToCell(Vector2.zero);
+            BoatDeck deck = vessel.Boat.Deck;
+            Vector2 footprint = special.obstaclePrefab.GetComponent<BoxCollider2D>().size;
+            Vector2Int center = deck.WorldToCell(Vector2.zero);
             var cells = new List<Vector2Int>();
-            for (int x = 0; x < vessel.Boat.Deck.GridSize.x; x++)
-            for (int y = 0; y < vessel.Boat.Deck.GridSize.y; y++)
+            for (int x = 0; x < deck.GridSize.x; x++)
+            for (int y = 0; y < deck.GridSize.y; y++)
             {
                 Vector2Int cell = new Vector2Int(x, y);
                 if (BoatDeck.CellDistance(center, cell) > 1)
@@ -319,11 +317,9 @@ namespace Ferryman.Voyage
             for (int i = 0; i < special.obstacleCount && cells.Count > 0; i++)
             {
                 int selected = random.Next(cells.Count);
-                Vector2 position = vessel.Boat.Deck.CellToWorld(cells[selected]);
+                Vector2 position = deck.CellToWorld(cells[selected]);
                 cells.RemoveAt(selected);
-                if (Physics2D.OverlapBoxAll(position, Vector2.one * 0.85f, 0f)
-                    .Any(hit => !hit.isTrigger && (hit.GetComponentInParent<Character>() != null
-                        || hit.GetComponentInParent<DestructibleObstacle>() != null)))
+                if (!deck.CanPlace(position, footprint))
                 {
                     i--;
                     continue;
@@ -362,13 +358,26 @@ namespace Ferryman.Voyage
             for (int x = 0; x < deck.GridSize.x; x++)
             {
                 Vector2 position = deck.CellToWorld(new Vector2Int(x, y));
-                bool blocked = Physics2D.OverlapBoxAll(position, new Vector2(0.5f, 0.75f), 0f)
-                    .Any(hit => !hit.isTrigger && (hit.GetComponentInParent<Character>() != null
-                        || hit.GetComponentInParent<DestructibleObstacle>() != null));
-                if (!blocked)
+                if (deck.CanPlace(position, new Vector2(0.5f, 0.75f)))
                     return position;
             }
             throw new InvalidOperationException("No boarding position is available on the deck.");
+        }
+
+        private void RestoreActorPosition(Character actor, Vector2 localPosition)
+        {
+            var hitbox = actor.GetComponent<BoxCollider2D>();
+            Vector2 desired = vessel.transform.TransformPoint(localPosition);
+            Physics2D.SyncTransforms();
+            if (!vessel.Boat.Deck.TryFindPlacement(desired + hitbox.offset, hitbox.size, hitbox, out Vector2 center))
+                throw new InvalidDataException("No clear deck position for a checkpoint actor.");
+            actor.transform.position = center - hitbox.offset;
+            var body = actor.GetComponent<Rigidbody2D>();
+            if (body != null)
+            {
+                body.position = actor.transform.position;
+                body.simulated = true;
+            }
         }
 
         private IEnumerator BoardAtIsland(VoyageStop stop, int index)
@@ -645,7 +654,7 @@ namespace Ferryman.Voyage
             BoatDeck deck = definition.vesselPrefab.GetComponent<VoyageVessel>().Boat.Deck;
             Vector2 playerPosition = root.TransformPoint(checkpoint.playerLocalPosition);
             if (!float.IsFinite(playerPosition.x) || !float.IsFinite(playerPosition.y)
-                || (deck.ClampToDeck(playerPosition) - playerPosition).sqrMagnitude > 0.0001f)
+                || !deck.ContainsFloor(playerPosition))
                 throw new InvalidDataException("Checkpoint player is outside the deck.");
             foreach (PassengerState passenger in checkpoint.passengers)
                 if (passenger == null || FindProfile(passenger.profileId) == null
@@ -656,7 +665,7 @@ namespace Ferryman.Voyage
                 else
                 {
                     Vector2 position = root.TransformPoint(passenger.localPosition);
-                    if ((deck.ClampToDeck(position) - position).sqrMagnitude > 0.0001f)
+                    if (!deck.ContainsFloor(position))
                         throw new InvalidDataException("Checkpoint passenger is outside the deck.");
                 }
         }

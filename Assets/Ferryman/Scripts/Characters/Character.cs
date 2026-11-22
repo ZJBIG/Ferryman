@@ -29,6 +29,9 @@ namespace Ferryman.Characters
 
         public Collider2D Hitbox => hitbox;
         public bool IsStunned => Time.time < stunnedUntil;
+        public float StunRemainingRatio => stunDuration > 0f
+            ? Mathf.Clamp01((stunnedUntil - Time.time) / stunDuration)
+            : 0f;
         public bool ActionsEnabled => actionsEnabled;
         public virtual bool IsHostile => false;
         protected virtual bool CanAct => actionsEnabled && !IsStunned && (!IsHostile || Health > 0f);

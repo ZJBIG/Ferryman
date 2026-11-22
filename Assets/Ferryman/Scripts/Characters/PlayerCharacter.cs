@@ -130,13 +130,17 @@ namespace Ferryman.Characters
             }
 
             var struck = new HashSet<Object>();
+            Camera kickCamera = aimCamera != null ? aimCamera : Camera.main;
             foreach (var hit in hits)
             {
                 var obstacle = hit.GetComponentInParent<DestructibleObstacle>();
                 if (obstacle != null)
                 {
                     if (struck.Add(obstacle))
-                        obstacle.Clear();
+                    {
+                        Vector2 away = (Vector2)obstacle.transform.position - origin;
+                        obstacle.Kick(away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection, kickCamera);
+                    }
                     continue;
                 }
 

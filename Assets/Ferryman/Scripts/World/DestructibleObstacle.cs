@@ -22,7 +22,12 @@ namespace Ferryman.World
             Remove(true);
         }
 
-        internal bool Remove(bool showClearedEffect)
+        internal void Kick(Vector2 direction, Camera camera)
+        {
+            Remove(true, direction, camera);
+        }
+
+        internal bool Remove(bool showClearedEffect, Vector2 kickDirection = default, Camera camera = null)
         {
             var hitbox = GetComponent<Collider2D>();
             if (IsCleared || !hitbox.enabled)
@@ -31,6 +36,12 @@ namespace Ferryman.World
             hitbox.enabled = false;
             if (showClearedEffect && clearedEffectPrefab != null)
                 Instantiate(clearedEffectPrefab, transform.position, Quaternion.identity);
+            if (camera != null && visual != null && visual.sprite != null
+                && visual.transform != transform && visual.transform.IsChildOf(transform))
+            {
+                visual.transform.SetParent(null, true);
+                visual.gameObject.AddComponent<KickedItemFlight>().Launch(visual, kickDirection, camera);
+            }
             Destroy(gameObject);
             return true;
         }

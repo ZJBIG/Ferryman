@@ -66,8 +66,7 @@ namespace Ferryman.Tests
         [Test]
         public void PlayerColliderStaysInsideAllEdgesAndCorners()
         {
-            Vector2 start = body.position;
-            Bounds boundary = deck.GetComponent<EdgeCollider2D>().bounds;
+            Vector2 start = Vector2.zero;
             for (int x = -1; x <= 1; x++)
             for (int y = -1; y <= 1; y++)
             {
@@ -80,11 +79,24 @@ namespace Ferryman.Tests
                     AssertInsideDeck();
                 }
 
-                if (x != 0)
-                    Assert.That(Mathf.Abs(body.position.x), Is.GreaterThan(boundary.extents.x - playerCollider.bounds.extents.x - 0.1f));
-                if (y != 0)
-                    Assert.That(Mathf.Abs(body.position.y), Is.GreaterThan(boundary.extents.y - playerCollider.bounds.extents.y - 0.1f));
+                Assert.That(Vector2.Distance(body.position, start), Is.GreaterThan(1.5f));
             }
+
+            body.position = Vector2.zero;
+            Step(Vector2.left, 100);
+            float cabinSide = body.position.x;
+            Assert.That(cabinSide, Is.InRange(-3.25f, -3.1f), "The middle cabin wall did not block the player.");
+            body.position = Vector2.zero;
+            Step(Vector2.up, 100);
+            Step(Vector2.left, 100);
+            Assert.That(body.position.x, Is.LessThan(cabinSide - 0.5f), "Upper-left access was blocked.");
+            AssertInsideDeck();
+            body.position = Vector2.zero;
+            Step(Vector2.down, 100);
+            Step(Vector2.left, 100);
+            Assert.That(body.position.y, Is.LessThan(-2.1f), "Lower-left access was blocked.");
+            Assert.That(body.position.x, Is.LessThan(cabinSide - 0.1f), "Lower cabin corner did not open up.");
+            AssertInsideDeck();
         }
 
         [Test]
@@ -111,13 +123,9 @@ namespace Ferryman.Tests
 
         private void AssertInsideDeck()
         {
-            Bounds boundary = deck.GetComponent<EdgeCollider2D>().bounds;
             Bounds footprint = playerCollider.bounds;
-            const float tolerance = 0.02f;
-            Assert.That(footprint.min.x, Is.GreaterThanOrEqualTo(boundary.min.x - tolerance));
-            Assert.That(footprint.max.x, Is.LessThanOrEqualTo(boundary.max.x + tolerance));
-            Assert.That(footprint.min.y, Is.GreaterThanOrEqualTo(boundary.min.y - tolerance));
-            Assert.That(footprint.max.y, Is.LessThanOrEqualTo(boundary.max.y + tolerance));
+            Assert.That(deck.HasClearFloor(footprint.center, (Vector2)footprint.size - Vector2.one * 0.04f), Is.True,
+                "Player entered the ship fixtures or left the hull outline.");
         }
     }
 }

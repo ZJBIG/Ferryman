@@ -42,10 +42,16 @@ namespace Ferryman.World
         {
             targetBoat = boat;
             throwOrigin = transform.position;
-            landingPosition = boat.Deck.ClampToDeck(destination);
+            var hitbox = GetComponent<BoxCollider2D>();
+            Physics2D.SyncTransforms();
+            if (!boat.Deck.TryFindPlacement(destination, hitbox.size, hitbox, out landingPosition))
+            {
+                Destroy(gameObject);
+                return;
+            }
             thrownAt = Time.time;
             inFlight = true;
-            GetComponent<Collider2D>().enabled = false;
+            hitbox.enabled = false;
             if (fuseFill != null)
                 fuseFill.parent.gameObject.SetActive(false);
         }
@@ -59,8 +65,17 @@ namespace Ferryman.World
                     + Vector2.up * (Mathf.Sin(t * Mathf.PI) * throwArcHeight);
                 if (t < 1f)
                     return;
+                var hitbox = GetComponent<BoxCollider2D>();
+                Physics2D.SyncTransforms();
+                if (!targetBoat.Deck.TryFindPlacement(landingPosition, hitbox.size, hitbox, out Vector2 touchdown))
+                {
+                    Destroy(gameObject);
+                    return;
+                }
+                transform.position = touchdown;
                 inFlight = false;
-                GetComponent<Collider2D>().enabled = true;
+                hitbox.enabled = true;
+                Physics2D.SyncTransforms();
                 detonateAt = Time.time + fuseSeconds;
                 if (fuseFill != null)
                     fuseFill.parent.gameObject.SetActive(true);

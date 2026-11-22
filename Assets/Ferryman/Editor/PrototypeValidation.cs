@@ -38,16 +38,17 @@ namespace Ferryman.Editor
                 finally { PrefabUtility.UnloadPrefabContents(prefab); }
             }
             CheckAppearances(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Stone.prefab").GetComponent<DestructibleObstacle>(),
-                "Items/StoneWide", "Items/StoneTall", "Items/DeckObstacle");
+                1.25f, "Items/StoneWide", "Items/StoneTall", "Items/DeckObstacle");
             CheckAppearances(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/TimedBomb.prefab").GetComponent<DestructibleObstacle>(),
-                "Items/BombRound", "Items/BombDynamite");
+                1.45f, "Items/BombRound", "Items/BombDynamite");
             var repairArt = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/RepairPoint.prefab");
-            CheckAppearances(repairArt.GetComponent<RepairPoint>(), "Repair/HoleSplinter", "Repair/HoleWide");
+            CheckAppearances(repairArt.GetComponent<RepairPoint>(), 3.08f, "Repair/HoleSplinter", "Repair/HoleWide");
             var repairFields = new SerializedObject(repairArt.GetComponent<RepairPoint>());
             var bar = (GameObject)repairFields.FindProperty("progressBar").objectReferenceValue;
             var fill = (Transform)repairFields.FindProperty("progressFill").objectReferenceValue;
             Require(bar != null && fill != null && fill.parent.gameObject == bar && fill.localScale == Vector3.one,
                 "Repair bar bindings or progress container scale differ.");
+            Require(bar.transform.localScale == new Vector3(1.25f, 1.25f, 1f), "Repair frame and fill must scale together.");
             var fillArt = fill.Find("Visual").GetComponent<SpriteRenderer>();
             var frameArt = bar.transform.Find("Background").GetComponent<SpriteRenderer>();
             Require(AssetDatabase.GetAssetPath(fillArt.sprite) == Root + "Art/Repair/ProgressFill.png"
@@ -101,9 +102,13 @@ namespace Ferryman.Editor
                 "Default fixed and random events differ.");
             var boundary = vessel.Boat.Deck.GetComponent<EdgeCollider2D>();
             var line = vessel.Boat.Deck.GetComponent<LineRenderer>();
-            Require(boundary.points.Length == 5 && boundary.points[0] == boundary.points[4] && line.positionCount == 4, "Deck edge no longer closes.");
-            for (int i = 0; i < 4; i++)
-                Require((Vector2)line.GetPosition(i) == boundary.points[i], "Deck outline and physics edge differ.");
+            var points = boundary.points;
+            Require(points.Length == 8 && points[0] == points[points.Length - 1] && line.positionCount == points.Length - 1,
+                "Deck edge no longer closes along the ship art.");
+            Require(vessel.Boat.Deck.GetComponentsInChildren<BoxCollider2D>().Length == 6,
+                "One of the cabin or cargo collision sections is missing.");
+            for (int i = 0; i < line.positionCount; i++)
+                Require((Vector2)line.GetPosition(i) == points[i], "Deck outline and physics edge differ.");
 
             var buildScenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).ToArray();
             Require(buildScenes.Length == 6 && buildScenes[0].path == Root + "Scenes/main.unity", "Build entry or scenes differ.");
@@ -128,6 +133,12 @@ namespace Ferryman.Editor
                     Require(presentation != null && Camera.main != null, "Scene presentation/camera is absent.");
                     if (buildScene.path.EndsWith("main.unity", StringComparison.Ordinal))
                     {
+                        var ui = scene.GetRootGameObjects().SingleOrDefault(root => root.name == "UI Layout");
+                        Require(ui != null && !ui.activeSelf && ui.GetComponent<Canvas>() != null,
+                            "Main UI layout is missing or active before the UI art is integrated.");
+                        foreach (string slot in new[] { "Title Screen", "Route Map", "In-Game/Ship Durability",
+                            "In-Game/Stun Ring", "Settlement/Reward Items", "Dialogue/Portrait", "Upgrade Options" })
+                            Require(ui.transform.Find(slot) is RectTransform, "Missing UI layout slot: " + slot);
                         Require(presentation.IsUnifiedScene, "Main does not contain the full voyage environment.");
                         var islands = (Transform)new SerializedObject(presentation).FindProperty("islandStops").objectReferenceValue;
                         Require(islands.childCount == 3, "Main must contain the three island appearances.");
@@ -150,7 +161,7 @@ namespace Ferryman.Editor
             EditorSceneManager.OpenScene(Root + "Scenes/main.unity");
             Directory.CreateDirectory(".local");
             File.WriteAllText(".local/prototype-resource-observations.txt",
-                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed 12 x 5 edge, grid size 1.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\n");
+                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed hull outline, six cabin/cargo colliders, 12 x 5 repair grid.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\nMain UI layout anchors are present and inactive.\n");
             Debug.Log("Ferryman full prototype resource verification passed.");
         }
 
@@ -203,13 +214,13 @@ namespace Ferryman.Editor
             }
         }
 
-        private static void CheckAppearances(Component owner, params string[] images)
+        private static void CheckAppearances(Component owner, float scale, params string[] images)
         {
             var fields = new SerializedObject(owner);
             var visual = fields.FindProperty("visual").objectReferenceValue as SpriteRenderer;
             var appearances = fields.FindProperty("appearances");
             Require(visual != null && visual.transform.parent == owner.transform && visual.color == Color.white
-                && visual.transform.localScale == Vector3.one && appearances.arraySize == images.Length,
+                && visual.transform.localScale == new Vector3(scale, scale, 1f) && appearances.arraySize == images.Length,
                 "Item/repair visual or static appearance bindings differ: " + owner.name);
             for (int i = 0; i < images.Length; i++)
                 Require(AssetDatabase.GetAssetPath(appearances.GetArrayElementAtIndex(i).objectReferenceValue)

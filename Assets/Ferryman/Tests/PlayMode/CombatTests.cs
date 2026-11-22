@@ -99,6 +99,7 @@ namespace Ferryman.Tests
             yield return WaitFor(() => player.IsStunned, 2f, "Enemy projectile did not stun the player.");
 
             Assert.That(player.Health, Is.EqualTo(100f));
+            Assert.That(player.StunRemainingRatio, Is.InRange(0.9f, 1f));
             Assert.That(body.velocity, Is.EqualTo(Vector2.zero));
             player.Move(Vector2.right);
             Assert.That(body.velocity, Is.EqualTo(Vector2.zero));
@@ -111,8 +112,10 @@ namespace Ferryman.Tests
             yield return WaitFor(() => blockedShot == null, 0.2f, "An invulnerable target should still consume the projectile.");
             Assert.That(player.IsStunned, Is.True);
             Assert.That(received, Is.EqualTo(1));
+            Assert.That(player.StunRemainingRatio, Is.GreaterThan(0f).And.LessThan(0.7f));
             yield return new WaitForSeconds(0.7f);
             Assert.That(player.IsStunned, Is.False, "A second hit extended the stun.");
+            Assert.That(player.StunRemainingRatio, Is.Zero);
 
             player.Move(Vector2.right);
             Assert.That(body.velocity.x, Is.EqualTo(player.MoveSpeed));
@@ -150,7 +153,13 @@ namespace Ferryman.Tests
             int received = 0;
             damageSystem.DamageReceived.AddListener((source, target, amount) => received++);
 
+            Transform stoneVisual = edgeStone.transform.Find("Visual");
+            Vector3 launchPosition = stoneVisual.position;
+            Quaternion launchRotation = stoneVisual.rotation;
             Assert.That(player.TryMelee(Vector2.right), Is.True);
+            Assert.That(edgeStone.IsCleared, Is.True);
+            Assert.That(edgeStone.GetComponent<Collider2D>().enabled, Is.False);
+            Assert.That(stoneVisual.parent, Is.Null);
             yield return null;
             Assert.That(edgeStone == null, Is.True,
                 "The stone overlaps the sector even though its nearest point is outside the angle.");
@@ -159,6 +168,10 @@ namespace Ferryman.Tests
             Assert.That(behindStone != null, Is.True, "Melee hit a stone behind the player.");
             Assert.That(distantStone != null, Is.True, "Melee hit a stone beyond its radius.");
             Object.Destroy(distantStone.gameObject);
+            yield return WaitFor(() => stoneVisual != null && stoneVisual.position.x > launchPosition.x
+                && stoneVisual.position.y > launchPosition.y && Quaternion.Angle(stoneVisual.rotation, launchRotation) > 10f,
+                0.55f, "The kicked stone did not move away and spin.");
+            yield return WaitFor(() => stoneVisual == null, 1f, "The kicked stone visual did not clean itself up.");
         }
 
         private Projectile FireFrom(Character source, Vector3 origin, Vector2 direction, float damage)

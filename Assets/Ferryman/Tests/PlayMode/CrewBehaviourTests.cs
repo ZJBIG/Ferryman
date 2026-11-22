@@ -62,7 +62,7 @@ namespace Ferryman.Tests
                 .First(item => item.GetComponent<TimedBomb>() == null);
             stone.transform.position = Vector2.zero;
             stone.gameObject.SetActive(true);
-            Vector2Int damagedCell = new Vector2Int(1, 1);
+            Vector2Int damagedCell = new Vector2Int(3, 1);
             boat.ApplyDamage(100f, boat.Deck.CellToWorld(damagedCell));
             RepairPoint point = boat.RepairPoints.Single();
             MaintenanceCrewMember crew = CreateMaintenance(new Vector2(4.5f, 0f), 4f, 10f, 1);

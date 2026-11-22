@@ -9,6 +9,8 @@ namespace Ferryman.World
 {
     public sealed class BoatHealth : MonoBehaviour
     {
+        private static readonly Vector2 RepairArtworkSize = new Vector2(1.96f, 1.54f);
+
         [Serializable]
         public sealed class State
         {
@@ -74,6 +76,29 @@ namespace Ferryman.World
                     || deck.WorldToCell(deck.transform.TransformPoint(point.localPosition)) != point.cell)
                     throw new InvalidDataException("Invalid repair checkpoint.");
 
+            var placements = new List<(Vector2Int Cell, Vector2 Position, float Progress)>(state.points.Length);
+            var displaced = new List<PointState>();
+            occupied.Clear();
+            foreach (var saved in state.points)
+            {
+                Vector2 position = deck.transform.TransformPoint(saved.localPosition);
+                if (deck.HasClearFloor(position, RepairArtworkSize))
+                {
+                    occupied.Add(saved.cell);
+                    placements.Add((saved.cell, position, saved.progress));
+                }
+                else
+                    displaced.Add(saved);
+            }
+            foreach (var saved in displaced)
+            {
+                Vector2 position = deck.transform.TransformPoint(saved.localPosition);
+                if (!TryFindFreeCell(occupied, saved.cell, position, out Vector2Int cell, out Vector2 moved))
+                    throw new InvalidDataException("No clear deck position for a checkpoint repair point.");
+                occupied.Add(cell);
+                placements.Add((cell, moved, saved.progress));
+            }
+
             foreach (var point in repairPoints.Values)
             {
                 point.StopAllRepairs();
@@ -82,14 +107,8 @@ namespace Ferryman.World
             repairPoints.Clear();
             currentHealth = state.health;
             pendingDamage = state.pendingDamage;
-            foreach (var saved in state.points)
-            {
-                var point = Instantiate(repairPointPrefab, deck.transform.TransformPoint(saved.localPosition),
-                    Quaternion.identity, deck.transform);
-                point.Initialize(this, saved.cell, repairPointHealth);
-                point.RestoreProgress(saved.progress);
-                repairPoints.Add(saved.cell, point);
-            }
+            foreach (var placement in placements)
+                AddRepairPoint(placement.Cell, placement.Position).RestoreProgress(placement.Progress);
             healthChanged.Invoke(currentHealth, maxHealth);
         }
 
@@ -129,23 +148,31 @@ namespace Ferryman.World
             Vector2Int origin = deck.WorldToCell(firstPosition);
             while (pendingDamage >= repairPointHealth)
             {
-                if (!TryFindFreeCell(origin, out Vector2Int cell))
+                if (!TryFindFreeCell(repairPoints.Keys, origin, firstPosition, out Vector2Int cell, out Vector2 position))
                     break;
 
-                Vector2 position = cell == origin ? firstPosition : deck.CellToWorld(cell);
-                var point = Instantiate(repairPointPrefab, position, Quaternion.identity, deck.transform);
-                repairPoints.Add(cell, point);
-                point.Initialize(this, cell, repairPointHealth);
+                AddRepairPoint(cell, position);
                 pendingDamage -= repairPointHealth;
             }
         }
 
-        private bool TryFindFreeCell(Vector2Int origin, out Vector2Int cell)
+        private RepairPoint AddRepairPoint(Vector2Int cell, Vector2 position)
         {
-            if (!repairPoints.ContainsKey(origin))
+            var point = Instantiate(repairPointPrefab, position, Quaternion.identity, deck.transform);
+            repairPoints.Add(cell, point);
+            point.Initialize(this, cell, repairPointHealth);
+            return point;
+        }
+
+        private bool TryFindFreeCell(ICollection<Vector2Int> occupied, Vector2Int origin, Vector2 preferred,
+            out Vector2Int cell, out Vector2 position)
+        {
+            if (!occupied.Contains(origin))
             {
                 cell = origin;
-                return true;
+                position = deck.HasClearFloor(preferred, RepairArtworkSize) ? preferred : deck.CellToWorld(origin);
+                if (deck.HasClearFloor(position, RepairArtworkSize))
+                    return true;
             }
 
             var candidates = new List<Vector2Int>();
@@ -155,28 +182,31 @@ namespace Ferryman.World
                 candidates.Clear();
                 for (int x = -radius; x <= radius; x++)
                 {
-                    AddCandidate(origin + new Vector2Int(x, -radius), candidates);
-                    AddCandidate(origin + new Vector2Int(x, radius), candidates);
+                    AddCandidate(origin + new Vector2Int(x, -radius), occupied, candidates);
+                    AddCandidate(origin + new Vector2Int(x, radius), occupied, candidates);
                 }
                 for (int y = -radius + 1; y < radius; y++)
                 {
-                    AddCandidate(origin + new Vector2Int(-radius, y), candidates);
-                    AddCandidate(origin + new Vector2Int(radius, y), candidates);
+                    AddCandidate(origin + new Vector2Int(-radius, y), occupied, candidates);
+                    AddCandidate(origin + new Vector2Int(radius, y), occupied, candidates);
                 }
                 if (candidates.Count == 0)
                     continue;
 
                 cell = candidates[Random.Range(0, candidates.Count)];
+                position = deck.CellToWorld(cell);
                 return true;
             }
 
             cell = default;
+            position = default;
             return false;
         }
 
-        private void AddCandidate(Vector2Int cell, List<Vector2Int> candidates)
+        private void AddCandidate(Vector2Int cell, ICollection<Vector2Int> occupied, List<Vector2Int> candidates)
         {
-            if (deck.ContainsCell(cell) && !repairPoints.ContainsKey(cell))
+            if (deck.ContainsCell(cell) && !occupied.Contains(cell)
+                && deck.HasClearFloor(deck.CellToWorld(cell), RepairArtworkSize))
                 candidates.Add(cell);
         }
 

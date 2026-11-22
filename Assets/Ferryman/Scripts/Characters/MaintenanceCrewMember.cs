@@ -227,15 +227,7 @@ namespace Ferryman.Characters
         {
             Vector2 size = Vector2.Scale(footprint.size, transform.lossyScale) + Vector2.one * 0.04f;
             Vector2 center = position + Vector2.Scale(footprint.offset, transform.lossyScale);
-            Bounds boundary = boat.Deck.GetComponent<EdgeCollider2D>().bounds;
-            Vector2 half = size * 0.5f;
-            if (center.x - half.x < boundary.min.x || center.x + half.x > boundary.max.x
-                || center.y - half.y < boundary.min.y || center.y + half.y > boundary.max.y)
-                return false;
-            foreach (var hit in Physics2D.OverlapBoxAll(center, size, 0f))
-                if (!hit.isTrigger && hit != footprint && hit != boat.Deck.GetComponent<EdgeCollider2D>())
-                    return false;
-            return true;
+            return boat.Deck.CanPlace(center, size, footprint);
         }
 
         private void PauseContributions()

@@ -102,6 +102,7 @@ namespace Ferryman.Tests
             Assert.That(boat.RepairPoints.All(point => boat.Deck.ContainsCell(point.Cell)), Is.True);
             Assert.That(boat.RepairPoints.Count(point => BoatDeck.CellDistance(origin, point.Cell) == 1), Is.EqualTo(8));
             Assert.That(boat.RepairPoints.Max(point => BoatDeck.CellDistance(origin, point.Cell)), Is.EqualTo(2));
+            Assert.That(boat.RepairPoints.All(point => boat.Deck.HasClearFloor(point.transform.position, new Vector2(1.96f, 1.54f))), Is.True);
             Assert.That(player.IsRepairing, Is.False);
             Assert.That(boat.RepairPoints.All(point => !point.IsBeingRepaired), Is.True);
             Assert.That(replacement.BeginRepair(player), Is.False);
@@ -211,6 +212,7 @@ namespace Ferryman.Tests
             Assert.That(bombs.Length, Is.EqualTo(2));
             TimedBomb cleared = bombs[0];
             TimedBomb exploding = bombs[1];
+            TimedBomb thrown = Object.Instantiate(exploding, Vector2.up * 6f, Quaternion.identity);
             cleared.transform.position = Vector2.right;
             exploding.transform.position = Vector2.left;
             var clearEffect = new GameObject("Test Bomb Clear Effect");
@@ -220,15 +222,23 @@ namespace Ferryman.Tests
             SetField(exploding, "explosionEffectPrefab", explosionEffect);
             cleared.gameObject.SetActive(true);
             exploding.gameObject.SetActive(true);
+            Transform bombVisual = cleared.transform.Find("Visual");
+            Transform fuseBar = cleared.transform.Find("Fuse Bar");
             Physics2D.SyncTransforms();
             Assert.That(player.TryMelee(Vector2.right), Is.True);
             Assert.That(cleared.GetComponent<DestructibleObstacle>().IsCleared, Is.True);
             Assert.That(cleared.GetComponent<Collider2D>().enabled, Is.False);
+            Assert.That(bombVisual.parent, Is.Null);
             cleared.GetComponent<DestructibleObstacle>().Clear();
             Assert.That(cleared.Explode(), Is.False, "A cleared bomb still exploded before delayed destruction.");
             Assert.That(EffectCount(clearEffect), Is.EqualTo(1));
             Assert.That(EffectCount(explosionEffect), Is.Zero);
+            yield return null;
+            Assert.That(cleared == null && fuseBar == null, Is.True);
+            yield return WaitFor(() => bombVisual != null && bombVisual.position.x > 1f, 0.55f,
+                "The bomb sprite did not fly away.");
             yield return new WaitForSeconds(2f);
+            Assert.That(bombVisual == null, Is.True, "The kicked bomb visual did not clean itself up.");
             Assert.That(boat.CurrentHealth, Is.EqualTo(1000f), "Bomb damage occurred before the fuse elapsed.");
             yield return WaitFor(() => exploding == null, 2f, "The intact bomb did not explode after its fuse.");
             Assert.That(boat.CurrentHealth, Is.EqualTo(900f));
@@ -239,6 +249,22 @@ namespace Ferryman.Tests
             Assert.That(EffectCount(explosionEffect), Is.EqualTo(1));
             yield return new WaitForSeconds(0.1f);
             Assert.That(boat.CurrentHealth, Is.EqualTo(900f));
+
+            Vector2 blockedCabin = new Vector2(-5f, 0f);
+            thrown.gameObject.SetActive(true);
+            BoxCollider2D thrownHitbox = thrown.GetComponent<BoxCollider2D>();
+            Assert.That(boat.Deck.CanPlace(blockedCabin, thrownHitbox.size), Is.False);
+            Assert.That(boat.Deck.TryFindPlacement(blockedCabin, thrownHitbox.size, thrownHitbox, out Vector2 planned), Is.True);
+            thrown.Throw(boat, blockedCabin);
+            Assert.That(thrownHitbox.enabled, Is.False);
+            body.position = planned;
+            Physics2D.SyncTransforms();
+            yield return WaitFor(() => thrown != null && !thrown.IsInFlight, 1f, "The thrown bomb did not find a safe landing.");
+            Assert.That(thrownHitbox.enabled, Is.True);
+            Assert.That((Vector2)thrown.transform.position, Is.Not.EqualTo(planned));
+            Assert.That(boat.Deck.CanPlace(thrown.transform.position, thrownHitbox.size, thrownHitbox), Is.True);
+            Object.Destroy(thrown.gameObject);
+
             foreach (var effect in Object.FindObjectsOfType<Transform>()
                 .Where(item => item.name.StartsWith("Test Bomb", StringComparison.Ordinal)).ToArray())
                 Object.Destroy(effect.gameObject);
