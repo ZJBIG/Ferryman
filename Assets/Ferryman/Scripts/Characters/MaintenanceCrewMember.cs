@@ -16,13 +16,13 @@ namespace Ferryman.Characters
         private int repairRange;
         private int simultaneousRepairs;
         private RepairPoint target;
-        private Vector2Int repairCenter;
         private bool working;
         private bool contributing;
         private readonly List<RepairPoint> repairTargets = new List<RepairPoint>();
         private readonly List<Vector2Int> path = new List<Vector2Int>();
         private int pathIndex;
-        private Vector2 approachPosition;
+        private readonly List<RaycastHit2D> routeHits = new List<RaycastHit2D>();
+        private bool routeBlocked;
         private float nextPathAt;
 
         public RepairPoint CurrentTarget => target;
@@ -66,25 +66,16 @@ namespace Ferryman.Characters
                 RepairAtCenter();
                 return;
             }
-            if (target == null || target.IsComplete || !target.isActiveAndEnabled)
+            if ((target == null || target.IsComplete || !target.isActiveAndEnabled || routeBlocked)
+                && Time.time >= nextPathAt)
                 FindWork();
-            if (target == null)
+            if (target == null || target.IsComplete || !target.isActiveAndEnabled)
                 return;
 
-            if (Time.time >= nextPathAt)
-            {
-                if (!BuildPath(target.Cell))
-                {
-                    target = null;
-                    path.Clear();
-                    return;
-                }
-                nextPathAt = Time.time + 0.5f;
-            }
-            if (Vector2.Distance(body.position, approachPosition) <= 0.08f)
+            Vector2Int position = boat.Deck.WorldToCell(body.position);
+            if (BoatDeck.CellDistance(position, target.Cell) <= repairRange)
             {
                 working = true;
-                repairCenter = target.Cell;
                 path.Clear();
                 body.velocity = Vector2.zero;
                 RepairAtCenter();
@@ -93,7 +84,7 @@ namespace Ferryman.Characters
 
         private void FixedUpdate()
         {
-            if (!CanAct || working || target == null || path.Count == 0)
+            if (!CanAct || working || target == null || target.IsComplete || !target.isActiveAndEnabled || path.Count == 0)
             {
                 body.velocity = Vector2.zero;
                 return;
@@ -101,20 +92,27 @@ namespace Ferryman.Characters
 
             while (pathIndex < path.Count && Vector2.Distance(body.position, boat.Deck.CellToWorld(path[pathIndex])) <= 0.08f)
                 pathIndex++;
-            if (pathIndex >= path.Count)
+            for (int i = path.Count - 1; i >= pathIndex; i--)
             {
-                body.velocity = Vector2.zero;
+                Vector2 delta = boat.Deck.CellToWorld(path[i]) - body.position;
+                if (footprint.Cast(delta.normalized, new ContactFilter2D { useTriggers = false }, routeHits, delta.magnitude) > 0)
+                    continue;
+                pathIndex = i;
+                routeBlocked = false;
+                body.velocity = delta.normalized * Mathf.Min(moveSpeed, delta.magnitude / Time.fixedDeltaTime);
                 return;
             }
 
-            Vector2 delta = boat.Deck.CellToWorld(path[pathIndex]) - body.position;
-            body.velocity = delta.normalized * Mathf.Min(moveSpeed, delta.magnitude / Time.fixedDeltaTime);
+            routeBlocked = true;
+            body.velocity = Vector2.zero;
         }
 
         private void FindWork()
         {
             path.Clear();
             target = null;
+            routeBlocked = false;
+            nextPathAt = Time.time + 0.25f;
             var unreachable = new List<RepairPoint>();
             Vector2Int origin = boat.Deck.WorldToCell(body.position);
             while (true)
@@ -125,7 +123,6 @@ namespace Ferryman.Characters
                 if (BuildPath(candidate.Cell))
                 {
                     target = candidate;
-                    nextPathAt = Time.time + 0.5f;
                     return;
                 }
                 unreachable.Add(candidate);
@@ -134,6 +131,7 @@ namespace Ferryman.Characters
 
         private void RepairAtCenter()
         {
+            Vector2Int repairCenter = boat.Deck.WorldToCell(body.position);
             for (int i = repairTargets.Count - 1; i >= 0; i--)
             {
                 RepairPoint point = repairTargets[i];
@@ -178,17 +176,13 @@ namespace Ferryman.Characters
             var previous = new Dictionary<Vector2Int, Vector2Int> { [origin] = origin };
             frontier.Enqueue(origin);
             Vector2Int? goal = null;
-            int nearestTarget = int.MaxValue;
             while (frontier.Count > 0)
             {
                 Vector2Int cell = frontier.Dequeue();
-                int distance = BoatDeck.CellDistance(cell, targetCell);
-                if (distance <= repairRange && distance < nearestTarget)
+                if (BoatDeck.CellDistance(cell, targetCell) <= repairRange)
                 {
                     goal = cell;
-                    nearestTarget = distance;
-                    if (distance == 0)
-                        break;
+                    break;
                 }
                 for (int dx = -1; dx <= 1; dx++)
                 for (int dy = -1; dy <= 1; dy++)
@@ -209,7 +203,7 @@ namespace Ferryman.Characters
             if (!goal.HasValue)
                 return false;
 
-            // An occupied damage cell is approached from the nearest reachable repair cell.
+            // Keep the current cell center as a fallback when the next segment is blocked.
             Vector2Int step = goal.Value;
             while (step != origin)
             {
@@ -219,7 +213,6 @@ namespace Ferryman.Characters
             if (walkable[origin.x, origin.y] && goal.Value != origin)
                 path.Add(origin);
             path.Reverse();
-            approachPosition = goal.Value == origin ? body.position : deck.CellToWorld(goal.Value);
             return true;
         }
 
@@ -247,6 +240,8 @@ namespace Ferryman.Characters
             working = false;
             target = null;
             path.Clear();
+            routeBlocked = false;
+            nextPathAt = 0f;
         }
 
         public override bool TryReceiveDamage(float damage)

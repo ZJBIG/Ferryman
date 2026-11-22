@@ -125,18 +125,28 @@ namespace Ferryman.Tests
             Assert.That(point.Progress, Is.Zero, "Combat crew repaired the boat.");
             fighter.SetActionsAllowed(false);
 
-            MaintenanceCrewMember mechanic = CreateMaintenance(new Vector2(-1.5f, 0f), 2f, 25f, 1);
+            Vector2 stance = new Vector2(-0.5f, 0f);
+            MaintenanceCrewMember mechanic = CreateMaintenance(stance, 2f, 25f, 1);
             Physics2D.SyncTransforms();
             yield return WaitFor(() => point.Progress > 0f, 1f, "Maintenance crew did not begin repair.");
+            Assert.That(Vector2.Distance(mechanic.transform.position, stance), Is.LessThan(0.01f),
+                "Crew walked onto the damage even though it was already in repair range.");
+            Transform bar = point.transform.Find("Progress Bar");
+            Transform fill = bar.Find("Fill");
+            Assert.That(bar.gameObject.activeInHierarchy, Is.True, "Crew-only repair did not display its progress bar.");
+            Assert.That(fill.localScale.x, Is.EqualTo(point.Progress / point.RequiredProgress).Within(0.001f));
             Assert.That(mechanic.TryReceiveDamage(10f), Is.True);
             float saved = point.Progress;
             Assert.That(mechanic.IsRepairing, Is.False);
             Assert.That(point.IsBeingRepaired, Is.False);
+            Assert.That(bar.gameObject.activeSelf, Is.False);
             yield return new WaitForSeconds(0.4f);
             Assert.That(point.Progress, Is.EqualTo(saved));
             Assert.That(mechanic.TryReceiveDamage(10f), Is.False);
             yield return WaitFor(() => !mechanic.IsStunned && point.Progress > saved, 1f,
                 "Maintenance crew did not resume its saved task after stun.");
+            Assert.That(bar.gameObject.activeInHierarchy, Is.True);
+            Assert.That(fill.localScale.x, Is.EqualTo(point.Progress / point.RequiredProgress).Within(0.001f));
             Assert.That(mechanic.Health, Is.EqualTo(100f));
             Assert.That(mechanic.GetComponent<CombatCharacter>(), Is.Null);
             boat.ApplyDamage(10000f, Vector2.zero);

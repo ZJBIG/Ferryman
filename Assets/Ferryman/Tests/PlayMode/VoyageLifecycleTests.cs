@@ -85,7 +85,7 @@ namespace Ferryman.Tests
                 .Concat(source.stops.Select(stop => stop.fixedSpecialEvent))
                 .First(item => item != null && item.obstaclePrefab.GetComponent<TimedBomb>() == null));
             special.id = "lifecycle-stones";
-            special.obstacleCount = 1;
+            special.obstacleCount = 2;
             special.reward = new RewardData { coins = 5, specialItems = 1 };
             definition.randomEncounters = new[] { encounter };
             definition.specialEvents = new[] { new SpecialEventEntry { definition = special, maxAppearances = 1 } };
@@ -150,12 +150,25 @@ namespace Ferryman.Tests
             Assert.That(store.Progress.coins, Is.Zero, "Temporary event rewards were committed before settlement.");
 
             yield return WaitFor(() => AtEvent(3), "special event");
-            yield return AssertEventPaused(3);
             var stones = Object.FindObjectsOfType<DestructibleObstacle>();
             Assert.That(stones.Length, Is.EqualTo(special.obstacleCount));
+            Camera camera = Camera.main;
+            foreach (var stone in stones)
+            {
+                Assert.That(stone.IsInFlight, Is.True);
+                Assert.That(stone.GetComponent<Collider2D>().enabled, Is.False);
+                Assert.That(camera.WorldToViewportPoint(stone.transform.position).y, Is.GreaterThan(1f));
+                stone.Clear();
+                Assert.That(stone.IsCleared, Is.False);
+            }
+            float initialY = stones[0].transform.position.y;
+            yield return AssertEventPaused(3);
+            Assert.That(stones[0].transform.position.y, Is.LessThan(initialY));
+            yield return WaitFor(() => stones.All(stone => !stone.IsInFlight), "special event objects landed");
             foreach (var stone in stones)
             {
                 var hitbox = stone.GetComponent<BoxCollider2D>();
+                Assert.That(hitbox.enabled, Is.True);
                 Assert.That(controller.Vessel.Boat.Deck.CanPlace(stone.transform.position, hitbox.size, hitbox), Is.True,
                     "An event obstacle overlapped ship fixtures, another obstacle or a character.");
                 stone.Clear();
@@ -193,12 +206,17 @@ namespace Ferryman.Tests
             QuiesceActors();
             yield return CompleteCombat(1);
             yield return WaitFor(() => AtEvent(3), "the later event before ship destruction");
+            var falling = Object.FindObjectsOfType<DestructibleObstacle>();
+            Assert.That(falling.Length, Is.EqualTo(special.obstacleCount));
+            Assert.That(falling.All(item => item.IsInFlight), Is.True);
             Assert.That(controller.PendingReward.coins, Is.EqualTo(encounter.reward.coins));
             controller.Vessel.Boat.ApplyDamage(controller.Vessel.Boat.MaxHealth, Vector2.zero);
             Assert.That(controller.Phase, Is.EqualTo(VoyagePhase.Failure));
             Assert.That(controller.ActiveRun, Is.False);
             Assert.That(controller.DeliveredPassengers, Is.Zero);
             Assert.That(store.HasCheckpoint, Is.False);
+            Assert.That(falling.All(item => item == null || !item.gameObject.activeInHierarchy), Is.True,
+                "Ship destruction left airborne event obstacles active.");
             int savedCoins = 7 + encounter.reward.coins;
             int savedItems = 1 + encounter.reward.specialItems;
             Assert.That(new VoyageSaveStore(directory).Progress.coins, Is.EqualTo(savedCoins));

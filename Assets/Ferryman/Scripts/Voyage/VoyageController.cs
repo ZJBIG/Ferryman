@@ -313,27 +313,38 @@ namespace Ferryman.Voyage
                     cells.Add(cell);
             }
             var random = new Random(seed ^ StopIndex * 397);
+            var landings = new List<Rect>();
             Physics2D.SyncTransforms();
-            for (int i = 0; i < special.obstacleCount && cells.Count > 0; i++)
+            while (landings.Count < special.obstacleCount && cells.Count > 0)
             {
                 int selected = random.Next(cells.Count);
                 Vector2 position = deck.CellToWorld(cells[selected]);
                 cells.RemoveAt(selected);
-                if (!deck.CanPlace(position, footprint))
-                {
-                    i--;
+                var landing = new Rect(position - footprint * 0.5f, footprint);
+                if (landings.Any(other => other.Overlaps(landing)) || !deck.CanPlace(position, footprint))
                     continue;
-                }
-                var item = Instantiate(special.obstaclePrefab, position, Quaternion.identity);
+                landings.Add(landing);
+            }
+            if (landings.Count != special.obstacleCount)
+                throw new InvalidOperationException("甲板没有足够的事件物品放置空间。");
+
+            Camera view = Camera.main;
+            float top = view != null
+                ? view.ViewportToWorldPoint(new Vector3(0.5f, 1f, view.WorldToViewportPoint(deck.transform.position).z)).y
+                : deck.GetComponent<EdgeCollider2D>().bounds.max.y + 4f;
+            const float dropSeconds = 0.85f;
+            foreach (Rect landing in landings)
+            {
+                var origin = new Vector2(landing.center.x, top + 1.5f);
+                var item = Instantiate(special.obstaclePrefab, origin, Quaternion.identity);
                 var obstacle = item.GetComponent<DestructibleObstacle>();
                 var bomb = item.GetComponent<TimedBomb>();
                 if (bomb != null)
-                    bomb.BindBoat(vessel.Boat);
+                    bomb.Launch(vessel.Boat, landing.center, dropSeconds, 0f);
+                else
+                    obstacle.FlyTo(deck, landing.center, dropSeconds, 0f);
                 eventObstacles.Add(obstacle);
-                Physics2D.SyncTransforms();
             }
-            if (eventObstacles.Count != special.obstacleCount)
-                throw new InvalidOperationException("甲板没有足够的事件物品放置空间。");
         }
 
         private Passenger BoardPassenger(CrewDefinition profile, int destination)
@@ -568,7 +579,10 @@ namespace Ferryman.Voyage
             }
             foreach (var obstacle in eventObstacles)
                 if (obstacle != null)
-                    obstacle.Remove(false);
+                {
+                    obstacle.gameObject.SetActive(false);
+                    Destroy(obstacle.gameObject);
+                }
             eventObstacles.Clear();
         }
 

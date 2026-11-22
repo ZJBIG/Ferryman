@@ -15,13 +15,9 @@ namespace Ferryman.World
 
         private DestructibleObstacle obstacle;
         private float detonateAt;
-        private float thrownAt;
-        private Vector2 throwOrigin;
-        private Vector2 landingPosition;
-        private bool inFlight;
 
         public BoatHealth TargetBoat => targetBoat;
-        public bool IsInFlight => inFlight;
+        public bool IsInFlight => obstacle != null && obstacle.IsInFlight;
 
         private void Awake()
         {
@@ -30,7 +26,8 @@ namespace Ferryman.World
 
         private void OnEnable()
         {
-            detonateAt = Time.time + fuseSeconds;
+            if (!IsInFlight)
+                StartFuse();
         }
 
         public void BindBoat(BoatHealth boat)
@@ -40,46 +37,31 @@ namespace Ferryman.World
 
         public void Throw(BoatHealth boat, Vector2 destination)
         {
+            Launch(boat, destination, throwSeconds, throwArcHeight);
+        }
+
+        internal void Launch(BoatHealth boat, Vector2 destination, float seconds, float arcHeight)
+        {
             targetBoat = boat;
-            throwOrigin = transform.position;
-            var hitbox = GetComponent<BoxCollider2D>();
-            Physics2D.SyncTransforms();
-            if (!boat.Deck.TryFindPlacement(destination, hitbox.size, hitbox, out landingPosition))
-            {
-                Destroy(gameObject);
-                return;
-            }
-            thrownAt = Time.time;
-            inFlight = true;
-            hitbox.enabled = false;
             if (fuseFill != null)
                 fuseFill.parent.gameObject.SetActive(false);
+            obstacle.FlyTo(boat.Deck, destination, seconds, arcHeight, StartFuse);
+        }
+
+        private void StartFuse()
+        {
+            detonateAt = Time.time + fuseSeconds;
+            if (fuseFill != null)
+            {
+                fuseFill.localScale = Vector3.one;
+                fuseFill.parent.gameObject.SetActive(true);
+            }
         }
 
         private void LateUpdate()
         {
-            if (inFlight)
-            {
-                float t = Mathf.Clamp01((Time.time - thrownAt) / throwSeconds);
-                transform.position = Vector2.Lerp(throwOrigin, landingPosition, t)
-                    + Vector2.up * (Mathf.Sin(t * Mathf.PI) * throwArcHeight);
-                if (t < 1f)
-                    return;
-                var hitbox = GetComponent<BoxCollider2D>();
-                Physics2D.SyncTransforms();
-                if (!targetBoat.Deck.TryFindPlacement(landingPosition, hitbox.size, hitbox, out Vector2 touchdown))
-                {
-                    Destroy(gameObject);
-                    return;
-                }
-                transform.position = touchdown;
-                inFlight = false;
-                hitbox.enabled = true;
-                Physics2D.SyncTransforms();
-                detonateAt = Time.time + fuseSeconds;
-                if (fuseFill != null)
-                    fuseFill.parent.gameObject.SetActive(true);
-            }
+            if (IsInFlight)
+                return;
             if (fuseFill != null)
                 fuseFill.localScale = new Vector3(Mathf.Clamp01((detonateAt - Time.time) / fuseSeconds), 1f, 1f);
             if (Time.time >= detonateAt)
@@ -88,7 +70,7 @@ namespace Ferryman.World
 
         public bool Explode()
         {
-            if (inFlight || !obstacle.Remove(false))
+            if (IsInFlight || !obstacle.Remove(false))
                 return false;
 
             if (targetBoat != null)

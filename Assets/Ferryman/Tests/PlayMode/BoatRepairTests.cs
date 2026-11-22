@@ -257,10 +257,15 @@ namespace Ferryman.Tests
             Assert.That(boat.Deck.TryFindPlacement(blockedCabin, thrownHitbox.size, thrownHitbox, out Vector2 planned), Is.True);
             thrown.Throw(boat, blockedCabin);
             Assert.That(thrownHitbox.enabled, Is.False);
+            Transform thrownFuse = thrown.transform.Find("Fuse Bar");
+            Assert.That(thrownFuse.gameObject.activeSelf, Is.False);
+            Assert.That(thrown.Explode(), Is.False);
             body.position = planned;
             Physics2D.SyncTransforms();
             yield return WaitFor(() => thrown != null && !thrown.IsInFlight, 1f, "The thrown bomb did not find a safe landing.");
             Assert.That(thrownHitbox.enabled, Is.True);
+            Assert.That(thrownFuse.gameObject.activeSelf, Is.True);
+            Assert.That(thrownFuse.Find("Fill").localScale.x, Is.GreaterThan(0.9f));
             Assert.That((Vector2)thrown.transform.position, Is.Not.EqualTo(planned));
             Assert.That(boat.Deck.CanPlace(thrown.transform.position, thrownHitbox.size, thrownHitbox), Is.True);
             Object.Destroy(thrown.gameObject);

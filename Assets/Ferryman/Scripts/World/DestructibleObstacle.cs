@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace Ferryman.World
 {
@@ -9,12 +11,81 @@ namespace Ferryman.World
         [SerializeField] private Sprite[] appearances;
         [SerializeField] private GameObject clearedEffectPrefab;
 
+        private BoatDeck landingDeck;
+        private BoxCollider2D hitbox;
+        private Vector2 flightOrigin;
+        private Vector2 landingPosition;
+        private float launchedAt;
+        private float flightSeconds;
+        private float arcHeight;
+        private Action landed;
+
         public bool IsCleared { get; private set; }
+        public bool IsInFlight { get; private set; }
 
         private void Awake()
         {
+            hitbox = GetComponent<BoxCollider2D>();
             if (visual != null && appearances != null && appearances.Length > 0)
                 visual.sprite = appearances[Random.Range(0, appearances.Length)];
+        }
+
+        internal void FlyTo(BoatDeck deck, Vector2 destination, float seconds, float arc, Action onLanded = null)
+        {
+            IsInFlight = true;
+            hitbox.enabled = false;
+            landingDeck = deck;
+            Physics2D.SyncTransforms();
+            if (!deck.TryFindPlacement(destination, hitbox.size, hitbox, out landingPosition))
+            {
+                Destroy(gameObject);
+                return;
+            }
+            flightOrigin = transform.position;
+            launchedAt = Time.time;
+            flightSeconds = seconds;
+            arcHeight = arc;
+            landed = onLanded;
+        }
+
+        private void LateUpdate()
+        {
+            if (!IsInFlight)
+                return;
+            if (landingDeck == null)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            float t = Mathf.Clamp01((Time.time - launchedAt) / flightSeconds);
+            float travel = arcHeight > 0f ? t : t * t;
+            transform.position = Vector2.Lerp(flightOrigin, landingPosition, travel)
+                + Vector2.up * (Mathf.Sin(t * Mathf.PI) * arcHeight);
+            if (t < 1f)
+                return;
+            Physics2D.SyncTransforms();
+            if (!landingDeck.TryFindPlacement(landingPosition, hitbox.size, hitbox, out Vector2 touchdown))
+            {
+                Destroy(gameObject);
+                return;
+            }
+            if (touchdown != landingPosition)
+            {
+                // Finish the landing visibly if a character stepped into the original spot.
+                flightOrigin = landingPosition;
+                landingPosition = touchdown;
+                launchedAt = Time.time;
+                flightSeconds = 0.12f;
+                arcHeight = 0.2f;
+                return;
+            }
+            transform.position = touchdown;
+            IsInFlight = false;
+            hitbox.enabled = true;
+            Physics2D.SyncTransforms();
+            landed?.Invoke();
+            landed = null;
         }
 
         public void Clear()
@@ -29,7 +100,8 @@ namespace Ferryman.World
 
         internal bool Remove(bool showClearedEffect, Vector2 kickDirection = default, Camera camera = null)
         {
-            var hitbox = GetComponent<Collider2D>();
+            if (hitbox == null)
+                hitbox = GetComponent<BoxCollider2D>();
             if (IsCleared || !hitbox.enabled)
                 return false;
             IsCleared = true;
