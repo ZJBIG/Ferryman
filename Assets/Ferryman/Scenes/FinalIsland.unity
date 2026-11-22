@@ -152,6 +152,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   definition: {fileID: 11400000, guid: 82ed2870c18479449864c43a94a5c290, type: 2}
+  uiArt: {fileID: 11400000, guid: 7d73efb79cbf4fd48b49ea18d88c6d27, type: 2}
 --- !u!4 &320881878
 Transform:
   m_ObjectHideFlags: 0

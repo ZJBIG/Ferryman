@@ -70,14 +70,19 @@ namespace Ferryman.Voyage
 
             var encounters = new List<EncounterDefinition>();
             if (definition.randomEncounters != null)
+            {
                 foreach (var encounter in definition.randomEncounters)
+                {
                     if (encounter != null)
                         encounters.Add(encounter);
+                }
+            }
 
             var specialBudgets = new List<SpecialBudget>();
             var configuredSpecials = new HashSet<SeaEventDefinition>();
             int specialCapacity = 0;
             if (definition.specialEvents != null)
+            {
                 foreach (var entry in definition.specialEvents)
                 {
                     if (entry == null || entry.definition == null)
@@ -91,6 +96,7 @@ namespace Ferryman.Voyage
                     specialBudgets.Add(new SpecialBudget { definition = entry.definition, remaining = remaining });
                     specialCapacity += Math.Min(remaining, freeSeas.Count - specialCapacity);
                 }
+            }
 
             int wantedCombat = Math.Max(0, Math.Max(0, definition.enemyEncounterCount) - fixedCombatCount);
             int combatCount = encounters.Count > 0 ? Math.Min(wantedCombat, freeSeas.Count) : 0;

@@ -6,8 +6,17 @@ namespace Ferryman.Characters
 {
     public sealed class EnemyCharacter : CombatCharacter
     {
-        public enum AttackKind { Projectile, Bomb }
-        public enum TargetPreference { PlayerFirst, CrewFirst, ShipFirst }
+        public enum AttackKind
+        {
+            Projectile,
+            Bomb
+        }
+        public enum TargetPreference
+        {
+            PlayerFirst,
+            CrewFirst,
+            ShipFirst
+        }
 
         [SerializeField, Tooltip("敌人应避开的船体；当前阶段敌人固定在船外。")]
         private Transform excludedBoat;

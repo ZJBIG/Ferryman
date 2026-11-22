@@ -28,6 +28,7 @@ namespace Ferryman.Characters
         }
 
         public Collider2D Hitbox => hitbox;
+        public float MaxHealth { get; private set; }
         public bool IsStunned => Time.time < stunnedUntil;
         public float StunRemainingRatio => stunDuration > 0f
             ? Mathf.Clamp01((stunnedUntil - Time.time) / stunDuration)
@@ -49,6 +50,7 @@ namespace Ferryman.Characters
 
         protected virtual void Awake()
         {
+            MaxHealth = health;
             if (hitbox == null)
                 hitbox = GetComponent<Collider2D>();
             if (visual == null)

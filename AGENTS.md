@@ -3,6 +3,7 @@
 - 引擎版本以 `ProjectSettings/ProjectVersion.txt` 为准：Unity 2022.3.62f3c1。项目使用现有 2D URP 和旧 Input Manager，不为本原型增加输入或镜头依赖。
 - 完整游戏入口是 `Assets/Ferryman/Scenes/main.unity`，整轮在同一场景内切换海路与三站岛屿显示。main 为 Build Settings 首项；Departure、Sea、Island、FinalIsland 与独立回归夹具 Prototype 保留，共六个场景。原模板场景保留。
 - 业务代码、预制体和测试位于 `Assets/Ferryman`，脚本使用 `Ferryman` 命名空间。运行时代码与 PlayMode 测试分别使用 `Ferryman.Runtime` 和 `Ferryman.PlayModeTests` 程序集。
+- C# 使用四空格缩进，代码块花括号独占一行。简单单语句可以省略花括号，嵌套控制流用花括号分清层级。调整风格时保留 Unity 序列化字段名和枚举顺序。
 - 当前已实现整个 V0.1 核心循环：战斗、投弹、船损维修、固定 NPC 岗位、自动线性航程、逐波事件、上下客、结算和检查点恢复。`Character` 共享受击/碰撞/阵营/动作开关，`CombatCharacter` 共享朝向与射击；战斗 NPC 不维修，维护 NPC 不战斗。
 - 玩家和友军受击只眩晕后恢复，不扣血或死亡；默认眩晕 1 秒，期间停止移动与攻击、免疫伤害，重复命中不延长眩晕。敌人覆写受击逻辑，生命归零后停止攻击并销毁。
 - 船体固定。维修网格为 12×5，每格 1 单位，格索引兼容旧检查点。BoatDeck 用闭合 EdgeCollider2D 阻挡边缘，LineRenderer 与它共享顶点但关闭显示。船尾舱体分段阻挡，保留左上和左下的通行空间；箱子、桶和甲板道具各自提供实心碰撞。不要改为覆盖整个甲板的实心碰撞箱。玩家使用无重力、锁旋转的动态刚体和完整 BoxCollider2D；朝向只旋转显示子物体，零摩擦材质保证沿边滑动。

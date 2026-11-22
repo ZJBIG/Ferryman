@@ -68,18 +68,20 @@ namespace Ferryman.Tests
         {
             Vector2 start = Vector2.zero;
             for (int x = -1; x <= 1; x++)
-            for (int y = -1; y <= 1; y++)
             {
-                if (x == 0 && y == 0)
-                    continue;
-                body.position = start;
-                for (int i = 0; i < 250; i++)
+                for (int y = -1; y <= 1; y++)
                 {
-                    Step(new Vector2(x, y), 1);
-                    AssertInsideDeck();
-                }
+                    if (x == 0 && y == 0)
+                        continue;
+                    body.position = start;
+                    for (int i = 0; i < 250; i++)
+                    {
+                        Step(new Vector2(x, y), 1);
+                        AssertInsideDeck();
+                    }
 
-                Assert.That(Vector2.Distance(body.position, start), Is.GreaterThan(1.5f));
+                    Assert.That(Vector2.Distance(body.position, start), Is.GreaterThan(1.5f));
+                }
             }
 
             body.position = Vector2.zero;

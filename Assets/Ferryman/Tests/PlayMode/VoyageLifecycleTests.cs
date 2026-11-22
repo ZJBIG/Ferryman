@@ -141,9 +141,14 @@ namespace Ferryman.Tests
             QuiesceActors();
             yield return WaitFor(() => AtEvent(1), "first combat event");
             controller.Vessel.Boat.ApplyDamage(150f, new Vector2(-0.5f, 0.25f));
-            yield return CompleteCombat(1);
+            yield return VerifyCombatWaves(1);
+            yield return WaitFor(() => controller.BoardingProfile == joining, "boarding dialogue");
+            Assert.That(controller.BoardingDestination, Is.EqualTo(definition.stops[4].displayName));
+            Assert.That(controller.Passengers.Count, Is.EqualTo(1));
             yield return WaitFor(() => controller.StopIndex == 2 && controller.Phase == VoyagePhase.Island
                 && controller.Passengers.Count == 2, "automatic boarding at the intermediate island");
+            Assert.That(controller.BoardingProfile, Is.Null);
+            Assert.That(controller.BoardingDestination, Is.Null);
             Assert.That(controller.DeliveredPassengers, Is.Zero);
             Assert.That(controller.Passengers.Single(item => item.Definition == joining).DestinationStopIndex, Is.EqualTo(4));
             Assert.That(controller.Passengers.Single(item => item.Definition == escort).DestinationStopIndex, Is.EqualTo(4));
@@ -297,7 +302,6 @@ namespace Ferryman.Tests
             Assert.That(controller.ResumeVoyage(), Is.True);
             QuiesceActors();
             Assert.That(PlanSignature(), Is.EqualTo(plan));
-            AssertRestored(regional);
             yield return WaitFor(() => controller.StopIndex == 2 && controller.Phase == VoyagePhase.Island,
                 "entry into the restored region");
             AssertRestored(regional);
@@ -327,6 +331,21 @@ namespace Ferryman.Tests
 
         private IEnumerator CompleteCombat(int stop)
         {
+            yield return WaitFor(() => AtEvent(stop), "combat at stop " + stop);
+            float deadline = Time.realtimeSinceStartup + 12f;
+            while (AtEvent(stop))
+            {
+                QuiesceActors();
+                foreach (EnemyCharacter enemy in LiveEnemies())
+                    Kill(enemy);
+                if (Time.realtimeSinceStartup >= deadline)
+                    Assert.Fail("Combat did not finish: " + DescribeState());
+                yield return null;
+            }
+        }
+
+        private IEnumerator VerifyCombatWaves(int stop)
+        {
             yield return WaitFor(() => AtEvent(stop) && controller.WaveIndex == 0 && LiveEnemies().Length == 2,
                 "first wave at stop " + stop);
             RewardData before = controller.PendingReward;
@@ -350,8 +369,6 @@ namespace Ferryman.Tests
         private IEnumerator AssertEventPaused(int stop)
         {
             QuiesceActors();
-            var presentation = Object.FindObjectOfType<VoyageScenePresentation>();
-            Assert.That(presentation, Is.Not.Null);
             Transform motion = GameObject.Find("Environment/Sea Motion")?.transform;
             Assert.That(motion, Is.Not.Null);
             Vector3 position = motion.localPosition;

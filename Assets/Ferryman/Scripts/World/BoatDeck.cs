@@ -104,14 +104,16 @@ namespace Ferryman.World
             float best = float.PositiveInfinity;
             Vector2Int grid = GridSize;
             for (int x = 0; x < grid.x; x++)
-            for (int y = 0; y < grid.y; y++)
             {
-                Vector2 candidate = CellToWorld(new Vector2Int(x, y));
-                float distance = (candidate - preferred).sqrMagnitude;
-                if (distance >= best || !CanPlace(candidate, size, ignored))
-                    continue;
-                position = candidate;
-                best = distance;
+                for (int y = 0; y < grid.y; y++)
+                {
+                    Vector2 candidate = CellToWorld(new Vector2Int(x, y));
+                    float distance = (candidate - preferred).sqrMagnitude;
+                    if (distance >= best || !CanPlace(candidate, size, ignored))
+                        continue;
+                    position = candidate;
+                    best = distance;
+                }
             }
             return !float.IsPositiveInfinity(best);
         }

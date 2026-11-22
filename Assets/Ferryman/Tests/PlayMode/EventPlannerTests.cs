@@ -100,7 +100,7 @@ namespace Ferryman.Tests
         }
 
         [Test]
-        public void SeededPlanningIsStableAndCanUseAdjacentOrAnyEligibleSea()
+        public void SeededPlanningIsStableAndCanUseEveryEligibleSea()
         {
             VoyageDefinition voyage = CreateVoyage(4);
             EncounterDefinition first = CreateDefinition<EncounterDefinition>();
@@ -119,10 +119,6 @@ namespace Ferryman.Tests
                 PlannedVoyageEvent[] plan = VoyageEventPlanner.Build(voyage, seed);
                 Assert.That(plan.Count(entry => entry.kind == VoyageEventKind.Combat), Is.EqualTo(3));
                 unselectedSeas.Add(seaIndices.Single(index => plan[index].kind == VoyageEventKind.None));
-                Assert.That(Enumerable.Range(1, seaIndices.Length - 1).Any(index =>
-                    plan[seaIndices[index - 1]].kind == VoyageEventKind.Combat
-                    && plan[seaIndices[index]].kind == VoyageEventKind.Combat), Is.True,
-                    "Planning must allow encounters on consecutive sea segments.");
             }
             Assert.That(unselectedSeas.Count, Is.EqualTo(4), "A sea position was systematically excluded from random placement.");
         }

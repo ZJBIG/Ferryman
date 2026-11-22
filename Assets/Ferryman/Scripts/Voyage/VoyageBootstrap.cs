@@ -7,6 +7,7 @@ namespace Ferryman.Voyage
     public sealed class VoyageBootstrap : MonoBehaviour
     {
         [SerializeField] private VoyageDefinition definition;
+        [SerializeField] private VoyageUIArt uiArt;
 
         private void Awake()
         {
@@ -15,7 +16,7 @@ namespace Ferryman.Voyage
 
             var root = new GameObject("Voyage");
             var controller = root.AddComponent<VoyageController>();
-            root.AddComponent<VoyageView>();
+            root.AddComponent<VoyageView>().Initialize(uiArt);
             try
             {
                 controller.Initialize(definition,

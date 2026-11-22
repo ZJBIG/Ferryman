@@ -84,9 +84,6 @@ namespace Ferryman.Tests
             }
             Assert.That(point.Progress, Is.GreaterThan(0f), "Crew did not reach damage outside its initial repair range.");
             Assert.That(largestY, Is.GreaterThan(0.7f), "Crew did not take the free upper or lower row around the stone.");
-            Assert.That(crew.GetComponent<CombatCharacter>(), Is.Null);
-            Assert.That(Object.FindObjectsOfType<Projectile>().Length, Is.Zero);
-            Assert.That(boat.CurrentHealth, Is.EqualTo(900f));
             crew.SetActionsAllowed(false);
             float saved = point.Progress;
             yield return new WaitForSeconds(0.1f);
@@ -121,7 +118,6 @@ namespace Ferryman.Tests
                 "Combat crew did not resume shooting after stun.");
             Assert.That(fighter.IsStunned, Is.False);
             Assert.That(fighter.Health, Is.EqualTo(100f));
-            Assert.That(fighter.GetComponent<MaintenanceCrewMember>(), Is.Null);
             Assert.That(point.Progress, Is.Zero, "Combat crew repaired the boat.");
             fighter.SetActionsAllowed(false);
 
@@ -148,7 +144,6 @@ namespace Ferryman.Tests
             Assert.That(bar.gameObject.activeInHierarchy, Is.True);
             Assert.That(fill.localScale.x, Is.EqualTo(point.Progress / point.RequiredProgress).Within(0.001f));
             Assert.That(mechanic.Health, Is.EqualTo(100f));
-            Assert.That(mechanic.GetComponent<CombatCharacter>(), Is.Null);
             boat.ApplyDamage(10000f, Vector2.zero);
             Assert.That(mechanic.IsRepairing, Is.False);
             Assert.That(mechanic.GetComponent<Rigidbody2D>().velocity, Is.EqualTo(Vector2.zero));

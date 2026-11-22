@@ -168,8 +168,10 @@ namespace Ferryman.Characters
             Vector2Int size = deck.GridSize;
             var walkable = new bool[size.x, size.y];
             for (int x = 0; x < size.x; x++)
-            for (int y = 0; y < size.y; y++)
-                walkable[x, y] = CanStand(deck.CellToWorld(new Vector2Int(x, y)));
+            {
+                for (int y = 0; y < size.y; y++)
+                    walkable[x, y] = CanStand(deck.CellToWorld(new Vector2Int(x, y)));
+            }
 
             Vector2Int origin = deck.WorldToCell(body.position);
             var frontier = new Queue<Vector2Int>();
@@ -185,17 +187,19 @@ namespace Ferryman.Characters
                     break;
                 }
                 for (int dx = -1; dx <= 1; dx++)
-                for (int dy = -1; dy <= 1; dy++)
                 {
-                    if (dx == 0 && dy == 0)
-                        continue;
-                    Vector2Int next = cell + new Vector2Int(dx, dy);
-                    if (!deck.ContainsCell(next) || previous.ContainsKey(next) || !walkable[next.x, next.y])
-                        continue;
-                    if (dx != 0 && dy != 0 && (!walkable[cell.x + dx, cell.y] || !walkable[cell.x, cell.y + dy]))
-                        continue;
-                    previous.Add(next, cell);
-                    frontier.Enqueue(next);
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        if (dx == 0 && dy == 0)
+                            continue;
+                        Vector2Int next = cell + new Vector2Int(dx, dy);
+                        if (!deck.ContainsCell(next) || previous.ContainsKey(next) || !walkable[next.x, next.y])
+                            continue;
+                        if (dx != 0 && dy != 0 && (!walkable[cell.x + dx, cell.y] || !walkable[cell.x, cell.y + dy]))
+                            continue;
+                        previous.Add(next, cell);
+                        frontier.Enqueue(next);
+                    }
                 }
             }
             path.Clear();

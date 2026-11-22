@@ -35,7 +35,10 @@ namespace Ferryman.Editor
                     Require(prefab.transform.localScale == Vector3.one, "Prefab root scale differs: " + path);
                     CheckHierarchy(prefab);
                 }
-                finally { PrefabUtility.UnloadPrefabContents(prefab); }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(prefab);
+                }
             }
             CheckAppearances(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Stone.prefab").GetComponent<DestructibleObstacle>(),
                 1.25f, "Items/StoneWide", "Items/StoneTall", "Items/DeckObstacle");
@@ -60,6 +63,10 @@ namespace Ferryman.Editor
                 "Repair fill does not cover the drawn inner frame from its left edge.");
             VoyageDefinition definition = AssetDatabase.LoadAssetAtPath<VoyageDefinition>(Root + "Resources/Voyage/DefaultVoyage.asset");
             Require(definition != null && definition.stops.Length == 5, "Default voyage is absent or its route differs.");
+            var uiArt = AssetDatabase.LoadAssetAtPath<VoyageUIArt>(Root + "Art/UI/VoyageUI.asset");
+            Require(uiArt != null && uiArt.stunFill != null && uiArt.stunFill.isReadable, "UI art or readable stun mask is absent.");
+            foreach (var field in typeof(VoyageUIArt).GetFields())
+                Require(field.GetValue(uiArt) is Texture2D texture && texture != null, "Missing UI texture: " + field.Name);
             var vessel = definition.vesselPrefab.GetComponent<VoyageVessel>();
             Require(vessel != null && vessel.Boat != null && vessel.Player != null && vessel.DamageSystem != null, "Vessel bindings are incomplete.");
             Require(vessel.Player.MovementDeck == vessel.Boat.Deck && vessel.Player.BoatHealth == vessel.Boat
@@ -127,18 +134,27 @@ namespace Ferryman.Editor
                 else
                 {
                     VoyageBootstrap bootstrap = Object.FindObjectOfType<VoyageBootstrap>();
-                    Require(bootstrap != null && new SerializedObject(bootstrap).FindProperty("definition").objectReferenceValue == definition,
-                        "Scene bootstrap does not reference the default voyage.");
+                    Require(bootstrap != null, "Scene bootstrap is missing.");
+                    var bootstrapFields = new SerializedObject(bootstrap);
+                    Require(bootstrapFields.FindProperty("definition").objectReferenceValue == definition
+                        && bootstrapFields.FindProperty("uiArt").objectReferenceValue == uiArt,
+                        "Scene bootstrap does not reference the default voyage and UI art.");
                     var presentation = Object.FindObjectOfType<VoyageScenePresentation>();
                     Require(presentation != null && Camera.main != null, "Scene presentation/camera is absent.");
                     if (buildScene.path.EndsWith("main.unity", StringComparison.Ordinal))
                     {
                         var ui = scene.GetRootGameObjects().SingleOrDefault(root => root.name == "UI Layout");
                         Require(ui != null && !ui.activeSelf && ui.GetComponent<Canvas>() != null,
-                            "Main UI layout is missing or active before the UI art is integrated.");
+                            "Main authoring layout is missing or visible over the runtime UI.");
                         foreach (string slot in new[] { "Title Screen", "Route Map", "In-Game/Ship Durability",
                             "In-Game/Stun Ring", "Settlement/Reward Items", "Dialogue/Portrait", "Upgrade Options" })
                             Require(ui.transform.Find(slot) is RectTransform, "Missing UI layout slot: " + slot);
+                        var cards = ui.transform.Find("Upgrade Options/Cards");
+                        Require(cards != null && cards.childCount == 5, "The five upgrade previews are missing.");
+                        foreach (Transform card in cards)
+                            Require(card.GetComponent<UnityEngine.UI.RawImage>()?.texture != null
+                                && card.Find("Icon")?.GetComponent<UnityEngine.UI.RawImage>()?.texture != null
+                                && card.Find("Description") is RectTransform, "Incomplete upgrade preview: " + card.name);
                         Require(presentation.IsUnifiedScene, "Main does not contain the full voyage environment.");
                         var islands = (Transform)new SerializedObject(presentation).FindProperty("islandStops").objectReferenceValue;
                         Require(islands.childCount == 3, "Main must contain the three island appearances.");
@@ -202,15 +218,19 @@ namespace Ferryman.Editor
         private static void CheckHierarchy(GameObject root)
         {
             foreach (var transform in root.GetComponentsInChildren<Transform>(true))
-            foreach (Component component in transform.GetComponents<Component>())
             {
-                Require(component != null, "Missing script in " + transform.name);
-                using (var serialized = new SerializedObject(component))
-                using (var property = serialized.GetIterator())
+                foreach (Component component in transform.GetComponents<Component>())
+                {
+                    Require(component != null, "Missing script in " + transform.name);
+                    using var serialized = new SerializedObject(component);
+                    using var property = serialized.GetIterator();
                     while (property.NextVisible(true))
+                    {
                         if (property.propertyType == SerializedPropertyType.ObjectReference)
                             Require(property.objectReferenceValue != null || property.objectReferenceInstanceIDValue == 0,
                                 "Broken reference: " + transform.name + "/" + property.propertyPath);
+                    }
+                }
             }
         }
 

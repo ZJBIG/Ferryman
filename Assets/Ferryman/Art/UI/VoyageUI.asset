@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6770b72263694932bb0ee158571b3621, type: 3}
+  m_Name: VoyageUI
+  m_EditorClassIdentifier:
+  titleBai: {fileID: 2800000, guid: 2c8b4491248240789af0e677bc1d2082, type: 3}
+  titleDu: {fileID: 2800000, guid: ee49a6a444264a8d8050c7143a5959e3, type: 3}
+  titleRen: {fileID: 2800000, guid: c16ac434d000442e903e0856e9dc9c75, type: 3}
+  oar: {fileID: 2800000, guid: b2dd90f4c3664e87b5c5509a56e6f9c4, type: 3}
+  hull: {fileID: 2800000, guid: 004ee29dda4887448be362aa80427bd8, type: 3}
+  parchment: {fileID: 2800000, guid: b24bf5fd18d5455f8d35ead2e00070c1, type: 3}
+  departure: {fileID: 2800000, guid: 8783d4fbc2f846d89b31baca7d735f40, type: 3}
+  combat: {fileID: 2800000, guid: a1768b4ceb9a4458aebd9402f1397cff, type: 3}
+  special: {fileID: 2800000, guid: bc72a1deb1ce44c7baa8d24ac7345030, type: 3}
+  destination: {fileID: 2800000, guid: 3a4865ba32124abd9186f119a24776f4, type: 3}
+  waypoint: {fileID: 2800000, guid: e4f9bb04782c448386a268f85a7eab2d, type: 3}
+  shipFrame: {fileID: 2800000, guid: 2e56fd1d8997486285d79b49d1c784ca, type: 3}
+  shipHealthy: {fileID: 2800000, guid: 7cffc1d08d994cc5b05e9bb9361a7011, type: 3}
+  shipDamaged: {fileID: 2800000, guid: 1ba6faf8e1914597a9b6af66b9512b77, type: 3}
+  enemyFrame: {fileID: 2800000, guid: ceca4b3b6f544e468efb14fafd1a30d3, type: 3}
+  enemyFill: {fileID: 2800000, guid: fbbff56a7dfa4dcba8c0b0ef8e78c936, type: 3}
+  stunFrame: {fileID: 2800000, guid: 7727743bd71046648a1029504fb11243, type: 3}
+  stunFill: {fileID: 2800000, guid: b201fe96fc824425af9c30699b34c153, type: 3}
+  stunIcon: {fileID: 2800000, guid: 6cb4cffc86c8496b9d5731522f4dfe91, type: 3}
+  settlement: {fileID: 2800000, guid: 396bbe0096ff45408923ab8acafecda5, type: 3}
+  dialogue: {fileID: 2800000, guid: 9a011bade9ce4271870cf899dd62d5d4, type: 3}
+  portrait: {fileID: 2800000, guid: 01a010faca28473b87b78c56b6f772c2, type: 3}

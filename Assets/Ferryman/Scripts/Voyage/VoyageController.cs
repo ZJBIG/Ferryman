@@ -12,7 +12,19 @@ using Random = System.Random;
 
 namespace Ferryman.Voyage
 {
-    public enum VoyagePhase { Departure, Entering, Sailing, Event, Island, Leaving, Transition, Success, Failure, Error }
+    public enum VoyagePhase
+    {
+        Departure,
+        Entering,
+        Sailing,
+        Event,
+        Island,
+        Leaving,
+        Transition,
+        Success,
+        Failure,
+        Error
+    }
 
     public sealed class VoyageController : MonoBehaviour
     {
@@ -30,6 +42,7 @@ namespace Ferryman.Voyage
         private int deliveredPassengers;
         private int waveIndex;
         private bool settlementSuccess;
+        private string boardingDestination;
 
         public VoyageDefinition Definition => definition;
         public VoyageVessel Vessel => vessel;
@@ -48,6 +61,8 @@ namespace Ferryman.Voyage
         public IReadOnlyList<Passenger> Passengers => passengers;
         public IReadOnlyList<EnemyCharacter> Enemies => enemies;
         public IReadOnlyList<PlannedVoyageEvent> EventPlan => eventPlan;
+        public CrewDefinition BoardingProfile { get; private set; }
+        public string BoardingDestination => BoardingProfile == null ? null : boardingDestination;
 
         public void Initialize(VoyageDefinition voyage, VoyageSaveStore saves)
         {
@@ -64,6 +79,7 @@ namespace Ferryman.Voyage
                 StopCoroutine(routine);
             routine = null;
             Phase = VoyagePhase.Error;
+            BoardingProfile = null;
             Message = error.Message;
             Fade = 0f;
             if (vessel != null)
@@ -134,7 +150,10 @@ namespace Ferryman.Voyage
                     if (moved)
                         current = pending.Peek().Current;
                 }
-                catch (Exception error) { failure = error; }
+                catch (Exception error)
+                {
+                    failure = error;
+                }
                 if (failure != null)
                 {
                     routine = null;
@@ -290,12 +309,14 @@ namespace Ferryman.Voyage
         private void SpawnWave(WaveDefinition wave)
         {
             foreach (EnemySpawn group in wave.enemies)
-            for (int unit = 0; unit < group.count; unit++)
             {
-                Vector2 position = group.spawnPosition + Vector2.right * (unit - (group.count - 1) * 0.5f) * 0.8f;
-                var enemy = Instantiate(group.prefab, position, Quaternion.identity);
-                enemy.InitializeEnemy(vessel.Boat, vessel.Player, vessel.DamageSystem);
-                enemies.Add(enemy);
+                for (int unit = 0; unit < group.count; unit++)
+                {
+                    Vector2 position = group.spawnPosition + Vector2.right * (unit - (group.count - 1) * 0.5f) * 0.8f;
+                    var enemy = Instantiate(group.prefab, position, Quaternion.identity);
+                    enemy.InitializeEnemy(vessel.Boat, vessel.Player, vessel.DamageSystem);
+                    enemies.Add(enemy);
+                }
             }
         }
 
@@ -306,11 +327,13 @@ namespace Ferryman.Voyage
             Vector2Int center = deck.WorldToCell(Vector2.zero);
             var cells = new List<Vector2Int>();
             for (int x = 0; x < deck.GridSize.x; x++)
-            for (int y = 0; y < deck.GridSize.y; y++)
             {
-                Vector2Int cell = new Vector2Int(x, y);
-                if (BoatDeck.CellDistance(center, cell) > 1)
-                    cells.Add(cell);
+                for (int y = 0; y < deck.GridSize.y; y++)
+                {
+                    Vector2Int cell = new Vector2Int(x, y);
+                    if (BoatDeck.CellDistance(center, cell) > 1)
+                        cells.Add(cell);
+                }
             }
             var random = new Random(seed ^ StopIndex * 397);
             var landings = new List<Rect>();
@@ -366,11 +389,13 @@ namespace Ferryman.Voyage
             BoatDeck deck = vessel.Boat.Deck;
             Physics2D.SyncTransforms();
             for (int y = deck.GridSize.y - 1; y >= 0; y--)
-            for (int x = 0; x < deck.GridSize.x; x++)
             {
-                Vector2 position = deck.CellToWorld(new Vector2Int(x, y));
-                if (deck.CanPlace(position, new Vector2(0.5f, 0.75f)))
-                    return position;
+                for (int x = 0; x < deck.GridSize.x; x++)
+                {
+                    Vector2 position = deck.CellToWorld(new Vector2Int(x, y));
+                    if (deck.CanPlace(position, new Vector2(0.5f, 0.75f)))
+                        return position;
+                }
             }
             throw new InvalidOperationException("No boarding position is available on the deck.");
         }
@@ -405,8 +430,11 @@ namespace Ferryman.Voyage
             {
                 CrewDefinition profile = definition.passengerPool[random.Next(definition.passengerPool.Length)];
                 int destination = futureIslands[random.Next(futureIslands.Length)];
-                Message = profile.displayName + " 将上船 · " + DescribeRole(profile) + " · 目的地 " + definition.stops[destination].displayName;
+                BoardingProfile = profile;
+                boardingDestination = definition.stops[destination].displayName;
+                Message = profile.displayName + " 将上船 · " + DescribeRole(profile) + " · 目的地 " + boardingDestination;
                 yield return WaitActive(definition.boardingNoticeSeconds);
+                BoardingProfile = null;
                 if (ActiveRun)
                     BoardPassenger(profile, destination);
             }
@@ -481,11 +509,15 @@ namespace Ferryman.Voyage
 
         private void FinishRun(bool success)
         {
+            BoardingProfile = null;
             vessel.SetActionsAllowed(false);
             CleanupHazards();
             settlementSuccess = success;
             CanRetrySettlement = true;
-            try { store.Settle(runId, pendingReward); }
+            try
+            {
+                store.Settle(runId, pendingReward);
+            }
             catch (Exception error)
             {
                 ReportError(error);
@@ -507,6 +539,7 @@ namespace Ferryman.Voyage
 
         public void AbandonVoyage()
         {
+            BoardingProfile = null;
             if (routine != null)
                 StopCoroutine(routine);
             ActiveRun = false;
