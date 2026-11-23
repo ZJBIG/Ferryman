@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using Ferryman.Characters;
 using Ferryman.Combat;
+using Ferryman.Voyage;
 using Ferryman.World;
 using NUnit.Framework;
 using UnityEngine;
@@ -90,6 +91,51 @@ namespace Ferryman.Tests
             yield return new WaitForSeconds(0.1f);
             Assert.That(point.Progress, Is.EqualTo(saved));
             Assert.That(point.IsBeingRepaired, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator ShootingEnemiesChooseAvailableCrewAndPlayerByPreference()
+        {
+            var encounter = Resources.Load<EncounterDefinition>("Voyage/Events/CoastalRaid");
+            var hunterPrefab = encounter.waves.SelectMany(wave => wave.enemies).Select(group => group.prefab)
+                .First(prefab => prefab.PreferredTarget == EnemyCharacter.TargetPreference.CrewFirst);
+            Vector2 origin = new Vector2(3f, 6f);
+            var hunter = Object.Instantiate(hunterPrefab, origin, Quaternion.identity);
+            hunter.enabled = false;
+            enemy.transform.position = origin;
+            var crewObject = new GameObject("Targetable Crew");
+            crewObject.transform.position = new Vector2(3f, 1f);
+            var crew = crewObject.AddComponent<CrewMember>();
+            var playerBody = player.GetComponent<Rigidbody2D>();
+            playerBody.position = new Vector2(1f, 0f);
+            yield return null;
+
+            var selectTarget = typeof(EnemyCharacter).GetMethod("SelectTarget", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(selectTarget.Invoke(enemy, null), Is.SameAs(crew));
+            playerBody.position = new Vector2(3f, 2f);
+            Physics2D.SyncTransforms();
+            Assert.That(selectTarget.Invoke(enemy, null), Is.SameAs(player));
+            Assert.That(selectTarget.Invoke(hunter, null), Is.SameAs(crew));
+
+            Assert.That(crew.TryReceiveDamage(1f), Is.True);
+            Assert.That(selectTarget.Invoke(hunter, null), Is.SameAs(player));
+            Assert.That(player.TryReceiveDamage(1f), Is.True);
+            Assert.That(selectTarget.Invoke(enemy, null), Is.Null);
+            Assert.That(selectTarget.Invoke(hunter, null), Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator MaintenanceCrewWalksIntoBowToRepairDamage()
+        {
+            player.GetComponent<Rigidbody2D>().position = Vector2.zero;
+            var impact = new Vector2(7f, 0f);
+            boat.ApplyDamage(100f, impact);
+            RepairPoint point = boat.RepairPoints.Single();
+            Assert.That(point.Cell.x, Is.GreaterThanOrEqualTo(12));
+            MaintenanceCrewMember crew = CreateMaintenance(new Vector2(3.5f, 0f), 4f, 10f, 1);
+            Physics2D.SyncTransforms();
+            yield return WaitFor(() => point.Progress > 0f, 4f, "Maintenance crew did not reach the bow repair point.");
+            Assert.That(crew.transform.position.x, Is.GreaterThan(6f));
         }
 
         [UnityTest]

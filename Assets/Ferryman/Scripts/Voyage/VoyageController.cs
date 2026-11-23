@@ -330,9 +330,10 @@ namespace Ferryman.Voyage
             Vector2 footprint = special.obstaclePrefab.GetComponent<BoxCollider2D>().size;
             Vector2Int center = deck.WorldToCell(Vector2.zero);
             var cells = new List<Vector2Int>();
-            for (int x = 0; x < deck.GridSize.x; x++)
+            Vector2Int grid = deck.GridSize;
+            for (int x = 0; x < grid.x; x++)
             {
-                for (int y = 0; y < deck.GridSize.y; y++)
+                for (int y = 0; y < grid.y; y++)
                 {
                     Vector2Int cell = new Vector2Int(x, y);
                     if (BoatDeck.CellDistance(center, cell) > 1)
@@ -391,10 +392,11 @@ namespace Ferryman.Voyage
         private Vector2 FindBoardingPosition()
         {
             BoatDeck deck = vessel.Boat.Deck;
+            Vector2Int grid = deck.GridSize;
             Physics2D.SyncTransforms();
-            for (int y = deck.GridSize.y - 1; y >= 0; y--)
+            for (int y = grid.y - 1; y >= 0; y--)
             {
-                for (int x = 0; x < deck.GridSize.x; x++)
+                for (int x = 0; x < grid.x; x++)
                 {
                     Vector2 position = deck.CellToWorld(new Vector2Int(x, y));
                     if (deck.CanPlace(position, new Vector2(0.5f, 0.75f)))

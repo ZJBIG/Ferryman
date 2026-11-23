@@ -28,11 +28,11 @@ namespace Ferryman.Voyage
         private GUIStyle centeredInk;
         private GUIStyle button;
         private GUIStyle oarText;
-        private Texture2D radialFill;
+        private const int StunFillSteps = 64;
+        private readonly Texture2D[] stunFills = new Texture2D[StunFillSteps + 1];
         private Color32[] ringColors;
         private Color32[] ringPixels;
         private float[] ringAngles;
-        private int ringSteps = -1;
         private Vector2 passengerScroll;
         private static readonly Color InkColor = new Color(0.20f, 0.13f, 0.08f);
         private static readonly Color Shade = new Color(0.025f, 0.075f, 0.09f, 0.74f);
@@ -256,59 +256,76 @@ namespace Ferryman.Voyage
             if (Event.current.type != EventType.Repaint)
                 return;
 
-            var boat = controller.Vessel.Boat;
-            var ship = new Rect(viewport.xMin + 24f, viewport.yMin + 18f, 310f, 54f);
-            // Fill rectangles use the original shared-canvas offsets before the transparent margins were trimmed.
-            var shipFill = Within(ship, 750f / 2259f, 126f / 392f, 1445f / 2259f, 139f / 392f);
-            GUI.DrawTexture(shipFill, art.shipDamaged);
-            DrawFill(shipFill, art.shipHealthy, boat.MaxHealth > 0f ? boat.CurrentHealth / boat.MaxHealth : 0f);
-            GUI.DrawTexture(ship, art.shipFrame);
             Camera camera = Camera.main;
-            if (camera == null)
-                return;
-            float worldScale = camera.pixelHeight / (2f * camera.orthographicSize * scale);
-            var player = controller.Vessel.Player;
-            float stun = player.StunRemainingRatio;
-            if (stun > 0f)
+            if (camera != null)
             {
-                Bounds bounds = player.VisualBounds;
-                Vector2 point = WorldToGui(camera, bounds.center, scale, offset);
-                if (viewport.Contains(point))
-                {
-                    float size = 0.85f * worldScale;
-                    float side = (bounds.extents.x + 0.52f) * worldScale;
-                    float x = point.x + side;
-                    if (x + size > viewport.xMax)
-                        x = point.x - side - size;
-                    float y = Mathf.Clamp(point.y - size * 0.5f, viewport.yMin, viewport.yMax - size);
-                    var ring = new Rect(x, y, size, size);
-                    DrawStunFill(Within(ring, 17f / 616f, 17f / 616f, 599f / 616f, 599f / 616f), stun);
-                    GUI.DrawTexture(ring, art.stunFrame);
-                    GUI.DrawTexture(Within(ring, 0.26f, 0.27f, 0.52f, 0.52f), art.stunIcon, ScaleMode.ScaleToFit);
-                }
+                float worldScale = camera.pixelHeight / (2f * camera.orthographicSize * scale);
+                DrawEnemyFeedback(camera, worldScale, scale, offset);
+                DrawStunIndicator(controller.Vessel.Player, camera, viewport, worldScale, scale, offset);
+                foreach (Passenger passenger in controller.Passengers)
+                    if (passenger != null)
+                        DrawStunIndicator(passenger.Actor, camera, viewport, worldScale, scale, offset);
             }
 
+            var boat = controller.Vessel.Boat;
+            var ship = new Rect(viewport.xMin + 24f, viewport.yMin + 18f, 310f, 54f);
+            // These coordinates align the trimmed fill artwork with the frame's painted opening.
+            Rect shipFill = Within(ship, 321f / 1000f, 47f / 174f, 664f / 1000f, 84f / 174f);
+            float health = boat.MaxHealth > 0f ? Mathf.Clamp01(boat.CurrentHealth / boat.MaxHealth) : 0f;
+            DrawFill(shipFill, art.shipHealthy, 0f, health);
+            DrawFill(shipFill, art.shipDamaged, health, 1f);
+            GUI.DrawTexture(ship, art.shipFrame);
+        }
+
+        private void DrawEnemyFeedback(Camera camera, float worldScale, float scale, Vector2 offset)
+        {
             float barWidth = 2.15f * worldScale;
             float barHeight = barWidth * art.enemyFrame.height / art.enemyFrame.width;
+            // The frame includes a sword on the left. Center the painted bar under the enemy.
+            var opening = new Rect(118f / 480f, 66f / 153f, 352f / 480f, 57f / 153f);
             foreach (EnemyCharacter enemy in controller.Enemies)
             {
                 if (enemy == null || enemy.Health <= 0f)
                     continue;
-                Vector2 point = WorldToGui(camera, enemy.HealthBarAnchor - Vector3.up * 0.14f, scale, offset);
-                var frame = new Rect(point.x - barWidth * 0.5f, point.y, barWidth, barHeight);
-                if (frame.xMin < ship.xMax && frame.yMin < ship.yMax && frame.yMax > viewport.yMin)
-                    frame.y = ship.yMax + 4f;
-                Rect fill = Within(frame, 400f / 1537f, 229f / 489f, 1085f / 1537f, 148f / 489f);
-                Fill(fill, new Color(0.13f, 0.07f, 0.15f, 0.83f));
-                DrawFill(fill, art.enemyFill, enemy.MaxHealth > 0f ? enemy.Health / enemy.MaxHealth : 0f);
+                Vector2 point = WorldToGui(camera, enemy.HealthBarAnchor - Vector3.up * 0.06f, scale, offset);
+                var frame = new Rect(point.x - barWidth * opening.center.x, point.y - barHeight * opening.yMin,
+                    barWidth, barHeight);
+                Rect fill = Within(frame, opening.x, opening.y, opening.width, opening.height);
+                float health = enemy.MaxHealth > 0f ? Mathf.Clamp01(enemy.Health / enemy.MaxHealth) : 0f;
+                DrawFill(fill, art.enemyFill, 0f, health);
                 GUI.DrawTexture(frame, art.enemyFrame);
-                if (enemy.ShowsHitFeedback && art.hitIcon != null)
+                if (art.hitIcon != null && enemy.TryGetHitFeedbackPosition(out Vector3 position))
                 {
-                    Vector2 hitPoint = WorldToGui(camera, enemy.VisualBounds.center, scale, offset);
+                    Vector2 hitPoint = WorldToGui(camera, position, scale, offset);
                     GUI.DrawTexture(new Rect(hitPoint.x - barHeight * 0.5f, hitPoint.y - barHeight * 0.5f, barHeight, barHeight),
                         art.hitIcon, ScaleMode.ScaleToFit);
                 }
             }
+        }
+
+        private void DrawStunIndicator(Character actor, Camera camera, Rect viewport, float worldScale, float scale, Vector2 offset)
+        {
+            if (actor == null || !actor.isActiveAndEnabled)
+                return;
+            float stun = actor.StunRemainingRatio;
+            if (stun <= 0f)
+                return;
+
+            Bounds bounds = actor.VisualBounds;
+            Vector2 point = WorldToGui(camera, bounds.center, scale, offset);
+            if (!viewport.Contains(point))
+                return;
+
+            float size = 0.85f * worldScale;
+            float side = (bounds.extents.x + 0.52f) * worldScale;
+            float x = point.x + side;
+            if (x + size > viewport.xMax)
+                x = point.x - side - size;
+            float y = Mathf.Clamp(point.y - size * 0.5f, viewport.yMin, viewport.yMax - size);
+            var ring = new Rect(x, y, size, size);
+            DrawStunFill(Within(ring, 17f / 616f, 17f / 616f, 599f / 616f, 599f / 616f), stun);
+            GUI.DrawTexture(ring, art.stunFrame);
+            GUI.DrawTexture(Within(ring, 0.26f, 0.27f, 0.52f, 0.52f), art.stunIcon, ScaleMode.ScaleToFit);
         }
 
         private static Vector2 WorldToGui(Camera camera, Vector3 position, float scale, Vector2 offset)
@@ -319,13 +336,18 @@ namespace Ferryman.Voyage
 
         private void DrawStunFill(Rect area, float fraction)
         {
-            if (Event.current.type != EventType.Repaint)
-                return;
-            if (radialFill == null)
+            int steps = Mathf.CeilToInt(StunFillSteps * fraction);
+            Texture2D fill = stunFills[steps];
+            if (fill != null)
             {
-                int width = art.stunFill.width;
-                int height = art.stunFill.height;
-                radialFill = new Texture2D(width, height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+                GUI.DrawTexture(area, fill);
+                return;
+            }
+
+            int width = art.stunFill.width;
+            int height = art.stunFill.height;
+            if (ringColors == null)
+            {
                 ringColors = art.stunFill.GetPixels32();
                 ringPixels = new Color32[ringColors.Length];
                 ringAngles = new float[ringColors.Length];
@@ -339,16 +361,14 @@ namespace Ferryman.Voyage
                 }
             }
 
-            int steps = Mathf.CeilToInt(64f * fraction);
-            if (steps != ringSteps)
-            {
-                ringSteps = steps;
-                for (int i = 0; i < ringPixels.Length; i++)
-                    ringPixels[i] = ringAngles[i] < steps / 64f ? ringColors[i] : default;
-                radialFill.SetPixels32(ringPixels);
-                radialFill.Apply(false);
-            }
-            GUI.DrawTexture(area, radialFill);
+            float cutoff = (float)steps / StunFillSteps;
+            for (int i = 0; i < ringPixels.Length; i++)
+                ringPixels[i] = ringAngles[i] < cutoff ? ringColors[i] : default;
+            fill = new Texture2D(width, height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            fill.SetPixels32(ringPixels);
+            fill.Apply(false, true);
+            stunFills[steps] = fill;
+            GUI.DrawTexture(area, fill);
         }
 
         private void DrawDialogue()
@@ -420,13 +440,14 @@ namespace Ferryman.Voyage
             return new Rect(area.x + x * area.width, area.y + y * area.height, width * area.width, height * area.height);
         }
 
-        private static void DrawFill(Rect area, Texture2D texture, float fraction)
+        private static void DrawFill(Rect area, Texture2D texture, float from, float to)
         {
-            fraction = Mathf.Clamp01(fraction);
+            float fraction = to - from;
             if (fraction <= 0f)
                 return;
+            area.x += area.width * from;
             area.width *= fraction;
-            GUI.DrawTextureWithTexCoords(area, texture, new Rect(0f, 0f, fraction, 1f));
+            GUI.DrawTextureWithTexCoords(area, texture, new Rect(from, 0f, fraction, 1f));
         }
 
         private static void Fill(Rect area, Color color)
@@ -439,8 +460,9 @@ namespace Ferryman.Voyage
 
         private void OnDestroy()
         {
-            if (radialFill != null)
-                Destroy(radialFill);
+            foreach (Texture2D fill in stunFills)
+                if (fill != null)
+                    Destroy(fill);
         }
     }
 }

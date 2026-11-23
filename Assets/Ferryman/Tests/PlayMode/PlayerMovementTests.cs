@@ -84,6 +84,14 @@ namespace Ferryman.Tests
                 }
             }
 
+            body.position = start;
+            Step(Vector2.right, 120);
+            Assert.That(body.position.x, Is.GreaterThan(7.5f), "The player stopped before reaching the bow.");
+            AssertInsideDeck();
+            Step(Vector2.left, 30);
+            Assert.That(body.position.x, Is.LessThan(6f), "The player could not move back from the bow.");
+            AssertInsideDeck();
+
             body.position = Vector2.zero;
             Step(Vector2.left, 100);
             float cabinSide = body.position.x;

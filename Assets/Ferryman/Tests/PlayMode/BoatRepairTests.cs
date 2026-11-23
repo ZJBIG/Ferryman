@@ -275,6 +275,64 @@ namespace Ferryman.Tests
                 Object.Destroy(effect.gameObject);
         }
 
+        [UnityTest]
+        public IEnumerator BowLandingsAndRepairCheckpointsUseTheExpandedDeck()
+        {
+            BoatDeck deck = boat.Deck;
+            var oldEdge = new Vector2Int(11, 2);
+            var bowCell = new Vector2Int(12, 2);
+            Vector2 legacyPosition = deck.transform.TransformPoint(new Vector2(6f, 0f));
+            Assert.That(deck.WorldToCell(legacyPosition), Is.EqualTo(oldEdge));
+            boat.ApplyDamage(100f, legacyPosition);
+            Assert.That(boat.RepairPoints.Single().Cell, Is.EqualTo(oldEdge));
+
+            Vector2 landing = deck.CellToWorld(bowCell);
+            var template = Object.FindObjectsOfType<TimedBomb>(true).First();
+            var bomb = Object.Instantiate(template, landing + Vector2.up * 5f, Quaternion.identity);
+            bomb.gameObject.SetActive(true);
+            bomb.Throw(boat, landing);
+            yield return WaitFor(() => bomb != null && !bomb.IsInFlight, 1.5f, "The bomb did not land on the bow.");
+            Assert.That((Vector2)bomb.transform.position, Is.EqualTo(landing));
+            Assert.That(bomb.Explode(), Is.True);
+            RepairPoint point = boat.RepairPoints.Single(item => item.Cell == bowCell);
+            Assert.That((Vector2)point.transform.position, Is.EqualTo(landing));
+
+            Vector2 stoneLanding = deck.CellToWorld(new Vector2Int(13, 2));
+            var stoneTemplate = Object.FindObjectsOfType<DestructibleObstacle>(true)
+                .First(item => item.GetComponent<TimedBomb>() == null);
+            var stone = Object.Instantiate(stoneTemplate, stoneLanding + Vector2.up * 5f, Quaternion.identity);
+            stone.gameObject.SetActive(true);
+            var flyTo = typeof(DestructibleObstacle).GetMethod("FlyTo", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(flyTo, Is.Not.Null);
+            flyTo.Invoke(stone, new object[] { deck, stoneLanding, 0.4f, 0f, null });
+            yield return WaitFor(() => stone != null && !stone.IsInFlight, 1.5f, "The stone did not land on the bow.");
+            Assert.That((Vector2)stone.transform.position, Is.EqualTo(stoneLanding));
+            var stoneHitbox = stone.GetComponent<BoxCollider2D>();
+            Assert.That(stoneHitbox.enabled && deck.CanPlace(stoneLanding, stoneHitbox.size, stoneHitbox), Is.True);
+
+            body.position = landing;
+            Assert.That(player.TryRepair(0.5f), Is.True);
+            Assert.That(point.Progress, Is.EqualTo(25f));
+            player.StopRepairing();
+
+            BoatHealth.State checkpoint = boat.CaptureState();
+            boat.RestoreState(checkpoint);
+            Assert.That(boat.CurrentHealth, Is.EqualTo(800f));
+            Assert.That((Vector2)boat.RepairPoints.Single(item => item.Cell == oldEdge).transform.position, Is.EqualTo(legacyPosition));
+            var restored = boat.RepairPoints.Single(item => item.Cell == bowCell);
+            Assert.That((Vector2)restored.transform.position, Is.EqualTo(landing));
+            Assert.That(restored.Progress, Is.EqualTo(25f));
+
+            BoatHealth.PointState legacy = checkpoint.points.Single(item => item.cell == oldEdge);
+            legacy.cell = new Vector2Int(11, 0);
+            legacy.localPosition = new Vector2(6f, -2.5f);
+            legacy.progress = 15f;
+            Assert.That(deck.ContainsFloor(deck.transform.TransformPoint(legacy.localPosition)), Is.False);
+            boat.RestoreState(checkpoint);
+            var relocated = boat.RepairPoints.Single(item => item.Progress == 15f);
+            Assert.That(deck.HasClearFloor(relocated.transform.position, new Vector2(1.96f, 1.54f)), Is.True);
+        }
+
         private RepairPoint DamageCell(Vector2Int cell)
         {
             boat.ApplyDamage(100f, boat.Deck.CellToWorld(cell));

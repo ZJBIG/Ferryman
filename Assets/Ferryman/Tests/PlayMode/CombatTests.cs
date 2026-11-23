@@ -1,8 +1,11 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Ferryman.Characters;
 using Ferryman.Combat;
+using Ferryman.Voyage;
 using Ferryman.World;
 using NUnit.Framework;
 using UnityEngine;
@@ -85,6 +88,29 @@ namespace Ferryman.Tests
             Assert.That(received, Is.EqualTo(2));
             Assert.That(sent, Is.EqualTo(2));
             Object.Destroy(crewObject);
+        }
+
+        [UnityTest]
+        public IEnumerator ProjectileHitsTheMantisClawButPassesOutsideItsContour()
+        {
+            Vector2 position = new Vector2(0f, 7f);
+            enemy.transform.position = position;
+            Physics2D.SyncTransforms();
+
+            Assert.That(enemy.Hitbox, Is.TypeOf<PolygonCollider2D>());
+            Vector2 emptyCorner = position + new Vector2(0.55f, 0.9f);
+            Assert.That(enemy.Hitbox.bounds.Contains(emptyCorner), Is.True);
+            var miss = FireFrom(player, emptyCorner, Vector2.right, player.AttackPower);
+            yield return WaitFor(() => miss != null && miss.transform.position.x > enemy.Hitbox.bounds.max.x + 0.15f,
+                0.5f, "The projectile should fly through the empty corner of the monster's bounds.");
+            Assert.That(enemy.Health, Is.EqualTo(enemy.MaxHealth));
+            Object.Destroy(miss.gameObject);
+
+            Vector2 clawLane = position + new Vector2(0.68f, -1.6f);
+            Assert.That(enemy.Hitbox.OverlapPoint(position + new Vector2(0.68f, -0.65f)), Is.True);
+            var graze = FireFrom(player, clawLane, Vector2.up, player.AttackPower);
+            yield return WaitFor(() => graze == null, 0.5f, "The projectile should hit the claw outside the old box.");
+            Assert.That(enemy.Health, Is.EqualTo(enemy.MaxHealth - player.AttackPower));
         }
 
         [UnityTest]
@@ -172,6 +198,66 @@ namespace Ferryman.Tests
                 && stoneVisual.position.y > launchPosition.y && Quaternion.Angle(stoneVisual.rotation, launchRotation) > 10f,
                 0.55f, "The kicked stone did not move away and spin.");
             yield return WaitFor(() => stoneVisual == null, 1f, "The kicked stone visual did not clean itself up.");
+        }
+
+        [UnityTest]
+        public IEnumerator HitFeedbackStaysOnVisiblePixelsThroughBomberPoseChanges()
+        {
+            var encounter = Resources.Load<EncounterDefinition>("Voyage/Events/Bombardment");
+            var bomber = Object.Instantiate(encounter.waves[0].enemies[0].prefab, new Vector3(0f, 8f), Quaternion.identity);
+            var renderer = bomber.GetComponentInChildren<SpriteRenderer>();
+            var collider = (PolygonCollider2D)bomber.Hitbox;
+            var getAnchor = typeof(EnemyCharacter).GetProperty("HealthBarAnchor", BindingFlags.Instance | BindingFlags.NonPublic);
+            var idleAnchor = (Vector3)getAnchor.GetValue(bomber);
+            Vector2[] idleOutline = collider.GetPath(0);
+            Vector2 claw = bomber.transform.TransformPoint(new Vector2(1.28f, -0.3f));
+            Vector2 bomb = bomber.transform.TransformPoint(new Vector2(0.945f, -0.045f));
+            Physics2D.SyncTransforms();
+            Assert.That(collider.OverlapPoint(claw), Is.False);
+            Sprite idlePose = renderer.sprite;
+            bomber.InitializeEnemy(player.BoatHealth, player, damageSystem);
+            yield return WaitFor(() => renderer.sprite != idlePose, 1f, "Bomber did not display its held pose.");
+            Sprite heldPose = renderer.sprite;
+            bomber.enabled = false;
+            Physics2D.SyncTransforms();
+            Assert.That(collider.OverlapPoint(claw), Is.True, "The raised claw must be hittable.");
+            Assert.That(collider.OverlapPoint(bomb), Is.False, "The bomb must stay outside the body outline.");
+            Assert.That(Vector3.Distance((Vector3)getAnchor.GetValue(bomber), idleAnchor), Is.LessThan(0.001f));
+
+            var getPosition = typeof(EnemyCharacter).GetMethod("TryGetHitFeedbackPosition", BindingFlags.Instance | BindingFlags.NonPublic);
+            var args = new object[] { Vector3.zero };
+            var distinctPoints = new HashSet<Vector3>();
+            for (int i = 0; i < 8; i++)
+            {
+                Assert.That(bomber.TryReceiveDamage(1f), Is.True);
+                Assert.That(getPosition.Invoke(bomber, args), Is.True);
+                var heldPoint = (Vector3)args[0];
+                Assert.That(getPosition.Invoke(bomber, args), Is.True);
+                Assert.That(args[0], Is.EqualTo(heldPoint), "The point moved without a new hit or pose.");
+                AssertOpaqueAt(renderer, heldPoint);
+                distinctPoints.Add(heldPoint);
+                renderer.sprite = idlePose;
+                Assert.That(getPosition.Invoke(bomber, args), Is.True);
+                AssertOpaqueAt(renderer, (Vector3)args[0]);
+                renderer.sprite = heldPose;
+            }
+            Assert.That(distinctPoints.Count, Is.GreaterThan(1));
+            bomber.enabled = true;
+            yield return WaitFor(() => renderer.sprite == idlePose, 1f, "Bomber did not restore the idle pose after throwing.");
+            Assert.That(collider.GetPath(0), Is.EqualTo(idleOutline));
+        }
+
+        private static void AssertOpaqueAt(SpriteRenderer renderer, Vector3 position)
+        {
+            Sprite sprite = renderer.sprite;
+            Vector3 local = renderer.transform.InverseTransformPoint(position);
+            if (renderer.flipX)
+                local.x = -local.x;
+            if (renderer.flipY)
+                local.y = -local.y;
+            Vector2 pixel = (Vector2)local * sprite.pixelsPerUnit + sprite.pivot + sprite.rect.position;
+            Assert.That(sprite.rect.Contains(pixel), Is.True);
+            Assert.That(sprite.texture.GetPixel(Mathf.FloorToInt(pixel.x), Mathf.FloorToInt(pixel.y)).a, Is.GreaterThanOrEqualTo(0.5f));
         }
 
         private Projectile FireFrom(Character source, Vector3 origin, Vector2 direction, float damage)

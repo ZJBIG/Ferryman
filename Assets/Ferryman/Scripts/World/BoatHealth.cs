@@ -71,9 +71,8 @@ namespace Ferryman.World
                 if (point == null || !deck.ContainsCell(point.cell) || !occupied.Add(point.cell)
                     || !(point.progress >= 0f && point.progress < repairPointHealth)
                     || !float.IsFinite(point.localPosition.x) || !float.IsFinite(point.localPosition.y)
-                    || ((Vector2)deck.transform.TransformPoint(point.localPosition)
-                        - deck.ClampToDeck(deck.transform.TransformPoint(point.localPosition))).sqrMagnitude > 0.0001f
-                    || deck.WorldToCell(deck.transform.TransformPoint(point.localPosition)) != point.cell)
+                    || !deck.ContainsRepairCheckpointPosition(point.localPosition)
+                    || deck.LocalToCell(point.localPosition) != point.cell)
                     throw new InvalidDataException("Invalid repair checkpoint.");
 
             var placements = new List<(Vector2Int Cell, Vector2 Position, float Progress)>(state.points.Length);

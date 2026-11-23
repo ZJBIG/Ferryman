@@ -11,22 +11,46 @@ namespace Ferryman.World
         [SerializeField] private Vector2[] walkablePerimeter;
         [SerializeField] private BoxCollider2D[] fixedObstacles;
 
-        public Vector2Int GridSize => new Vector2Int(
+        private Vector2Int BaseGridSize => new Vector2Int(
             Mathf.Max(1, Mathf.FloorToInt(width / cellSize)),
             Mathf.Max(1, Mathf.FloorToInt(height / cellSize)));
 
-        public Vector2Int WorldToCell(Vector2 position)
+        public Vector2Int GridSize
         {
-            Vector2 local = transform.InverseTransformPoint(position);
-            Vector2Int size = GridSize;
+            get
+            {
+                Vector2Int size = BaseGridSize;
+                if (!HasPerimeter)
+                    return size;
+
+                float right = width * 0.5f;
+                foreach (Vector2 point in walkablePerimeter)
+                    right = Mathf.Max(right, point.x);
+                if (right > width * 0.5f)
+                    size.x += Mathf.CeilToInt((right - size.x * 0.5f * cellSize) / cellSize);
+                return size;
+            }
+        }
+
+        private bool HasPerimeter => walkablePerimeter != null && walkablePerimeter.Length >= 3;
+
+        public Vector2Int WorldToCell(Vector2 position) => LocalToCell(transform.InverseTransformPoint(position));
+
+        internal Vector2Int LocalToCell(Vector2 local)
+        {
+            Vector2Int size = BaseGridSize;
+            int x = Mathf.FloorToInt(local.x / cellSize + size.x * 0.5f);
+            // The right edge of the old grid belonged to its last column.
+            if (x == size.x && Mathf.Approximately(local.x, size.x * 0.5f * cellSize))
+                x--;
             return new Vector2Int(
-                Mathf.Clamp(Mathf.FloorToInt(local.x / cellSize + size.x * 0.5f), 0, size.x - 1),
+                Mathf.Clamp(x, 0, GridSize.x - 1),
                 Mathf.Clamp(Mathf.FloorToInt(local.y / cellSize + size.y * 0.5f), 0, size.y - 1));
         }
 
         public Vector2 CellToWorld(Vector2Int cell)
         {
-            Vector2Int size = GridSize;
+            Vector2Int size = BaseGridSize;
             return transform.TransformPoint(new Vector3(
                 (cell.x + 0.5f - size.x * 0.5f) * cellSize,
                 (cell.y + 0.5f - size.y * 0.5f) * cellSize));
@@ -35,10 +59,40 @@ namespace Ferryman.World
         public Vector2 ClampToDeck(Vector2 position)
         {
             Vector2 local = transform.InverseTransformPoint(position);
-            local.x = Mathf.Clamp(local.x, -width * 0.5f, width * 0.5f);
-            local.y = Mathf.Clamp(local.y, -height * 0.5f, height * 0.5f);
-            return transform.TransformPoint(local);
+            if (!HasPerimeter)
+                return transform.TransformPoint(ClampToBaseRectangle(local));
+            if (ContainsLocalFloor(local))
+                return position;
+
+            Vector2 closest = walkablePerimeter[0];
+            float bestDistance = float.PositiveInfinity;
+            for (int i = 0; i < walkablePerimeter.Length; i++)
+            {
+                Vector2 start = walkablePerimeter[i];
+                Vector2 edge = walkablePerimeter[(i + 1) % walkablePerimeter.Length] - start;
+                if (edge.sqrMagnitude == 0f)
+                    continue;
+                Vector2 candidate = start + edge * Mathf.Clamp01(Vector2.Dot(local - start, edge) / edge.sqrMagnitude);
+                float distance = (local - candidate).sqrMagnitude;
+                if (distance < bestDistance)
+                {
+                    closest = candidate;
+                    bestDistance = distance;
+                }
+            }
+            return transform.TransformPoint(closest);
         }
+
+        internal bool ContainsRepairCheckpointPosition(Vector2 local)
+        {
+            // Older saves allowed the rectangular area even where the artwork needs to be relocated.
+            return (ClampToBaseRectangle(local) - local).sqrMagnitude <= 0.0001f
+                || HasPerimeter && ContainsLocalFloor(local);
+        }
+
+        private Vector2 ClampToBaseRectangle(Vector2 local) => new Vector2(
+            Mathf.Clamp(local.x, -width * 0.5f, width * 0.5f),
+            Mathf.Clamp(local.y, -height * 0.5f, height * 0.5f));
 
         public bool ContainsCell(Vector2Int cell)
         {
@@ -48,10 +102,14 @@ namespace Ferryman.World
 
         public bool ContainsFloor(Vector2 position)
         {
-            if (walkablePerimeter == null || walkablePerimeter.Length < 3)
+            if (!HasPerimeter)
                 return (ClampToDeck(position) - position).sqrMagnitude <= 0.0001f;
 
-            Vector2 local = transform.InverseTransformPoint(position);
+            return ContainsLocalFloor(transform.InverseTransformPoint(position));
+        }
+
+        private bool ContainsLocalFloor(Vector2 local)
+        {
             // The configured perimeter is convex and ordered clockwise.
             for (int i = 0; i < walkablePerimeter.Length; i++)
             {
@@ -140,7 +198,7 @@ namespace Ferryman.World
         {
             float halfWidth = width * 0.5f;
             float halfHeight = height * 0.5f;
-            var perimeter = walkablePerimeter != null && walkablePerimeter.Length >= 3 ? walkablePerimeter : new[]
+            var perimeter = HasPerimeter ? walkablePerimeter : new[]
             {
                 new Vector2(-halfWidth, -halfHeight),
                 new Vector2(-halfWidth, halfHeight),

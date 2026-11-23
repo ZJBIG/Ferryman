@@ -266,7 +266,10 @@ namespace Ferryman.Tests
             AssertRestored(initial);
 
             yield return WaitFor(() => AtEvent(1), "combat after restoring the immediate checkpoint");
-            controller.Vessel.Player.GetComponent<Rigidbody2D>().position = new Vector2(2.5f, -0.5f);
+            var playerBowPosition = new Vector2(7.5f, 0f);
+            var crewBowPosition = new Vector2(6.5f, 1f);
+            controller.Vessel.Player.GetComponent<Rigidbody2D>().position = playerBowPosition;
+            controller.Passengers.Single().Actor.GetComponent<Rigidbody2D>().position = crewBowPosition;
             Physics2D.SyncTransforms();
             controller.Vessel.Boat.ApplyDamage(150f, new Vector2(-0.5f, 0.25f));
             RepairPoint point = controller.Vessel.Boat.RepairPoints.Single();
@@ -285,7 +288,9 @@ namespace Ferryman.Tests
             Assert.That(regional.pendingCoins, Is.EqualTo(encounter.reward.coins));
             Assert.That(regional.pendingSpecialItems, Is.EqualTo(encounter.reward.specialItems));
             Assert.That(regional.passengers.Length, Is.EqualTo(2));
-            Assert.That(Vector2.Distance(regional.playerLocalPosition, new Vector2(2.5f, -0.5f)), Is.LessThan(0.001f));
+            Assert.That(Vector2.Distance(regional.playerLocalPosition, playerBowPosition), Is.LessThan(0.001f));
+            Assert.That(Vector2.Distance(regional.passengers.Single(item => item.profileId == escort.id).localPosition,
+                crewBowPosition), Is.LessThan(0.001f));
 
             // Changes after the regional save must be rolled back when the controller is lost.
             controller.Vessel.Boat.ApplyDamage(40f, Vector2.zero);

@@ -4,7 +4,6 @@ using UnityEngine.Events;
 
 namespace Ferryman.Characters
 {
-    [RequireComponent(typeof(BoxCollider2D))]
     public abstract class Character : MonoBehaviour
     {
         [SerializeField, Min(0f)] private float health = 100f;

@@ -72,7 +72,11 @@ namespace Ferryman.Editor
             Require(vessel.Player.MovementDeck == vessel.Boat.Deck && vessel.Player.BoatHealth == vessel.Boat
                 && vessel.Player.DamageSystem == vessel.DamageSystem, "Vessel/player combat or deck bindings differ.");
             Require(vessel.Player.ProjectilePrefab != null, "Player weapon has no projectile.");
-            Require(vessel.Boat.Deck.GridSize == new Vector2Int(12, 5), "Default deck grid differs.");
+            BoatDeck deck = vessel.Boat.Deck;
+            Require(deck.GridSize == new Vector2Int(15, 5)
+                && deck.WorldToCell(deck.transform.TransformPoint(new Vector2(6f, 0f))) == new Vector2Int(11, 2)
+                && deck.CellToWorld(new Vector2Int(12, 2)) == (Vector2)deck.transform.TransformPoint(new Vector2(6.5f, 0f)),
+                "Bow grid moved the original deck cells or omitted the new columns.");
             CheckFloat(vessel.Boat, "maxHealth", 1000f);
             CheckFloat(vessel.Player, "moveSpeed", 4f);
             CheckFloat(vessel.Player, "attackPower", 10f);
@@ -98,6 +102,24 @@ namespace Ferryman.Editor
                         Require(bombing ? group.prefab.PreferredTarget == EnemyCharacter.TargetPreference.ShipFirst && group.prefab.BombPrefab != null
                             : group.prefab.PreferredTarget != EnemyCharacter.TargetPreference.ShipFirst && group.prefab.ProjectilePrefab != null,
                             "Enemy attack and target configuration differ.");
+                        Require(group.prefab.Hitbox is PolygonCollider2D outline && outline.GetTotalPointCount() > 4
+                            && group.prefab.GetComponentsInChildren<Collider2D>().Length == 1,
+                            "Enemy must use one body contour as its hitbox.");
+                        Require(group.prefab.GetComponentInChildren<SpriteRenderer>()?.sprite?.texture.isReadable == true,
+                            "Enemy body sprite must be readable for hit feedback.");
+                        if (bombing)
+                        {
+                            var poses = new SerializedObject(group.prefab).FindProperty("bombPoses");
+                            Require(poses.arraySize > 0, "Bomber has no windup poses.");
+                            for (int i = 0; i < poses.arraySize; i++)
+                            {
+                                SerializedProperty pose = poses.GetArrayElementAtIndex(i);
+                                var sprite = pose.FindPropertyRelative("heldPose").objectReferenceValue as Sprite;
+                                Require(sprite != null && sprite.texture.isReadable
+                                    && pose.FindPropertyRelative("bodyOutline").arraySize > 4,
+                                    "Bomber pose needs a readable sprite and a body contour.");
+                            }
+                        }
                     }
                 }
             }
@@ -107,12 +129,13 @@ namespace Ferryman.Editor
             PlannedVoyageEvent[] plan = VoyageEventPlanner.Build(definition, 42);
             Require(plan[1].kind == VoyageEventKind.Combat && plan[1].isFixed && plan[3].kind == VoyageEventKind.Special,
                 "Default fixed and random events differ.");
-            var boundary = vessel.Boat.Deck.GetComponent<EdgeCollider2D>();
-            var line = vessel.Boat.Deck.GetComponent<LineRenderer>();
+            var boundary = deck.GetComponent<EdgeCollider2D>();
+            var line = deck.GetComponent<LineRenderer>();
             var points = boundary.points;
-            Require(points.Length == 8 && points[0] == points[points.Length - 1] && line.positionCount == points.Length - 1,
+            Require(points.Length >= 4 && points[0] == points[points.Length - 1] && line.positionCount == points.Length - 1
+                && points.Any(point => point.x > 8f) && deck.HasClearFloor(deck.CellToWorld(new Vector2Int(13, 2)), new Vector2(1.22f, 1.17f)),
                 "Deck edge no longer closes along the ship art.");
-            Require(vessel.Boat.Deck.GetComponentsInChildren<BoxCollider2D>().Length == 6,
+            Require(deck.GetComponentsInChildren<BoxCollider2D>().Length == 6,
                 "One of the cabin or cargo collision sections is missing.");
             for (int i = 0; i < line.positionCount; i++)
                 Require((Vector2)line.GetPosition(i) == points[i], "Deck outline and physics edge differ.");
@@ -177,7 +200,7 @@ namespace Ferryman.Editor
             EditorSceneManager.OpenScene(Root + "Scenes/main.unity");
             Directory.CreateDirectory(".local");
             File.WriteAllText(".local/prototype-resource-observations.txt",
-                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed hull outline, six cabin/cargo colliders, 12 x 5 repair grid.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\nMain UI layout anchors are present and inactive.\n");
+                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed hull outline, six cabin/cargo colliders, 15 x 5 repair grid including the bow.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\nMain UI layout anchors are present and inactive.\n");
             Debug.Log("Ferryman full prototype resource verification passed.");
         }
 
