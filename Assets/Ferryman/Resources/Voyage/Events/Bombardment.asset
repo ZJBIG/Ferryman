@@ -17,9 +17,13 @@ MonoBehaviour:
   waves:
   - enemies:
     - prefab: {fileID: 402870840139730365, guid: 42b27aa8d72f59f47be8031f07cea9f2, type: 3}
-      count: 2
-      spawnPosition: {x: 0, y: 6.5}
+      count: 1
+      spawnPosition: {x: 0.1, y: 8.5}
+    - prefab: {fileID: 402870840139730365, guid: 42b27aa8d72f59f47be8031f07cea9f2, type: 3}
+      count: 1
+      spawnPosition: {x: 4.5, y: 8.5}
   reward:
     coins: 35
     specialItems: 1
-  cameraSize: 7.5
+  cameraSize: 9.5
+  cameraHeight: 3.5

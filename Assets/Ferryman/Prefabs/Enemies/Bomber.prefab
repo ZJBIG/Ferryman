@@ -8,18 +8,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 1594019081072344429, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: m_Color.b
-      value: 0.18
-      objectReference: {fileID: 0}
-    - target: {fileID: 1594019081072344429, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: m_Color.g
-      value: 0.46
-      objectReference: {fileID: 0}
-    - target: {fileID: 1594019081072344429, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: m_Color.r
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 2942608305332904749, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_Name
       value: Bomber
@@ -37,6 +25,42 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 853591217009229110, guid: eaf016f4af0b0094cbef03f0945e0f6b, type: 3}
     - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.data[0].heldPose
+      value:
+      objectReference: {fileID: -296268405037966489, guid: 06d567a712a349aa932621e9ee1b88aa, type: 3}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.data[0].projectile
+      value:
+      objectReference: {fileID: 21300000, guid: b1b284655ccb2c34e82e4a85867c7b39, type: 3}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.data[0].launchOffset.x
+      value: 0.955
+      objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.data[0].launchOffset.y
+      value: -0.028
+      objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.data[1].heldPose
+      value:
+      objectReference: {fileID: -341124726404019366, guid: 8b9d1059fee14f229caef2d9d066c52c, type: 3}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.data[1].projectile
+      value:
+      objectReference: {fileID: 21300000, guid: 3bf2d93846dfb104eb03653e86e7dcb1, type: 3}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.data[1].launchOffset.x
+      value: 0.945
+      objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: bombPoses.Array.data[1].launchOffset.y
+      value: -0.045
+      objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: displayName
       value: "\u6295\u5F39\u624B"
       objectReference: {fileID: 0}
@@ -48,6 +72,10 @@ PrefabInstance:
       propertyPath: targetPreference
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 6736160314134693394, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: m_Sprite
+      value:
+      objectReference: {fileID: -3673669636682697118, guid: 5069b32ff884b974888d58d2df8a494f, type: 3}
     - target: {fileID: 7126393379234087848, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

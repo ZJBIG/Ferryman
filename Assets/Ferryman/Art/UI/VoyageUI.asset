@@ -28,6 +28,7 @@ MonoBehaviour:
   shipDamaged: {fileID: 2800000, guid: 1ba6faf8e1914597a9b6af66b9512b77, type: 3}
   enemyFrame: {fileID: 2800000, guid: ceca4b3b6f544e468efb14fafd1a30d3, type: 3}
   enemyFill: {fileID: 2800000, guid: fbbff56a7dfa4dcba8c0b0ef8e78c936, type: 3}
+  hitIcon: {fileID: 2800000, guid: 50360c18944c415ca9770a7e6f188949, type: 3}
   stunFrame: {fileID: 2800000, guid: 7727743bd71046648a1029504fb11243, type: 3}
   stunFill: {fileID: 2800000, guid: b201fe96fc824425af9c30699b34c153, type: 3}
   stunIcon: {fileID: 2800000, guid: 6cb4cffc86c8496b9d5731522f4dfe91, type: 3}

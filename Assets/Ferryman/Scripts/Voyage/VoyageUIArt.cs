@@ -20,6 +20,7 @@ namespace Ferryman.Voyage
         public Texture2D shipDamaged;
         public Texture2D enemyFrame;
         public Texture2D enemyFill;
+        public Texture2D hitIcon;
         public Texture2D stunFrame;
         public Texture2D stunFill;
         public Texture2D stunIcon;

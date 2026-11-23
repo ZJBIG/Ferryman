@@ -13,16 +13,8 @@ PrefabInstance:
       value: Player Hunter
       objectReference: {fileID: 0}
     - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: bombPrefab
-      value: 
-      objectReference: {fileID: 853591217009229110, guid: eaf016f4af0b0094cbef03f0945e0f6b, type: 3}
-    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: displayName
       value: "\u73A9\u5BB6\u730E\u624B"
-      objectReference: {fileID: 0}
-    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: bombInterval
-      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: 7126393379234087848, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_LocalPosition.x

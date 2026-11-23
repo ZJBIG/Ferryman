@@ -18,8 +18,14 @@ namespace Ferryman.Characters
             ShipFirst
         }
 
-        [SerializeField, Tooltip("敌人应避开的船体；当前阶段敌人固定在船外。")]
-        private Transform excludedBoat;
+        [System.Serializable]
+        private sealed class BombPose
+        {
+            public Sprite heldPose;
+            public Sprite projectile;
+            public Vector2 launchOffset;
+        }
+
         [SerializeField] private PlayerCharacter target;
         [SerializeField] private GameObject deathEffectPrefab;
         [SerializeField] private AttackKind attackKind;
@@ -27,25 +33,41 @@ namespace Ferryman.Characters
         [SerializeField] private string displayName;
         [SerializeField] private TimedBomb bombPrefab;
         [SerializeField, Min(0.01f)] private float bombInterval = 3f;
+        [SerializeField] private BombPose[] bombPoses;
 
         private BoatHealth boat;
         private float nextBombAt;
-        private Character aimedTarget;
+        private BombPose pendingBomb;
+        private Sprite idleSprite;
+        private float hitFeedbackUntil;
+        private float BombWindup => Mathf.Min(0.5f, bombInterval * 0.5f);
 
-        public Transform ExcludedBoat => excludedBoat;
         public override bool IsHostile => true;
         public AttackKind AttackType => attackKind;
         public TargetPreference PreferredTarget => targetPreference;
         public TimedBomb BombPrefab => bombPrefab;
+        internal bool ShowsHitFeedback => Time.time < hitFeedbackUntil;
+        internal Vector3 HealthBarAnchor
+        {
+            get
+            {
+                bool holdingBomb = pendingBomb != null && idleSprite != null;
+                Bounds bounds = holdingBomb ? idleSprite.bounds : VisualBounds;
+                var bottomCenter = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+                return holdingBomb ? Visual.transform.TransformPoint(bottomCenter) : bottomCenter;
+            }
+        }
+
         public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name.Replace("(Clone)", "") : displayName;
 
         public void InitializeEnemy(BoatHealth targetBoat, PlayerCharacter player, DamageSystem system)
         {
             boat = targetBoat;
             target = player;
-            excludedBoat = targetBoat.transform;
             ConfigureCombat(system, ProjectilePrefab, AttackPower,
                 attackKind == AttackKind.Bomb ? bombInterval : FireInterval);
+            if (attackKind == AttackKind.Bomb && bombPoses != null && bombPoses.Length > 0)
+                nextBombAt = Time.time + BombWindup;
         }
 
         private void Update()
@@ -57,22 +79,46 @@ namespace Ferryman.Characters
 
             if (attackKind == AttackKind.Bomb)
             {
-                if (boat == null || bombPrefab == null || Time.time < nextBombAt)
-                    return;
-                nextBombAt = Time.time + bombInterval;
-                Vector2Int size = boat.Deck.GridSize;
-                Vector2 landing = boat.Deck.CellToWorld(new Vector2Int(Random.Range(0, size.x), Random.Range(0, size.y)));
-                Face(landing - (Vector2)transform.position);
-                var bomb = Instantiate(bombPrefab, transform.position, Quaternion.identity);
-                bomb.Throw(boat, landing);
+                UpdateBombThrow();
                 return;
             }
 
-            aimedTarget = SelectTarget();
+            Character aimedTarget = SelectTarget();
             if (aimedTarget == null)
                 return;
             Face(aimedTarget.transform.position - transform.position);
             TryFire(AimDirection);
+        }
+
+        private void UpdateBombThrow()
+        {
+            if (boat == null || bombPrefab == null)
+                return;
+            if (pendingBomb == null && bombPoses != null && bombPoses.Length > 0
+                && Time.time >= nextBombAt - BombWindup)
+            {
+                pendingBomb = bombPoses[Random.Range(0, bombPoses.Length)];
+                idleSprite = Visual.sprite;
+                Visual.sprite = pendingBomb.heldPose;
+                nextBombAt = Mathf.Max(nextBombAt, Time.time + BombWindup);
+            }
+            if (Time.time < nextBombAt)
+                return;
+
+            nextBombAt = Time.time + bombInterval;
+            Vector2Int size = boat.Deck.GridSize;
+            Vector2 landing = boat.Deck.CellToWorld(new Vector2Int(Random.Range(0, size.x), Random.Range(0, size.y)));
+            Face(landing - (Vector2)transform.position);
+            Vector3 origin = pendingBomb != null ? transform.TransformPoint(pendingBomb.launchOffset) : transform.position;
+            var bomb = Instantiate(bombPrefab, origin, Quaternion.identity);
+            if (pendingBomb != null)
+            {
+                // The released artwork includes the edge hidden by the claw in the held pose.
+                bomb.GetComponent<DestructibleObstacle>().SetAppearance(pendingBomb.projectile, 0.7f);
+                Visual.sprite = idleSprite;
+                pendingBomb = null;
+            }
+            bomb.Throw(boat, landing);
         }
 
         private Character SelectTarget()
@@ -103,6 +149,7 @@ namespace Ferryman.Characters
                 return false;
 
             Health = Mathf.Max(0f, Health - damage);
+            hitFeedbackUntil = Time.time + 0.18f;
             ShowFeedback(Color.white, 0.1f);
             if (Health <= 0f)
             {

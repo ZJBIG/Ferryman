@@ -18,6 +18,7 @@ namespace Ferryman.Voyage
 
         public bool IsUnifiedScene => islandStops != null;
         public float CameraSize => IsUnifiedScene && islandStops.gameObject.activeSelf ? islandCameraSize : cameraSize;
+        public float CameraHeight => IsUnifiedScene && islandStops.gameObject.activeSelf ? islandCameraHeight : 0f;
 
         public bool CanPresentStop(VoyageStop stop)
         {
@@ -45,7 +46,7 @@ namespace Ferryman.Voyage
 
             Camera camera = GetComponent<Camera>();
             Vector3 cameraPosition = camera.transform.position;
-            cameraPosition.y = island ? islandCameraHeight : 0f;
+            cameraPosition.y = CameraHeight;
             camera.transform.position = cameraPosition;
             camera.orthographicSize = CameraSize;
         }

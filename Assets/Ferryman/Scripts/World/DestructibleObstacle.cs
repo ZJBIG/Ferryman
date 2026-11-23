@@ -13,6 +13,7 @@ namespace Ferryman.World
 
         private BoatDeck landingDeck;
         private BoxCollider2D hitbox;
+        private Vector3 visualScale;
         private Vector2 flightOrigin;
         private Vector2 landingPosition;
         private float launchedAt;
@@ -26,8 +27,20 @@ namespace Ferryman.World
         private void Awake()
         {
             hitbox = GetComponent<BoxCollider2D>();
-            if (visual != null && appearances != null && appearances.Length > 0)
-                visual.sprite = appearances[Random.Range(0, appearances.Length)];
+            if (visual != null)
+                visualScale = visual.transform.localScale;
+            SetAppearance(ChooseAppearance());
+        }
+
+        private Sprite ChooseAppearance() => appearances != null && appearances.Length > 0
+            ? appearances[Random.Range(0, appearances.Length)] : visual != null ? visual.sprite : null;
+
+        internal void SetAppearance(Sprite appearance, float scale = 1f)
+        {
+            if (visual == null)
+                return;
+            visual.sprite = appearance;
+            visual.transform.localScale = visualScale * scale;
         }
 
         internal void FlyTo(BoatDeck deck, Vector2 destination, float seconds, float arc, Action onLanded = null)

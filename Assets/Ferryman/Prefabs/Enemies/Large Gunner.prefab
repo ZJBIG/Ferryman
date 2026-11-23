@@ -17,16 +17,8 @@ PrefabInstance:
       value: 160
       objectReference: {fileID: 0}
     - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: bombPrefab
-      value: 
-      objectReference: {fileID: 853591217009229110, guid: eaf016f4af0b0094cbef03f0945e0f6b, type: 3}
-    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: displayName
       value: "\u7532\u58F3\u5C04\u624B"
-      objectReference: {fileID: 0}
-    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: bombInterval
-      value: 1.2
       objectReference: {fileID: 0}
     - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: fireInterval
@@ -40,6 +32,10 @@ PrefabInstance:
       propertyPath: m_LocalScale.y
       value: 1.4
       objectReference: {fileID: 0}
+    - target: {fileID: 6736160314134693394, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: m_Sprite
+      value:
+      objectReference: {fileID: -8609729740602713184, guid: 0ebbda03d5859fd4e88b2c811bf8c2ba, type: 3}
     - target: {fileID: 7126393379234087848, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

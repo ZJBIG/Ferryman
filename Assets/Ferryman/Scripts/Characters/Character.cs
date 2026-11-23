@@ -28,6 +28,8 @@ namespace Ferryman.Characters
         }
 
         public Collider2D Hitbox => hitbox;
+        protected SpriteRenderer Visual => visual;
+        internal Bounds VisualBounds => visual != null ? visual.bounds : hitbox.bounds;
         public float MaxHealth { get; private set; }
         public bool IsStunned => Time.time < stunnedUntil;
         public float StunRemainingRatio => stunDuration > 0f

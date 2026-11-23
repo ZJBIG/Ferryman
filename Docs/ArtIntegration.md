@@ -28,7 +28,7 @@
 | 预制体 | 接入位置 | 用法 |
 | --- | --- | --- |
 | `Player.prefab` | `Visual` | 替换 Sprite，或在此下放置完整显示预制体及 Animator；Character 组件的 `Visual` 字段指向需要占位调色的 SpriteRenderer |
-| `Enemy.prefab`、`Enemies/*` | `Visual` | 基础敌人与四个变体均固定在船外；变体有独立显示名、生命、攻击方式与目标倾向 |
+| `Enemy.prefab`、`Enemies/*` | `Sea Monster` | 怪物保留原画朝向；仅独立的 `Visual/Muzzle` 瞄准目标。四个变体保留独立生命、攻击方式与目标倾向 |
 | `Crew/CombatCrew.prefab` | `Visual/Body`、`Weapon`、`Muzzle` | 船员显示和发射口，Visual 根缩放 1，Body 子层控制尺寸 |
 | `Crew/MaintenanceCrew.prefab` | `Visual/Body`、`Repair Tool` | 维护外观与工具；动画读取刚体速度和 IsRepairing |
 | `Vessel.prefab` | 嵌套 `Boat` / `Player` | 整船由航程控制进出场；行为期间不动画化根节点 |
@@ -36,7 +36,7 @@
 | `Projectile.prefab` | `Visual` | 放置飞弹、弹道、TrailRenderer 或飞行粒子；`Visual Root` 沿实际飞行方向旋转，根节点的圆形碰撞器保持独立 |
 | `Stone.prefab` | `Visual` | 替换障碍物显示时按最大可见外观核对根碰撞器尺寸和落地空间 |
 | `Boat.prefab` | `Hull Visual`、`Wing Left`、`Wing Right` | 分别显示原画船体和左右翅膀；旧 `Deck Surface` 占位层已删除，船舱与箱子为图中装饰 |
-| `Environment/SeaEnvironment.prefab` | `Sea Motion/Sea Surface -1..2`、`Sailing Wake` | 四块海图交替镜像循环，船浪使用三帧 Animator；显示独立于甲板碰撞 |
+| `Environment/SeaEnvironment.prefab` | `Sea Motion/Sea Surface -1..2`、`Sailing Wake` | 原海图交替镜像循环，上方镜像一排覆盖海战取景；船浪使用三帧 Animator |
 | `TimedBomb.prefab` | `Visual`、`Fuse Bar` | 替换炸弹与引信显示；`Fuse Fill` 指向横向填充挂点，倒计时缩放其 X 轴，清除/爆炸时随根移除 |
 | `RepairPoint.prefab` | `Visual`、`Progress Bar` | 固定损坏外观；进度条放在点上方，`Progress Fill` 指向横向填充挂点，维修时缩放其 X 轴 |
 
@@ -124,7 +124,13 @@ Departure、Sea、Island、FinalIsland 和 Prototype 保留为原区域演示与
 
 `VoyageScenePresentation` 的 Sea Motion、Sailing Wake 和 Scroll Loop Width 决定滚动、水花启停及循环宽度。航行时滚动、事件时停止。main 另外绑定 Island Stops，按路线 `sceneName` 匹配岛屿子节点；重复海路和不同路线长度不依赖固定站点索引。区域切换在过场遮罩期间重置海面位置和镜头。船只进出场由 Controller 的左入/右出整体平移和 Fade 驱动；演出期间暂停角色刚体模拟，结束恢复行为。正式动画保持显示与实际甲板位置一致，避免额外动画化船根造成双重位移。
 
-摄像机固定 X=2.306；main 岛屿区域 Y=3.3、Size=8.6，海路 Y=0、Size=6；旧区域场景保持对应取景，Prototype 的 Y=0、Size=7。岛屿取景同时容纳建筑、码头和完整船体。main 的 Island Camera Height / Island Camera Size 与 Camera Size 配置两种基础取景。Controller 读取 `VoyageScenePresentation.CameraSize` 并平滑切换遭遇尺寸；默认遭遇 Size=7.5，敌人位于船外 Y=6/6.5，避开船体与翅膀构图。正式大型敌人素材仍属后续制作。
+摄像机固定 X=2.306。main 岛屿区域 Y=3.3、Size=8.6，普通航行 Y=0、Size=6，两种战斗遭遇使用 `EncounterDefinition` 的 Y=3.5、Size=9.5。镜头平滑移到战斗取景后才生成首波，战斗结束恢复航行镜头。以 16:9 取景，船顶位于距画面底部约 59% 处，海怪位于上方 Y=8.5。投弹伏击的两个出生点间距为 4.4 单位。
+
+半潜海怪 PNG 位于 `Assets/Ferryman/Art/Enemies`。Sprite 导入矩形去除透明留白，原 PNG 保留完整画布。礁虾和提灯鮟鱇用于两类追击射手，岩甲龟用于大型射手，木桶寄居蟹用于投弹手。`Sea Monster` 独立于瞄准节点，替换图时保持本地旋转为零。
+
+寄居蟹在蓄力时将 `Sea Monster` 切换为完整的持物图，出手时切回待机图。`Bomb Poses` 每项绑定一张持物图、对应的飞行物贴图和钳口出手点。持物图的 PPU 与 Pivot 按桶壳和水线与待机图配准。两种投掷物离手后的最长可见边约 0.69 单位，与持物图接近，着陆后显示原始炸弹图标与引信条。甲板落石由独立航程事件生成。
+
+海怪纹理使用 Kaiser mipmap、Trilinear 和 -0.4 mip bias，保留海战镜头缩小后的轮廓与线条，导入保持无压缩。
 
 `UI.zip` 的正式素材位于 `Assets/Ferryman/Art/UI`。五个航程场景的 `Voyage Bootstrap` 共用 `VoyageUI.asset`，由 `VoyageView` 按 1280×720 参考坐标绘制。替换贴图后在 main 运行检查标题、按钮实际点击区域、进度填充和窗口缩放。标题和对话使用压缩包里的布局示意，运行时使用拆分的标题、船桨、文字框和人像框素材。
 
@@ -132,11 +138,11 @@ Departure、Sea、Island、FinalIsland 和 Prototype 保留为原区域演示与
 | --- | --- |
 | 开始 | 出发岛和码头作为背景，左侧摆渡船，右侧三个标题字和纵排船桨按钮。存在检查点时可继续游戏，新游戏先确认是否丢弃检查点。 |
 | 航线 | 在羊皮纸上按顺序连接岛屿、战斗和突发事件。预览与正式启航使用同一随机种子，生成相同的事件安排。 |
-| 局内 | 左上显示船只耐久，灰色是已损失部分，橙色是剩余部分。玩家眩晕时在旁边显示剩余时间环。敌人血条跟随各自的位置。 |
+| 局内 | 左上显示船只耐久，灰色是已损失部分，橙色是剩余部分。眩晕倒计时环贴在主角右侧，右侧贴近屏幕边缘时切到左侧。敌人血条按统一世界宽度绘制在贴图下方，命中时短暂显示受击图标。 |
 | 结算 | 成功与船毁共用居中面板，上方显示送达人数和本轮金币，内框显示道具与累计奖励。返回按钮沿用原有返航流程。 |
 | 对话 | 途中乘客上船前，使用底部羊皮纸与左置头像框显示姓名、目的地和岗位。暂无立绘的角色使用岗位字。 |
 
-main 的 `UI Layout` 保持停用。美术可在编辑模式启用它，查看 `Upgrade Options/Cards` 中的五张卡。图标居中放在上方矩形，名称在矩形下方，再往下预留描述区。升级规则和触发点待定义。受击和炸弹图标已导入，待确认各自的显示位置和时机。耐久、敌人血量和眩晕素材已去除透明留白，替换其框和填充时保留原始画布的相对偏移。眩晕填充纹理需保持 Read/Write Enabled。
+main 的 `UI Layout` 保持停用。美术可在编辑模式启用它，查看 `Upgrade Options/Cards` 中的五张卡。图标居中放在上方矩形，名称在矩形下方，再往下预留描述区。升级规则和触发点待定义。耐久、敌人血量和眩晕素材已去除透明留白，替换其框和填充时保留原始画布的相对偏移。眩晕填充纹理需保持 Read/Write Enabled。
 
 
 ## 素材替换约束
@@ -148,7 +154,7 @@ main 的 `UI Layout` 保持停用。美术可在编辑模式启用它，查看 `
 | 道具入场 | 特殊事件道具从相机上方落下，敌人从身边抛出炸弹。两种入场方式都在落地前关闭碰撞，触地前复查落点，炸弹触地后开始引信 |
 | 岛屿、码头、乘客及船只进出场 | main 内区域切换和自动上下客已接入，正式表现保留既有岗位/目的地和时间规则 |
 | 敌人 HP、眩晕、乘客、奖励和结算 UI | 已接入正式素材，读取既有战斗状态与航程奖励 |
-| 大型敌人与特殊镜头 | 已提供可配置遭遇缩放，正式大型怪物素材不要求首批制作 |
+| 大型敌人与特殊镜头 | 岩甲龟使用单独的美术规格，战斗与航行自动切换镜头位置及尺寸 |
 
 ## 交付与替换检查
 

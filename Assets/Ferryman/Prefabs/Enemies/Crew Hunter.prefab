@@ -8,38 +8,22 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 1594019081072344429, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: m_Color.b
-      value: 0.75
-      objectReference: {fileID: 0}
-    - target: {fileID: 1594019081072344429, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: m_Color.g
-      value: 0.32
-      objectReference: {fileID: 0}
-    - target: {fileID: 1594019081072344429, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: m_Color.r
-      value: 0.69
-      objectReference: {fileID: 0}
     - target: {fileID: 2942608305332904749, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_Name
       value: Crew Hunter
       objectReference: {fileID: 0}
     - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: bombPrefab
-      value: 
-      objectReference: {fileID: 853591217009229110, guid: eaf016f4af0b0094cbef03f0945e0f6b, type: 3}
-    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: displayName
       value: "\u8239\u5458\u730E\u624B"
-      objectReference: {fileID: 0}
-    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
-      propertyPath: bombInterval
-      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: targetPreference
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 6736160314134693394, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: m_Sprite
+      value:
+      objectReference: {fileID: -1892181062956617991, guid: d6b9a7fe1319cfc49a700f3dd731a7c0, type: 3}
     - target: {fileID: 7126393379234087848, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

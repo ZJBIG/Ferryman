@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | 1 核心循环 | 选择首位乘客、自动摆渡、途中上客、战斗/维修协作、到站下客、本轮与永久奖励 | `VoyageController`、main 默认入口、完整航程成功回归 |
 | 2.1 船只 | 固定船型、独立全局 HP、自动航行、甲板维修网格 | Vessel 嵌套 Boat/Player；`BoatHealth` / `BoatDeck`；引用与移动/维修回归 |
-| 2.2 摄像机 | 正俯视、固定 X=2.306；岛屿 Y=3.3/Size=8.6、海路 Y=0/Size=6；遭遇 Size=7.5，自动平滑切换 | 场景 Camera、VoyageScenePresentation.CameraSize 与 Controller.Update；Encounter.cameraSize |
+| 2.2 摄像机 | 正俯视、固定 X=2.306；岛屿 Y=3.3/Size=8.6、海路 Y=0/Size=6；战斗 Y=3.5/Size=9.5，平滑切换后生成怪物，船位于画面下方约 3/5 内 | 场景 Camera、VoyageScenePresentation、VoyageController；Encounter 的 cameraSize / cameraHeight |
 | 3.1 操作 | 旧 Input Manager；Update 读输入、FixedUpdate 写刚体；鼠标连线决定方向，只旋转显示子物体 | `PlayerCharacter` / `CombatCharacter`；三项移动回归和资源参数检查 |
 | 3.2 远程 | 手持武器/Muzzle、左键按住连续射击、无限子弹、无装弹 | TryFire/Launch；跨边界、自身/友军过滤、单次命中回归 |
 | 3.3 近战 | 90° 扇形，可伤敌并一次清除石块/炸弹；两键同时输入时近战优先 | TryMelee；扇形边角、范围排除、重复碰撞器去重及炸弹清除回归 |

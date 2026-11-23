@@ -260,35 +260,55 @@ namespace Ferryman.Voyage
             GUI.DrawTexture(shipFill, art.shipDamaged);
             DrawFill(shipFill, art.shipHealthy, boat.MaxHealth > 0f ? boat.CurrentHealth / boat.MaxHealth : 0f);
             GUI.DrawTexture(ship, art.shipFrame);
-            float stun = controller.Vessel.Player.StunRemainingRatio;
-            float hudRight = ship.xMax;
-            if (stun > 0f)
-            {
-                var ring = new Rect(ship.xMax + 12f, ship.y, 54f, 54f);
-                DrawStunFill(Within(ring, 17f / 616f, 17f / 616f, 599f / 616f, 599f / 616f), stun);
-                GUI.DrawTexture(ring, art.stunFrame);
-                GUI.DrawTexture(Within(ring, 0.26f, 0.27f, 0.52f, 0.52f), art.stunIcon, ScaleMode.ScaleToFit);
-                hudRight = ring.xMax;
-            }
-
             Camera camera = Camera.main;
             if (camera == null)
                 return;
+            float worldScale = camera.pixelHeight / (2f * camera.orthographicSize * scale);
+            var player = controller.Vessel.Player;
+            float stun = player.StunRemainingRatio;
+            if (stun > 0f)
+            {
+                Bounds bounds = player.VisualBounds;
+                Vector2 point = WorldToGui(camera, bounds.center, scale, offset);
+                if (viewport.Contains(point))
+                {
+                    float size = 0.85f * worldScale;
+                    float side = (bounds.extents.x + 0.52f) * worldScale;
+                    float x = point.x + side;
+                    if (x + size > viewport.xMax)
+                        x = point.x - side - size;
+                    float y = Mathf.Clamp(point.y - size * 0.5f, viewport.yMin, viewport.yMax - size);
+                    var ring = new Rect(x, y, size, size);
+                    DrawStunFill(Within(ring, 17f / 616f, 17f / 616f, 599f / 616f, 599f / 616f), stun);
+                    GUI.DrawTexture(ring, art.stunFrame);
+                    GUI.DrawTexture(Within(ring, 0.26f, 0.27f, 0.52f, 0.52f), art.stunIcon, ScaleMode.ScaleToFit);
+                }
+            }
+
+            float barWidth = 2.15f * worldScale;
+            float barHeight = barWidth * art.enemyFrame.height / art.enemyFrame.width;
             foreach (EnemyCharacter enemy in controller.Enemies)
             {
                 if (enemy == null || enemy.Health <= 0f)
                     continue;
-                Bounds bounds = enemy.Hitbox.bounds;
-                Vector3 screen = camera.WorldToScreenPoint(bounds.center + Vector3.down * (bounds.extents.y + 0.28f));
-                Vector2 point = (new Vector2(screen.x, Screen.height - screen.y) - offset) / scale;
-                var frame = new Rect(point.x - 66f, point.y - 21f, 132f, 42f);
-                if (frame.xMin < hudRight && frame.yMin < ship.yMax && frame.yMax > viewport.yMin)
+                Vector2 point = WorldToGui(camera, enemy.HealthBarAnchor - Vector3.up * 0.14f, scale, offset);
+                var frame = new Rect(point.x - barWidth * 0.5f, point.y, barWidth, barHeight);
+                if (frame.xMin < ship.xMax && frame.yMin < ship.yMax && frame.yMax > viewport.yMin)
                     frame.y = ship.yMax + 4f;
                 Rect fill = Within(frame, 400f / 1537f, 229f / 489f, 1085f / 1537f, 148f / 489f);
                 Fill(fill, new Color(0.13f, 0.07f, 0.15f, 0.83f));
                 DrawFill(fill, art.enemyFill, enemy.MaxHealth > 0f ? enemy.Health / enemy.MaxHealth : 0f);
                 GUI.DrawTexture(frame, art.enemyFrame);
+                if (enemy.ShowsHitFeedback && art.hitIcon != null)
+                    GUI.DrawTexture(new Rect(frame.xMax - barHeight, frame.y - barHeight * 0.5f, barHeight, barHeight),
+                        art.hitIcon, ScaleMode.ScaleToFit);
             }
+        }
+
+        private static Vector2 WorldToGui(Camera camera, Vector3 position, float scale, Vector2 offset)
+        {
+            Vector3 screen = camera.WorldToScreenPoint(position);
+            return (new Vector2(screen.x, Screen.height - screen.y) - offset) / scale;
         }
 
         private void DrawStunFill(Rect area, float fraction)

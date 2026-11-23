@@ -282,6 +282,10 @@ namespace Ferryman.Voyage
             if (planned.kind == VoyageEventKind.Combat)
             {
                 EncounterDefinition encounter = planned.encounter;
+                Camera camera = Camera.main;
+                while (ActiveRun && camera != null && (camera.orthographicSize != encounter.cameraSize
+                    || camera.transform.position.y != encounter.cameraHeight))
+                    yield return null;
                 for (waveIndex = 0; waveIndex < encounter.waves.Length && ActiveRun; waveIndex++)
                 {
                     Message = encounter.displayName + $"  第 {waveIndex + 1}/{encounter.waves.Length} 轮";
@@ -664,7 +668,7 @@ namespace Ferryman.Voyage
             foreach (var encounter in definition.randomEncounters.Concat(definition.stops.Select(stop => stop.fixedEncounter)).Where(item => item != null).Distinct())
             {
                 if (encounter.waves == null || encounter.waves.Length == 0 || encounter.reward.coins < 0 || encounter.reward.specialItems < 0
-                    || !(encounter.cameraSize > 0f) || !float.IsFinite(encounter.cameraSize))
+                    || !(encounter.cameraSize > 0f) || !float.IsFinite(encounter.cameraSize) || !float.IsFinite(encounter.cameraHeight))
                     throw new InvalidDataException("Combat event needs waves, valid rewards and a camera size.");
                 foreach (var wave in encounter.waves)
                 {
@@ -725,9 +729,20 @@ namespace Ferryman.Voyage
             VoyageScenePresentation presentation = camera.GetComponent<VoyageScenePresentation>();
             float size = presentation != null ? presentation.CameraSize
                 : Phase == VoyagePhase.Island || Phase == VoyagePhase.Departure ? 5f : 6f;
+            Vector3 position = camera.transform.position;
+            float height = presentation != null && presentation.IsUnifiedScene ? presentation.CameraHeight : position.y;
             if (Phase == VoyagePhase.Event && eventPlan[StopIndex].kind == VoyageEventKind.Combat)
+            {
                 size = eventPlan[StopIndex].encounter.cameraSize;
-            camera.orthographicSize = Mathf.MoveTowards(camera.orthographicSize, size, 2f * Time.deltaTime);
+                height = eventPlan[StopIndex].encounter.cameraHeight;
+            }
+            else if (Phase == VoyagePhase.Sailing)
+                height = 0f;
+
+            float step = 4f * Time.deltaTime;
+            position.y = Mathf.MoveTowards(position.y, height, step);
+            camera.transform.position = position;
+            camera.orthographicSize = Mathf.MoveTowards(camera.orthographicSize, size, step);
         }
 
         private void OnApplicationQuit()

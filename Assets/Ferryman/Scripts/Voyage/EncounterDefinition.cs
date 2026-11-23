@@ -33,5 +33,6 @@ namespace Ferryman.Voyage
         public WaveDefinition[] waves = Array.Empty<WaveDefinition>();
         public RewardData reward;
         [Min(1f)] public float cameraSize = 6f;
+        public float cameraHeight;
     }
 }
