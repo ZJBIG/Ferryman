@@ -41,9 +41,10 @@ namespace Ferryman.Characters
 
             Character target = null;
             float nearest = float.PositiveInfinity;
-            foreach (var candidate in FindObjectsOfType<Character>())
+            foreach (var candidate in SceneCharacters)
             {
-                if (!candidate.IsHostile || candidate.Health <= 0f || candidate.Hitbox == null || !candidate.Hitbox.enabled)
+                if (candidate == null || !candidate.gameObject.activeInHierarchy
+                    || !candidate.IsHostile || candidate.Health <= 0f || candidate.Hitbox == null || !candidate.Hitbox.enabled)
                     continue;
                 float distance = ((Vector2)candidate.transform.position - body.position).sqrMagnitude;
                 if (distance >= nearest)

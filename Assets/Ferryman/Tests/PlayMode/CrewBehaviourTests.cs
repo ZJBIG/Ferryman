@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Ferryman.Characters;
 using Ferryman.Combat;
 using Ferryman.World;
@@ -94,6 +95,10 @@ namespace Ferryman.Tests
         [UnityTest]
         public IEnumerator CrewJobsStaySeparateAndResumeAfterStun()
         {
+            var snapshot = SceneCharacters();
+            Assert.That(snapshot, Does.Contain(player), "Disabled scripts must remain valid combat targets.");
+            Assert.That(snapshot, Does.Contain(enemy), "Disabled scripts must remain valid combat targets.");
+            Assert.That(SceneCharacters(), Is.SameAs(snapshot), "Actors repeated the scene search in the same frame.");
             foreach (var actor in Object.FindObjectsOfType<EnemyCharacter>())
                 if (actor != enemy)
                     actor.gameObject.SetActive(false);
@@ -111,6 +116,9 @@ namespace Ferryman.Tests
             Physics2D.SyncTransforms();
             Assert.That(fighter.TryReceiveDamage(10f), Is.True);
             yield return new WaitForSeconds(0.3f);
+            var nextSnapshot = SceneCharacters();
+            Assert.That(nextSnapshot, Is.Not.SameAs(snapshot));
+            Assert.That(nextSnapshot, Does.Contain(fighter), "A newly boarded combat crew member did not enter the next snapshot.");
             Assert.That(fighter.IsStunned, Is.True);
             Assert.That(Object.FindObjectsOfType<Projectile>().Length, Is.Zero);
             Assert.That(point.Progress, Is.Zero);
@@ -226,6 +234,12 @@ namespace Ferryman.Tests
             definition.role = role;
             definitions.Add(definition);
             return definition;
+        }
+
+        private static Character[] SceneCharacters()
+        {
+            return (Character[])typeof(Character).GetProperty("SceneCharacters", BindingFlags.Static | BindingFlags.NonPublic)
+                .GetValue(null);
         }
 
         private static IEnumerator WaitFor(Func<bool> condition, float timeout, string message)

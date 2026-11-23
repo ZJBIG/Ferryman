@@ -20,6 +20,8 @@ namespace Ferryman.Characters
         private Color originalColor;
         private Coroutine feedback;
         private bool actionsEnabled = true;
+        private static Character[] sceneCharacters;
+        private static int sceneCharactersFrame = -1;
 
         public float Health
         {
@@ -38,6 +40,27 @@ namespace Ferryman.Characters
         public bool ActionsEnabled => actionsEnabled;
         public virtual bool IsHostile => false;
         protected virtual bool CanAct => actionsEnabled && !IsStunned && (!IsHostile || Health > 0f);
+
+        protected static Character[] SceneCharacters
+        {
+            get
+            {
+                // Share one search per frame; newly spawned actors enter the snapshot next frame.
+                if (sceneCharactersFrame != Time.frameCount)
+                {
+                    sceneCharacters = FindObjectsByType<Character>(FindObjectsSortMode.None);
+                    sceneCharactersFrame = Time.frameCount;
+                }
+                return sceneCharacters;
+            }
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetSceneCharacters()
+        {
+            sceneCharacters = null;
+            sceneCharactersFrame = -1;
+        }
 
         public virtual void SetActionsAllowed(bool allowed)
         {

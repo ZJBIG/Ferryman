@@ -253,6 +253,9 @@ namespace Ferryman.Voyage
 
         private void DrawCombat(Rect viewport, float scale, Vector2 offset)
         {
+            if (Event.current.type != EventType.Repaint)
+                return;
+
             var boat = controller.Vessel.Boat;
             var ship = new Rect(viewport.xMin + 24f, viewport.yMin + 18f, 310f, 54f);
             // Fill rectangles use the original shared-canvas offsets before the transparent margins were trimmed.
@@ -300,8 +303,11 @@ namespace Ferryman.Voyage
                 DrawFill(fill, art.enemyFill, enemy.MaxHealth > 0f ? enemy.Health / enemy.MaxHealth : 0f);
                 GUI.DrawTexture(frame, art.enemyFrame);
                 if (enemy.ShowsHitFeedback && art.hitIcon != null)
-                    GUI.DrawTexture(new Rect(frame.xMax - barHeight, frame.y - barHeight * 0.5f, barHeight, barHeight),
+                {
+                    Vector2 hitPoint = WorldToGui(camera, enemy.VisualBounds.center, scale, offset);
+                    GUI.DrawTexture(new Rect(hitPoint.x - barHeight * 0.5f, hitPoint.y - barHeight * 0.5f, barHeight, barHeight),
                         art.hitIcon, ScaleMode.ScaleToFit);
+                }
             }
         }
 

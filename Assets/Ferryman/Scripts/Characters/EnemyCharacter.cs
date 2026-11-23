@@ -126,9 +126,10 @@ namespace Ferryman.Characters
             Character best = null;
             float bestDistance = float.PositiveInfinity;
             int bestPriority = int.MaxValue;
-            foreach (var character in FindObjectsOfType<Character>())
+            foreach (var character in SceneCharacters)
             {
-                if (character.IsHostile || !character.ActionsEnabled)
+                if (character == null || !character.gameObject.activeInHierarchy
+                    || character.IsHostile || !character.ActionsEnabled)
                     continue;
                 bool isPlayer = character is PlayerCharacter;
                 int priority = targetPreference == TargetPreference.CrewFirst ? (isPlayer ? 1 : 0) : (isPlayer ? 0 : 1);
