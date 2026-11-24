@@ -227,7 +227,7 @@ namespace Ferryman.Tests
             Physics2D.SyncTransforms();
             Assert.That(player.TryMelee(Vector2.right), Is.True);
             Assert.That(cleared.GetComponent<DestructibleObstacle>().IsCleared, Is.True);
-            Assert.That(cleared.GetComponent<Collider2D>().enabled, Is.False);
+            Assert.That(cleared.GetComponentsInChildren<Collider2D>(), Is.Empty);
             Assert.That(bombVisual.parent, Is.Null);
             cleared.GetComponent<DestructibleObstacle>().Clear();
             Assert.That(cleared.Explode(), Is.False, "A cleared bomb still exploded before delayed destruction.");
@@ -252,22 +252,23 @@ namespace Ferryman.Tests
 
             Vector2 blockedCabin = new Vector2(-5f, 0f);
             thrown.gameObject.SetActive(true);
-            BoxCollider2D thrownHitbox = thrown.GetComponent<BoxCollider2D>();
-            Assert.That(boat.Deck.CanPlace(blockedCabin, thrownHitbox.size), Is.False);
-            Assert.That(boat.Deck.TryFindPlacement(blockedCabin, thrownHitbox.size, thrownHitbox, out Vector2 planned), Is.True);
+            Vector2 thrownSize = (Vector2)typeof(DestructibleObstacle).GetProperty("Footprint", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(thrown.GetComponent<DestructibleObstacle>());
+            Assert.That(boat.Deck.CanPlace(blockedCabin, thrownSize), Is.False);
+            Assert.That(boat.Deck.TryFindPlacement(blockedCabin, thrownSize, null, out Vector2 planned), Is.True);
             thrown.Throw(boat, blockedCabin);
-            Assert.That(thrownHitbox.enabled, Is.False);
+            Assert.That(thrown.GetComponentsInChildren<Collider2D>(), Is.Empty);
             Transform thrownFuse = thrown.transform.Find("Fuse Bar");
             Assert.That(thrownFuse.gameObject.activeSelf, Is.False);
             Assert.That(thrown.Explode(), Is.False);
             body.position = planned;
             Physics2D.SyncTransforms();
             yield return WaitFor(() => thrown != null && !thrown.IsInFlight, 1f, "The thrown bomb did not find a safe landing.");
-            Assert.That(thrownHitbox.enabled, Is.True);
+            Assert.That(thrown.GetComponentsInChildren<Collider2D>(), Is.Empty);
             Assert.That(thrownFuse.gameObject.activeSelf, Is.True);
             Assert.That(thrownFuse.Find("Fill").localScale.x, Is.GreaterThan(0.9f));
             Assert.That((Vector2)thrown.transform.position, Is.Not.EqualTo(planned));
-            Assert.That(boat.Deck.CanPlace(thrown.transform.position, thrownHitbox.size, thrownHitbox), Is.True);
+            Assert.That(boat.Deck.CanPlace(thrown.transform.position, thrownSize), Is.True);
             Object.Destroy(thrown.gameObject);
 
             foreach (var effect in Object.FindObjectsOfType<Transform>()

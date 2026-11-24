@@ -55,7 +55,7 @@ namespace Ferryman.Tests
                 VoyageRouteNode node = map.Nodes[id];
                 Assert.That(node.id, Is.EqualTo(id));
                 if (node.depth < VoyageRouteMap.FinalDepth - 1)
-                    Assert.That(node.next.Length, Is.GreaterThanOrEqualTo(2));
+                    Assert.That(node.next.Length, Is.GreaterThanOrEqualTo(1));
                 else if (node.depth == VoyageRouteMap.FinalDepth - 1)
                     Assert.That(node.next, Is.EqualTo(new[] { 19 }));
                 foreach (int destination in node.next)

@@ -75,8 +75,14 @@ namespace Ferryman.Editor
             Require(vessel.Player.MovementDeck == vessel.Boat.Deck && vessel.Player.BoatHealth == vessel.Boat
                 && vessel.Player.DamageSystem == vessel.DamageSystem, "Vessel/player combat or deck bindings differ.");
             Require(vessel.Player.ProjectilePrefab != null, "Player weapon has no projectile.");
-            Require(new SerializedObject(vessel.Player).FindProperty("shotEffectPrefab").objectReferenceValue == null,
-                "Player must not spawn a second effect at the muzzle.");
+            Require(new SerializedObject(vessel.Player).FindProperty("shotEffectPrefab").objectReferenceValue
+                == AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Effects/MuzzleFlash.prefab"),
+                "Player ranged attack is not bound to the supplied muzzle effect.");
+            var bomb = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/TimedBomb.prefab");
+            Require(bomb.GetComponentsInChildren<Collider2D>().Length == 0, "Bombs must not have collision boxes.");
+            Require(new SerializedObject(bomb.GetComponent<TimedBomb>()).FindProperty("explosionEffectPrefab").objectReferenceValue
+                == AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Effects/BombCleared.prefab"),
+                "Bomb detonation is missing the supplied smoke effect.");
             Require(new SerializedObject(vessel.Player).FindProperty("meleeImpactEffectPrefab").objectReferenceValue
                 == AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Effects/ProjectileImpact.prefab"),
                 "Player kick impact is not bound to the supplied hit effect.");
@@ -100,6 +106,7 @@ namespace Ferryman.Editor
             foreach (EncounterDefinition encounter in definition.randomEncounters.Concat(definition.stops.Select(stop => stop.fixedEncounter)).Where(item => item != null).Distinct())
             {
                 Require(encounter.waves != null && encounter.waves.Length > 0, "Encounter has no waves.");
+                Require(encounter.waveInterval >= 0.1f && float.IsFinite(encounter.waveInterval), "Encounter wave interval is invalid.");
                 foreach (WaveDefinition wave in encounter.waves)
                 {
                     Require(wave != null && wave.enemies != null && wave.enemies.Length > 0, "Encounter has an empty wave.");

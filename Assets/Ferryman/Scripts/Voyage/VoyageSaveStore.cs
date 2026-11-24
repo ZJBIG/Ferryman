@@ -150,7 +150,7 @@ namespace Ferryman.Voyage
             {
                 if (checkpoint.stopIndex >= VoyageRouteMap.FinalDepth * 2 + 1)
                     throw new InvalidDataException("Branching voyage checkpoint has an invalid stop index.");
-                VoyageRouteMap.Generate(checkpoint.seed).ValidatePath(checkpoint.routePath);
+                VoyageRouteMap.Generate(checkpoint.seed, checkpoint.routePath).ValidatePath(checkpoint.routePath);
                 int expectedLength = (checkpoint.stopIndex + 1) / 2 + 1;
                 if (checkpoint.routePath.Length != expectedLength)
                     throw new InvalidDataException("Branching voyage path does not match the checkpoint stop.");

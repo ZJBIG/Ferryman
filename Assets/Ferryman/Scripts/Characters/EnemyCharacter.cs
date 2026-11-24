@@ -121,7 +121,7 @@ namespace Ferryman.Characters
             if (TryChooseBombLanding(out Vector2 landing))
             {
                 Face(landing - (Vector2)transform.position);
-                Vector3 origin = pendingBomb != null ? transform.TransformPoint(pendingBomb.launchOffset) : transform.position;
+                Vector3 origin = pendingBomb != null ? Visual.transform.TransformPoint(pendingBomb.launchOffset) : transform.position;
                 var bomb = Instantiate(bombPrefab, origin, Quaternion.identity);
                 if (pendingBomb != null)
                 {
@@ -143,7 +143,7 @@ namespace Ferryman.Characters
         {
             BoatDeck deck = boat.Deck;
             Vector2Int size = deck.GridSize;
-            Vector2 footprint = bombPrefab.GetComponent<BoxCollider2D>().size;
+            Vector2 footprint = bombPrefab.GetComponent<DestructibleObstacle>().Footprint;
             landing = default;
             int validCount = 0;
             Physics2D.SyncTransforms();

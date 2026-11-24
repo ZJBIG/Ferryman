@@ -139,7 +139,7 @@ MonoBehaviour:
   aimVisual: {fileID: 5082876501279003187}
   damageSystem: {fileID: 0}
   muzzle: {fileID: 690258357062984658}
-  shotEffectPrefab: {fileID: 0}
+  shotEffectPrefab: {fileID: 8280731793023676188, guid: 87ec343bc0e3b6d4591cff279f327e3f, type: 3}
   shotFired:
     m_PersistentCalls:
       m_Calls: []

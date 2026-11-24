@@ -26,7 +26,7 @@
 | 2.1 船只 | 固定船型、独立全局 HP、自动航行、甲板维修网格 | Vessel 嵌套 Boat/Player；`BoatHealth` / `BoatDeck`；引用与移动/维修回归 |
 | 2.2 摄像机 | 正俯视、固定 X=2.306；岛屿 Y=3.3/Size=8.6、海路 Y=0/Size=6；战斗 Y=3.5/Size=9.5，平滑切换后生成怪物，船位于画面下方约 3/5 内 | 场景 Camera、VoyageScenePresentation、VoyageController；Encounter 的 cameraSize / cameraHeight |
 | 3.1 操作 | 旧 Input Manager；Update 读输入、FixedUpdate 写刚体；鼠标连线决定方向，只旋转显示子物体 | `PlayerCharacter` / `CombatCharacter`；三项移动回归和资源参数检查 |
-| 3.2 远程 | 手持武器/Muzzle、左键连射、无限子弹、无装弹；玩家枪口额外特效取消，统一长轨迹子弹 | TryFire/Launch、Player.prefab；跨边界、自身/友军过滤、单次命中回归 |
+| 3.2 远程 | 手持武器/Muzzle、左键连射、无限子弹、无装弹；玩家与 NPC 成功射击播放现有枪口特效，统一长轨迹子弹 | TryFire/Launch、Player.prefab；跨边界、自身/友军过滤、单次命中回归 |
 | 3.3 近战 | 90° 扇形伤敌、清除石块/炸弹、弹开友方 NPC；两键同时输入时近战优先；反馈只在目标接触点生成，敌人使用红色反馈，玩家无自身挥击特效 | TryMelee；扇形边角、范围排除、实体去重、飞踢击退与命中反馈回归 |
 | 3.4 眩晕 | 玩家/友军不扣血或死亡；1 秒眩晕，停止动作、免伤、重复命中不延长，结束恢复 | Character.TryReceiveDamage / IsStunned；实帧眩晕和岗位恢复回归 |
 | 4.1 固定岗位 | 首位乘客选择前显示职责；途中乘客对话等待 3 秒后自动上船；无 NPC 指令；战斗只战斗、维护只维修；接驳岛可选择岗位乘客 | CrewDefinition、Passenger、两类 CrewMember、VoyageView、VoyageExpedition；岗位隔离回归 |
@@ -44,7 +44,7 @@
 | 8.7 NPC 维修 | 八邻接寻路绕实心障碍，只有扫过整个碰撞体仍畅通才跳过中间路点。到当前站位够得着的范围就开始维修，使用和玩家共用的破损进度条 | MaintenanceCrewMember；绕障、原地开修、进度条和暂停恢复回归 |
 | 8.8 协同维修 | 同一点不限制参与人数，玩家/NPC 的实际贡献相加，每个并行点完整速度；一次结算 | RepairPoint 共享参与者；玩家与 NPC 协同、并行和单次回血回归 |
 | 8.9 维修显示 | 固定损坏模型；仅有参与者时显示点上方共享条，中断隐藏、进度保留，完成移除 | RepairPoint.prefab 与开始/停止/完成事件；维修回归与显示挂点检查 |
-| 9 敌人 | 不同 HP、角色攻击倾向和延迟投弹；炸弹飞行后落地计时，可近战清除；轮次配置类型/数量/奖励，清完当前轮才出下一轮 | 四个敌人变体、两个遭遇资源；逐波回归、炸弹回归与攻击/倾向引用检查 |
+| 9 敌人 | 不同 HP、角色攻击倾向和延迟投弹；炸弹飞行后落地计时，可近战清除；轮次配置类型/数量/奖励，默认每 8 秒生成下一波，存活敌人保留并避让；落物和战斗均不等待清场才继续航行 | 四个敌人变体、两个遭遇资源；现有航程检查改为验证定时叠加波次、未清障碍继续航行与模型间距 |
 | 10 出发岛与成长 | 六类局内/永久升级，各 5 级相加生效；普通升级价格 50×(当前等级+1) 金币，并行/范围为当前等级+1 特殊道具；集市售火力、连射、快速维修；出发岛永久购买保存等级，写盘失败不更新钱包 | VoyageUpgrades、VoyageExpedition、VoyageSaveStore.TryBuyUpgrade、VoyageSaveUpgradeTests；具体规则见 ExpeditionDesign.md |
 
 ## 数据与恢复边界

@@ -169,6 +169,33 @@ namespace Ferryman.Characters
                     Instantiate(meleeImpactEffectPrefab, contact, AimRotation);
             }
 
+            foreach (var bomb in FindObjectsOfType<TimedBomb>())
+            {
+                var obstacle = bomb.GetComponent<DestructibleObstacle>();
+                if (obstacle.IsInFlight || obstacle.IsCleared || struck.Contains(obstacle))
+                    continue;
+                Bounds bounds = obstacle.VisualBounds;
+                Vector2 contact = bounds.ClosestPoint(origin);
+                Vector2 offset = contact - origin;
+                bool reached = offset.sqrMagnitude <= meleeRange * meleeRange
+                    && Vector2.Angle(AimDirection, offset) <= meleeAngle * 0.5f;
+                for (int edge = -1; !reached && edge <= 1; edge += 2)
+                {
+                    Vector2 boundary = Quaternion.Euler(0f, 0f, edge * meleeAngle * 0.5f) * AimDirection;
+                    if (bounds.IntersectRay(new Ray(origin, boundary), out float distance) && distance <= meleeRange)
+                    {
+                        reached = true;
+                        contact = origin + boundary * distance;
+                    }
+                }
+                if (!reached)
+                    continue;
+                Vector2 away = (Vector2)obstacle.transform.position - origin;
+                obstacle.Kick(away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection, kickCamera);
+                if (meleeImpactEffectPrefab != null)
+                    Instantiate(meleeImpactEffectPrefab, contact, AimRotation);
+            }
+
             if (meleeEffectPrefab != null)
                 Instantiate(meleeEffectPrefab, origin + AimDirection * (meleeRange * 0.65f), AimRotation);
             meleePerformed.Invoke();

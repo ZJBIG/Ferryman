@@ -43,7 +43,7 @@ namespace Ferryman.Voyage
                 eventPlan = VoyageEventPlanner.Build(definition, seed);
                 return;
             }
-            RouteMap = VoyageRouteMap.Generate(seed);
+            RouteMap = VoyageRouteMap.Generate(seed, checkpoint?.routePath);
             routePath.AddRange(checkpoint?.routePath ?? new[] { 0 });
             RouteMap.ValidatePath(routePath.ToArray());
             runUpgrades = VoyageUpgrades.ReadRanks(checkpoint?.runUpgrades);
@@ -75,7 +75,8 @@ namespace Ferryman.Voyage
             expeditionStops[seaIndex].displayName = "前往" + node.Name;
             var random = new Random(seed ^ node.id * 7919);
             bool combat = node.kind == VoyageIslandKind.Battle || node.kind == VoyageIslandKind.Elite
-                || node.kind == VoyageIslandKind.Destination || random.NextDouble() < 0.4;
+                || node.kind == VoyageIslandKind.Destination
+                || random.NextDouble() < (node.depth <= 2 ? 0.2 : node.depth <= 4 ? 0.3 : 0.4);
             if (combat)
             {
                 EncounterDefinition[] sources = definition.randomEncounters
@@ -89,15 +90,18 @@ namespace Ferryman.Voyage
                     : node.kind == VoyageIslandKind.Elite ? "精英海域" : "群岛海战";
                 encounter.cameraSize = source.cameraSize;
                 encounter.cameraHeight = source.cameraHeight;
-                int waves = node.depth == VoyageRouteMap.FinalDepth ? 3
-                    : node.kind == VoyageIslandKind.Elite ? 2 + node.depth / 5 : 1 + node.depth / 4;
+                encounter.waveInterval = source.waveInterval;
+                int waves = node.depth <= 2 ? 1 : 2;
+                if (node.depth == VoyageRouteMap.FinalDepth || node.kind == VoyageIslandKind.Elite && node.depth >= 5)
+                    waves = 3;
                 encounter.waves = Enumerable.Range(0, waves).Select(wave => new WaveDefinition
                 {
-                    enemies = source.waves[wave % source.waves.Length].enemies.Select(group => new EnemySpawn
+                    enemies = source.waves[wave % source.waves.Length].enemies.Select((group, groupIndex) => new EnemySpawn
                     {
                         prefab = group.prefab,
                         spawnPosition = group.spawnPosition,
-                        count = Mathf.Min(5, group.count + node.depth / 3)
+                        count = Mathf.Min(4, group.count + (node.depth - 1 + wave + groupIndex
+                            + (node.kind == VoyageIslandKind.Elite ? 1 : 0)) / 4)
                     }).ToArray()
                 }).ToArray();
                 encounter.reward = new RewardData

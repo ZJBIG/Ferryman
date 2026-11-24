@@ -4,7 +4,6 @@ using Random = UnityEngine.Random;
 
 namespace Ferryman.World
 {
-    [RequireComponent(typeof(BoxCollider2D))]
     public sealed class DestructibleObstacle : MonoBehaviour
     {
         [SerializeField] private SpriteRenderer visual;
@@ -23,6 +22,20 @@ namespace Ferryman.World
 
         public bool IsCleared { get; private set; }
         public bool IsInFlight { get; private set; }
+        internal Bounds VisualBounds => visual != null ? visual.bounds : new Bounds(transform.position, Footprint);
+        internal Vector2 Footprint
+        {
+            get
+            {
+                var collider = hitbox != null ? hitbox : GetComponent<BoxCollider2D>();
+                if (collider != null)
+                    return collider.size;
+                if (visual == null || visual.sprite == null)
+                    return Vector2.one;
+                Vector3 scale = visual.transform.lossyScale;
+                return Vector2.Scale(visual.sprite.bounds.size, new Vector2(Mathf.Abs(scale.x), Mathf.Abs(scale.y)));
+            }
+        }
 
         private void Awake()
         {
@@ -46,10 +59,11 @@ namespace Ferryman.World
         internal void FlyTo(BoatDeck deck, Vector2 destination, float seconds, float arc, Action onLanded = null)
         {
             IsInFlight = true;
-            hitbox.enabled = false;
+            if (hitbox != null)
+                hitbox.enabled = false;
             landingDeck = deck;
             Physics2D.SyncTransforms();
-            if (!deck.TryFindPlacement(destination, hitbox.size, hitbox, out landingPosition))
+            if (!deck.TryFindPlacement(destination, Footprint, hitbox, out landingPosition))
             {
                 Destroy(gameObject);
                 return;
@@ -78,7 +92,7 @@ namespace Ferryman.World
             if (t < 1f)
                 return;
             Physics2D.SyncTransforms();
-            if (!landingDeck.TryFindPlacement(landingPosition, hitbox.size, hitbox, out Vector2 touchdown))
+            if (!landingDeck.TryFindPlacement(landingPosition, Footprint, hitbox, out Vector2 touchdown))
             {
                 Destroy(gameObject);
                 return;
@@ -95,7 +109,8 @@ namespace Ferryman.World
             }
             transform.position = touchdown;
             IsInFlight = false;
-            hitbox.enabled = true;
+            if (hitbox != null)
+                hitbox.enabled = true;
             Physics2D.SyncTransforms();
             landed?.Invoke();
             landed = null;
@@ -115,10 +130,11 @@ namespace Ferryman.World
         {
             if (hitbox == null)
                 hitbox = GetComponent<BoxCollider2D>();
-            if (IsCleared || !hitbox.enabled)
+            if (IsCleared || IsInFlight || hitbox != null && !hitbox.enabled)
                 return false;
             IsCleared = true;
-            hitbox.enabled = false;
+            if (hitbox != null)
+                hitbox.enabled = false;
             if (showClearedEffect && clearedEffectPrefab != null)
                 Instantiate(clearedEffectPrefab, transform.position, Quaternion.identity);
             if (camera != null && visual != null && visual.sprite != null

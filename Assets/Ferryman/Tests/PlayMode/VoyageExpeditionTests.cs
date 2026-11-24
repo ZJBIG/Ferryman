@@ -54,6 +54,7 @@ namespace Ferryman.Tests
             var shooter = encounters.SelectMany(item => item.waves).SelectMany(wave => wave.enemies)
                 .Select(group => group.prefab).First(item => item.AttackType == EnemyCharacter.AttackKind.Projectile);
             var encounter = Clone(encounters[0]);
+            encounter.waveInterval = 0.5f;
             encounter.waves = new[]
             {
                 new WaveDefinition { enemies = new[]

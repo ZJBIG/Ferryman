@@ -31,6 +31,7 @@ namespace Ferryman.Voyage
         public string id;
         public string displayName;
         public WaveDefinition[] waves = Array.Empty<WaveDefinition>();
+        [Min(0.1f)] public float waveInterval = 8f;
         public RewardData reward;
         [Min(1f)] public float cameraSize = 6f;
         public float cameraHeight;

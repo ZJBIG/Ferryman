@@ -70,6 +70,7 @@ namespace Ferryman.Tests
                 .Select(group => group.prefab).First(item => item.AttackType == EnemyCharacter.AttackKind.Projectile);
             encounter = Clone(encounters[0]);
             encounter.id = "lifecycle-combat";
+            encounter.waveInterval = 0.5f;
             encounter.reward = new RewardData { coins = 20, specialItems = 2 };
             encounter.waves = new[]
             {
@@ -156,8 +157,9 @@ namespace Ferryman.Tests
             yield return AssertEventKeepsSailing(1);
             var bomb = Object.FindObjectOfType<TimedBomb>();
             yield return WaitFor(() => !bomb.IsInFlight, "bomb landing");
-            bomb.GetComponent<DestructibleObstacle>().Clear();
             yield return WaitFor(() => controller.Phase == VoyagePhase.Sailing, "rest after the bomb event");
+            Assert.That(bomb, Is.Not.Null, "The voyage removed the bomb instead of continuing with it on deck.");
+            Assert.That(bomb.GetComponent<DestructibleObstacle>().IsCleared, Is.False);
             remaining = controller.SailingRemaining;
             Assert.That(remaining, Is.InRange(0.1f, 0.2f));
             started = Time.time;
@@ -207,8 +209,9 @@ namespace Ferryman.Tests
                 Assert.That(hitbox.enabled, Is.True);
                 Assert.That(controller.Vessel.Boat.Deck.CanPlace(stone.transform.position, hitbox.size, hitbox), Is.True,
                     "An event obstacle overlapped ship fixtures, another obstacle or a character.");
-                stone.Clear();
             }
+            yield return WaitFor(() => controller.Phase != VoyagePhase.Event, "continued voyage with uncleared stones");
+            Assert.That(stones.All(stone => stone != null && !stone.IsCleared), Is.True);
             yield return WaitFor(() => controller.Phase == VoyagePhase.Success, "successful arrival and settlement");
             int coins = encounter.reward.coins + special.reward.coins + escort.coinsReward + joining.coinsReward;
             int items = encounter.reward.specialItems + special.reward.specialItems
@@ -380,24 +383,72 @@ namespace Ferryman.Tests
             }
         }
 
+        [UnityTest]
+        public IEnumerator TimedSeaMonsterWavesKeepSpaceAboveOrRightOfTheShip()
+        {
+            EnemyCharacter prefab = encounter.waves[0].enemies[0].prefab;
+            encounter.waves[0].enemies = new[]
+            {
+                new EnemySpawn { prefab = prefab, count = 3 },
+                new EnemySpawn { prefab = prefab, count = 3 }
+            };
+            encounter.waves = new[]
+            {
+                encounter.waves[0],
+                new WaveDefinition { enemies = new[] { new EnemySpawn { prefab = prefab, count = 4 } } },
+                new WaveDefinition { enemies = new[] { new EnemySpawn { prefab = prefab, count = 5 } } }
+            };
+            Assert.That(controller.StartVoyage(escort, 104), Is.True);
+            yield return WaitFor(() => AtEvent(1) && LiveEnemies().Length == 6, "six sea monsters");
+            AssertSeaMonsterLayout(LiveEnemies());
+            yield return WaitFor(() => AtEvent(1) && controller.WaveIndex == 1 && LiveEnemies().Length == 10,
+                "second wave while the first six monsters remain");
+            AssertSeaMonsterLayout(LiveEnemies());
+            yield return WaitFor(() => AtEvent(1) && controller.WaveIndex == 2 && LiveEnemies().Length == 15,
+                "third wave while all earlier monsters remain");
+            AssertSeaMonsterLayout(LiveEnemies());
+        }
+
+        private void AssertSeaMonsterLayout(EnemyCharacter[] actors)
+        {
+            Bounds deck = controller.Vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
+            var bodies = new List<Bounds>();
+            Camera camera = Camera.main;
+            foreach (EnemyCharacter actor in actors)
+            {
+                Transform model = actor.transform.Find("Sea Monster");
+                Assert.That(model.localScale, Is.EqualTo(new Vector3(1.2f, 1.2f, 1f)));
+                Bounds body = model.GetComponent<SpriteRenderer>().bounds;
+                Assert.That(body.min.x, Is.GreaterThanOrEqualTo(deck.min.x));
+                Assert.That(body.min.y, Is.GreaterThanOrEqualTo(deck.min.y));
+                Assert.That(body.min.y >= deck.max.y + 0.5f || body.min.x >= deck.max.x + 0.5f, Is.True,
+                    "A sea monster spawned beside the left or lower side, or on the ship.");
+                Vector3 min = camera.WorldToViewportPoint(body.min);
+                Vector3 max = camera.WorldToViewportPoint(body.max);
+                Assert.That(min.x >= 0f && min.y >= 0f && max.x <= 1f && max.y <= 1f, Is.True,
+                    "A sea monster spawned outside the visible sea.");
+                foreach (Bounds other in bodies)
+                    Assert.That(body.min.x - other.max.x >= 0.5f || other.min.x - body.max.x >= 0.5f
+                        || body.min.y - other.max.y >= 0.5f || other.min.y - body.max.y >= 0.5f, Is.True,
+                        "Sea monster models spawned too close together.");
+                bodies.Add(body);
+            }
+        }
+
         private IEnumerator VerifyCombatWaves(int stop)
         {
             yield return WaitFor(() => AtEvent(stop) && controller.WaveIndex == 0 && LiveEnemies().Length == 2,
                 "first wave at stop " + stop);
+            AssertSeaMonsterLayout(LiveEnemies());
             RewardData before = controller.PendingReward;
             yield return AssertEventKeepsSailing(stop);
-            Kill(LiveEnemies()[0]);
-            yield return null;
-            QuiesceActors();
-            Assert.That(controller.WaveIndex, Is.Zero, "A new wave appeared before every enemy in the prior wave died.");
-            Assert.That(LiveEnemies().Length, Is.EqualTo(1));
-            Kill(LiveEnemies()[0]);
-            yield return WaitFor(() => AtEvent(stop) && controller.WaveIndex == 1 && LiveEnemies().Length == 1,
+            yield return WaitFor(() => AtEvent(stop) && controller.WaveIndex == 1 && LiveEnemies().Length == 3,
                 "second wave at stop " + stop);
+            AssertSeaMonsterLayout(LiveEnemies());
             Assert.That(controller.PendingReward.coins, Is.EqualTo(before.coins));
             Assert.That(controller.PendingReward.specialItems, Is.EqualTo(before.specialItems));
-            Kill(LiveEnemies()[0]);
             yield return WaitFor(() => !AtEvent(stop), "completion of combat at stop " + stop);
+            Assert.That(LiveEnemies().Length, Is.EqualTo(3), "Combat still waits for a kill before continuing.");
             Assert.That(controller.PendingReward.coins, Is.EqualTo(before.coins + encounter.reward.coins));
             Assert.That(controller.PendingReward.specialItems, Is.EqualTo(before.specialItems + encounter.reward.specialItems));
         }

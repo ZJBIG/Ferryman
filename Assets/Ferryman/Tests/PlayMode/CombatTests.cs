@@ -104,8 +104,12 @@ namespace Ferryman.Tests
             yield return WaitFor(() => shot == null, 0.3f, "The projectile did not hit the enemy.");
             Assert.That(ImpactCount(), Is.Zero, "Projectile added yellow feedback to an enemy.");
             Assert.That(player.TryFire(Vector2.up), Is.True);
-            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Any(effect => effect.name == "MuzzleFlash(Clone)"), Is.False,
-                "Player shooting added an extra effect at the muzzle.");
+            var flashes = Object.FindObjectsOfType<SpriteEffect>().Where(effect => effect.name == "MuzzleFlash(Clone)").ToArray();
+            Assert.That(flashes, Has.Length.EqualTo(1), "A shot must show one supplied muzzle effect.");
+            Assert.That(player.TryFire(Vector2.up), Is.False);
+            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name == "MuzzleFlash(Clone)"), Is.EqualTo(1));
+            yield return new WaitForSeconds(0.15f);
+            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Any(effect => effect.name == "MuzzleFlash(Clone)"), Is.False);
             Object.Destroy(crewObject);
             Object.Destroy(solid);
             Object.Destroy(trigger);
@@ -146,6 +150,20 @@ namespace Ferryman.Tests
             Assert.That(received, Is.Zero);
             Assert.That(player.BoatHealth.CurrentHealth, Is.EqualTo(800f));
             Assert.That(player.TryFire(Vector2.up), Is.True, "Bomb knockback blocked attacks.");
+        }
+
+        [UnityTest]
+        public IEnumerator BombHasNoColliderAndDoesNotBlockPlayerMovement()
+        {
+            var bomb = Object.FindObjectsOfType<TimedBomb>(true).First();
+            bomb.transform.position = new Vector2(0.65f, 0f);
+            bomb.gameObject.SetActive(true);
+            Assert.That(bomb.GetComponentsInChildren<Collider2D>(), Is.Empty);
+            Physics2D.SyncTransforms();
+            player.Move(Vector2.right);
+            yield return new WaitForSeconds(0.3f);
+            player.Move(Vector2.zero);
+            Assert.That(player.GetComponent<Rigidbody2D>().position.x, Is.GreaterThan(1f), "The bomb blocked player movement.");
         }
 
         [UnityTest]

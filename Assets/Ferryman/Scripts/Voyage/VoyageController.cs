@@ -28,6 +28,7 @@ namespace Ferryman.Voyage
 
     public sealed partial class VoyageController : MonoBehaviour
     {
+        private const float ObstacleDropSeconds = 0.85f;
         private VoyageDefinition definition;
         private VoyageSaveStore store;
         private VoyageVessel vessel;
@@ -294,13 +295,28 @@ namespace Ferryman.Voyage
                 while (ActiveRun && camera != null && (camera.orthographicSize != encounter.cameraSize
                     || camera.transform.position.y != encounter.cameraHeight))
                     yield return null;
+                SeaEventDefinition falling = definition.specialEvents.Select(entry => entry.definition)
+                    .FirstOrDefault(item => item != null && item.obstaclePrefab != null
+                        && item.obstaclePrefab.GetComponent<TimedBomb>() == null);
+                int depth = IsExpedition ? RouteMap.Nodes[CurrentNodeId].depth : Mathf.Max(1, (StopIndex + 1) / 2);
+                float dropInterval = depth <= 2 ? 12f : depth <= 4 ? 9f : 7f;
+                int dropLimit = depth <= 2 ? 1 : depth <= 4 ? 2 : 3;
+                int drops = 0;
+                float nextDropAt = Time.time + Mathf.Min(dropInterval, encounter.waveInterval * 0.5f);
                 for (waveIndex = 0; waveIndex < encounter.waves.Length && ActiveRun; waveIndex++)
                 {
                     Message = encounter.displayName + $"  第 {waveIndex + 1}/{encounter.waves.Length} 轮";
                     SpawnWave(encounter.waves[waveIndex]);
-                    while (enemies.Any(enemy => enemy != null && enemy.Health > 0f) && ActiveRun)
+                    float nextWaveAt = Time.time + encounter.waveInterval;
+                    while (ActiveRun && Time.time < nextWaveAt)
+                    {
+                        if (falling != null && drops < dropLimit && Time.time >= nextDropAt)
+                        {
+                            SpawnObstacles(falling, drops++);
+                            nextDropAt = Time.time + dropInterval;
+                        }
                         yield return null;
-                    enemies.Clear();
+                    }
                 }
                 if (ActiveRun)
                     AddReward(encounter.reward);
@@ -308,11 +324,9 @@ namespace Ferryman.Voyage
             else
             {
                 SeaEventDefinition special = planned.specialEvent;
-                Message = special.displayName + "：右键清除甲板上的物品";
+                Message = special.displayName;
                 SpawnObstacles(special);
-                while (eventObstacles.Any(obstacle => obstacle != null && !obstacle.IsCleared) && ActiveRun)
-                    yield return null;
-                eventObstacles.Clear();
+                yield return WaitActive(ObstacleDropSeconds);
                 if (ActiveRun)
                     AddReward(special.reward);
             }
@@ -320,11 +334,65 @@ namespace Ferryman.Voyage
 
         private void SpawnWave(WaveDefinition wave)
         {
+            enemies.RemoveAll(enemy => enemy == null || enemy.Health <= 0f);
+            Camera camera = Camera.main;
+            if (camera == null)
+                throw new InvalidOperationException("海怪生成需要主相机。");
+            Physics2D.SyncTransforms();
+            Bounds deck = vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
+            Vector2 half = Vector2.zero;
+            int count = 0;
+            foreach (EnemySpawn group in wave.enemies)
+            {
+                Bounds visual = group.prefab.VisualBounds;
+                Vector3 origin = group.prefab.transform.position;
+                half.x = Mathf.Max(half.x, Mathf.Abs(visual.min.x - origin.x), Mathf.Abs(visual.max.x - origin.x));
+                half.y = Mathf.Max(half.y, Mathf.Abs(visual.min.y - origin.y), Mathf.Abs(visual.max.y - origin.y));
+                count += group.count;
+            }
+            const float spacing = 0.6f;
+            Vector2 step = half * 2f + Vector2.one * (spacing + 0.1f);
+            Vector2 viewHalf = new Vector2(camera.orthographicSize * camera.aspect, camera.orthographicSize);
+            Vector2 viewCenter = camera.transform.position;
+            Vector2 min = Vector2.Max(viewCenter - viewHalf + half + Vector2.one * 0.3f,
+                (Vector2)deck.min + half);
+            Vector2 max = viewCenter + viewHalf - half - Vector2.one * 0.3f;
+            Bounds[] occupied = enemies.Select(enemy =>
+            {
+                Bounds bounds = enemy.VisualBounds;
+                bounds.Expand(new Vector3(half.x * 2f + spacing * 2f, half.y * 2f + spacing * 2f, 1f));
+                return bounds;
+            }).ToArray();
+            var positions = new List<Vector2>();
+            float top = Mathf.Max(min.y, deck.max.y + half.y + 0.8f);
+            for (int side = 0; side < 2; side++)
+            {
+                Vector2 regionMin = side == 0 ? new Vector2(min.x, top)
+                    : new Vector2(Mathf.Max(min.x, deck.max.x + half.x + 0.8f), min.y);
+                Vector2 regionMax = side == 0 ? max : new Vector2(max.x, Mathf.Min(max.y, top - step.y));
+                for (float y = regionMin.y; y <= regionMax.y; y += step.y)
+                {
+                    for (float x = regionMin.x; x <= regionMax.x; x += step.x)
+                    {
+                        if (occupied.All(bounds => !bounds.Contains(new Vector3(x, y, 0f))))
+                            positions.Add(new Vector2(x, y));
+                    }
+                }
+            }
+            if (positions.Count < count)
+                throw new InvalidOperationException("船的上侧和右侧没有足够的海怪生成空间。");
+            var random = new Random(seed ^ StopIndex * 397 ^ waveIndex * 3571);
+            for (int i = positions.Count - 1; i > 0; i--)
+            {
+                int other = random.Next(i + 1);
+                (positions[i], positions[other]) = (positions[other], positions[i]);
+            }
+            int nextPosition = 0;
             foreach (EnemySpawn group in wave.enemies)
             {
                 for (int unit = 0; unit < group.count; unit++)
                 {
-                    Vector2 position = group.spawnPosition + Vector2.right * (unit - (group.count - 1) * 0.5f) * 0.8f;
+                    Vector2 position = positions[nextPosition++];
                     var enemy = Instantiate(group.prefab, position, Quaternion.identity);
                     enemy.InitializeEnemy(vessel.Boat, vessel.Player, vessel.DamageSystem);
                     enemies.Add(enemy);
@@ -332,10 +400,12 @@ namespace Ferryman.Voyage
             }
         }
 
-        private void SpawnObstacles(SeaEventDefinition special)
+        private void SpawnObstacles(SeaEventDefinition special, int combatDrop = -1)
         {
             BoatDeck deck = vessel.Boat.Deck;
-            Vector2 footprint = special.obstaclePrefab.GetComponent<BoxCollider2D>().size;
+            int count = combatDrop < 0 ? special.obstacleCount
+                : IsExpedition && RouteMap.Nodes[CurrentNodeId].depth >= 5 ? 2 : 1;
+            Vector2 footprint = special.obstaclePrefab.GetComponent<DestructibleObstacle>().Footprint;
             Vector2Int center = deck.WorldToCell(Vector2.zero);
             var cells = new List<Vector2Int>();
             Vector2Int grid = deck.GridSize;
@@ -348,10 +418,10 @@ namespace Ferryman.Voyage
                         cells.Add(cell);
                 }
             }
-            var random = new Random(seed ^ StopIndex * 397);
+            var random = new Random(seed ^ StopIndex * 397 ^ (combatDrop >= 0 ? combatDrop * 3571 : 0));
             var landings = new List<Rect>();
             Physics2D.SyncTransforms();
-            while (landings.Count < special.obstacleCount && cells.Count > 0)
+            while (landings.Count < count && cells.Count > 0)
             {
                 int selected = random.Next(cells.Count);
                 Vector2 position = deck.CellToWorld(cells[selected]);
@@ -361,14 +431,13 @@ namespace Ferryman.Voyage
                     continue;
                 landings.Add(landing);
             }
-            if (landings.Count != special.obstacleCount)
+            if (landings.Count != count && combatDrop < 0)
                 throw new InvalidOperationException("甲板没有足够的事件物品放置空间。");
 
             Camera view = Camera.main;
             float top = view != null
                 ? view.ViewportToWorldPoint(new Vector3(0.5f, 1f, view.WorldToViewportPoint(deck.transform.position).z)).y
                 : deck.GetComponent<EdgeCollider2D>().bounds.max.y + 4f;
-            const float dropSeconds = 0.85f;
             foreach (Rect landing in landings)
             {
                 var origin = new Vector2(landing.center.x, top + 1.5f);
@@ -376,9 +445,9 @@ namespace Ferryman.Voyage
                 var obstacle = item.GetComponent<DestructibleObstacle>();
                 var bomb = item.GetComponent<TimedBomb>();
                 if (bomb != null)
-                    bomb.Launch(vessel.Boat, landing.center, dropSeconds, 0f);
+                    bomb.Launch(vessel.Boat, landing.center, ObstacleDropSeconds, 0f);
                 else
-                    obstacle.FlyTo(deck, landing.center, dropSeconds, 0f);
+                    obstacle.FlyTo(deck, landing.center, ObstacleDropSeconds, 0f);
                 eventObstacles.Add(obstacle);
             }
         }
@@ -685,6 +754,7 @@ namespace Ferryman.Voyage
             foreach (var encounter in definition.randomEncounters.Concat(definition.stops.Select(stop => stop.fixedEncounter)).Where(item => item != null).Distinct())
             {
                 if (encounter.waves == null || encounter.waves.Length == 0 || encounter.reward.coins < 0 || encounter.reward.specialItems < 0
+                    || encounter.waveInterval < 0.1f || !float.IsFinite(encounter.waveInterval)
                     || !(encounter.cameraSize > 0f) || !float.IsFinite(encounter.cameraSize) || !float.IsFinite(encounter.cameraHeight))
                     throw new InvalidDataException("Combat event needs waves, valid rewards and a camera size.");
                 foreach (var wave in encounter.waves)

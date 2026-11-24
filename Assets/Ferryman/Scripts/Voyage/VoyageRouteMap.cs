@@ -81,9 +81,28 @@ namespace Ferryman.Voyage
             Nodes = nodes;
         }
 
-        public static VoyageRouteMap Generate(int seed)
+        public static VoyageRouteMap Generate(int seed, IReadOnlyList<int> savedPath = null)
         {
             var random = new Random(seed);
+            var directions = new int[FinalDepth, 2];
+            for (int depth = 1; depth < FinalDepth - 1; depth++)
+            {
+                for (int lane = 0; lane < 2; lane++)
+                    directions[depth, lane] = (depth + lane) % 2 == 0 ? 1 : -1;
+            }
+            // Keep a previously travelled diagonal when restoring older maps.
+            for (int i = 1; savedPath != null && i < savedPath.Count; i++)
+            {
+                int from = savedPath[i - 1];
+                int to = savedPath[i];
+                if (from < 1 || from > 18 || to < 1 || to > 18)
+                    continue;
+                int depth = (from - 1) / 3 + 1;
+                int lane = (from - 1) % 3;
+                int nextLane = (to - 1) % 3;
+                if ((to - 1) / 3 + 1 == depth + 1 && Math.Abs(nextLane - lane) == 1)
+                    directions[depth, Math.Min(lane, nextLane)] = nextLane - lane;
+            }
             var nodes = new VoyageRouteNode[20];
             nodes[0] = new VoyageRouteNode
             {
@@ -103,7 +122,7 @@ namespace Ferryman.Voyage
             {
                 var kinds = new[]
                 {
-                    random.Next(2) == 0 ? VoyageIslandKind.Battle : VoyageIslandKind.Elite,
+                    random.Next(2) == 0 || depth <= 2 ? VoyageIslandKind.Battle : VoyageIslandKind.Elite,
                     activities[depth - 1],
                     alternatives[(depth - 1) % alternatives.Length]
                 };
@@ -124,7 +143,10 @@ namespace Ferryman.Voyage
                     else
                     {
                         for (int nextLane = Math.Max(0, lane - 1); nextLane <= Math.Min(2, lane + 1); nextLane++)
-                            next.Add(1 + depth * 3 + nextLane);
+                        {
+                            if (nextLane == lane || directions[depth, Math.Min(lane, nextLane)] == nextLane - lane)
+                                next.Add(1 + depth * 3 + nextLane);
+                        }
                     }
                     nodes[id] = new VoyageRouteNode
                     {
