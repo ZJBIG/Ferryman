@@ -118,16 +118,12 @@ namespace Ferryman.Voyage
             int rank = ranks[(int)kind];
             if (rank >= VoyageUpgrades.MaxRank)
                 return false;
-            int price = VoyageUpgrades.Price(kind, rank);
-            bool usesItems = VoyageUpgrades.UsesSpecialItems(kind);
-            if ((usesItems ? Progress.specialItems : Progress.coins) < price)
-                return false;
             ranks[(int)kind]++;
             var next = new PermanentProgress
             {
                 version = 1,
-                coins = Progress.coins - (usesItems ? 0 : price),
-                specialItems = Progress.specialItems - (usesItems ? price : 0),
+                coins = Progress.coins,
+                specialItems = Progress.specialItems,
                 lastSettledRunId = Progress.lastSettledRunId,
                 upgrades = ranks
             };

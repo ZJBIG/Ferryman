@@ -77,7 +77,14 @@ namespace Ferryman.Voyage
                 DrawSettlement(screen);
             else if (controller.Vessel != null)
             {
-                DrawCombat(screen, scale, offset);
+                bool upgradeCards = controller.IsExpedition && controller.Phase == VoyagePhase.Island
+                    && controller.BoardingProfile == null && (controller.UpgradeChoices.Length > 0
+                        || !controller.IslandResolved && (controller.CurrentIsland == VoyageIslandKind.Market
+                            || controller.CurrentIsland == VoyageIslandKind.Shipyard
+                            || controller.CurrentIsland == VoyageIslandKind.Battle
+                            || controller.CurrentIsland == VoyageIslandKind.Elite));
+                if (!upgradeCards)
+                    DrawCombat(screen, scale, offset);
                 if (controller.Phase == VoyagePhase.Island && controller.BoardingProfile != null)
                     DrawDialogue();
                 else if (controller.IsExpedition && controller.Phase == VoyagePhase.Island)
@@ -108,8 +115,7 @@ namespace Ferryman.Voyage
                     DrawPassengers(screen);
                     break;
                 case DeparturePage.Upgrades:
-                    VoyageExpeditionUI.DrawPermanent(controller, art, inkTitle, ink, button);
-                    if (GUI.Button(new Rect(550f, 641f, 180f, 44f), "返回港口", button))
+                    if (VoyageExpeditionUI.DrawPermanent(controller, art, ink))
                         page = DeparturePage.Title;
                     break;
             }
@@ -122,8 +128,11 @@ namespace Ferryman.Voyage
             GUI.DrawTexture(new Rect(686f, 109f, 201f, 207f), art.titleBai, ScaleMode.ScaleToFit);
             GUI.DrawTexture(new Rect(878f, 91f, 207f, 207f), art.titleDu, ScaleMode.ScaleToFit);
             GUI.DrawTexture(new Rect(1064f, 137f, 192f, 207f), art.titleRen, ScaleMode.ScaleToFit);
+            bool enabled = GUI.enabled;
+            GUI.enabled = enabled && !controller.HasCheckpoint;
             if (controller.Definition.branchingRoutes && GUI.Button(new Rect(931f, 329f, 264f, 43f), "港口永久整备", button))
                 page = DeparturePage.Upgrades;
+            GUI.enabled = enabled;
             if (Oar(new Rect(725f, 378f, 516f, 99f), "新游戏", true))
             {
                 if (controller.HasCheckpoint)
@@ -141,6 +150,15 @@ namespace Ferryman.Voyage
             }
             if (Oar(new Rect(725f, 588f, 516f, 99f), "退出", true))
                 Act(controller.QuitGame);
+        }
+
+        private void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.Escape) && controller.IsExpedition && controller.ActiveRun
+                && controller.Phase == VoyagePhase.Island && !controller.IslandResolved
+                && controller.CurrentIsland == VoyageIslandKind.Market && controller.BoardingProfile == null
+                && controller.UpgradeChoices.Length == 0)
+                Act(() => controller.ResolveIslandOption(4));
         }
 
         private bool Oar(Rect area, string label, bool enabled)

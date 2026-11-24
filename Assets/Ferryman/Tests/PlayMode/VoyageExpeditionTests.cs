@@ -156,9 +156,14 @@ namespace Ferryman.Tests
                 else
                 {
                     int beforePassengers = controller.Passengers.Count;
+                    int beforeCoins = controller.AvailableCoins;
+                    if (controller.CurrentIsland == VoyageIslandKind.Mystery)
+                        option = 1;
                     Assert.That(controller.ResolveIslandOption(option), Is.True);
                     if (controller.CurrentIsland == VoyageIslandKind.Rescue)
                         Assert.That(controller.Passengers.Count, Is.EqualTo(beforePassengers + 1));
+                    if (controller.CurrentIsland == VoyageIslandKind.Mystery)
+                        Assert.That(controller.AvailableCoins, Is.EqualTo(beforeCoins));
                 }
                 RewardData resolvedReward = controller.PendingReward;
                 int[] ranks = controller.RunUpgrades;
@@ -195,6 +200,31 @@ namespace Ferryman.Tests
             yield return WaitFor(() => controller.Phase == VoyagePhase.Departure, "return home");
             Assert.That(controller.RoutePath, Is.Empty);
             Assert.That(controller.IsExpedition, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator FullyUpgradedShipyardSkipsChoicesWithoutSpendingRewards()
+        {
+            Assert.That(controller.StartVoyage(definition.initialPassengers[0], 7), Is.True);
+            yield return WaitFor(() => controller.AwaitingRouteChoice, "departure");
+            VoyageCheckpoint checkpoint = store.LoadCheckpoint(definition.id);
+            checkpoint.stopIndex = 4;
+            checkpoint.routePath = new[] { 0, 2, 6 };
+            checkpoint.islandResolved = false;
+            checkpoint.runUpgrades = Enumerable.Repeat(VoyageUpgrades.MaxRank, VoyageUpgrades.Count).ToArray();
+            checkpoint.pendingCoins = 80;
+            checkpoint.pendingSpecialItems = 2;
+            store.SaveCheckpoint(checkpoint);
+            yield return DestroyForCrash();
+            CreateController();
+            Assert.That(controller.ResumeVoyage(), Is.True);
+            yield return WaitFor(() => controller.Phase == VoyagePhase.Island && controller.BoardingProfile == null, "maxed shipyard");
+            Assert.That(controller.CurrentIsland, Is.EqualTo(VoyageIslandKind.Shipyard));
+            Assert.That(controller.ResolveIslandOption(0), Is.True);
+            Assert.That(controller.UpgradeChoices, Is.Empty);
+            Assert.That(controller.AwaitingRouteChoice, Is.True);
+            Assert.That(controller.AvailableCoins, Is.EqualTo(80));
+            Assert.That(controller.AvailableSpecialItems, Is.EqualTo(2));
         }
 
         [UnityTest]

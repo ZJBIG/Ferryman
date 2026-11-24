@@ -81,8 +81,10 @@ namespace Ferryman.Tests
                 Assert.That(player.TryMelee(Vector2.right), Is.True);
                 int expected = entity == trigger ? 0 : 1;
                 Assert.That(ImpactCount(), Is.EqualTo(expected), "Wrong impact count for " + entity.name);
-                Assert.That(Object.FindObjectsOfType<SpriteEffect>().Any(effect => effect.name == "MeleeSwing(Clone)"), Is.False,
-                    "A kick added an extra effect on the player.");
+                var swings = Object.FindObjectsOfType<SpriteEffect>().Where(effect => effect.name == "MeleeSwing(Clone)").ToArray();
+                Assert.That(swings, Has.Length.EqualTo(1), "The existing kick effect must play once per attack.");
+                Assert.That(swings[0].transform.position.x, Is.GreaterThan(player.transform.position.x + 0.5f),
+                    "The kick effect belongs in front of the player.");
                 Assert.That(player.transform.Find("Melee Outline").GetComponent<LineRenderer>().enabled, Is.False,
                     "A kick restored the old outline effect on the player.");
                 entity.SetActive(false);

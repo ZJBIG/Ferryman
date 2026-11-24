@@ -14,6 +14,19 @@ namespace Ferryman.Voyage
         public static void Draw(VoyageController c, VoyageUIArt art, int previewSeed, bool preview,
             GUIStyle title, GUIStyle text, GUIStyle button)
         {
+            if (!preview && !c.IslandResolved && (c.CurrentIsland == VoyageIslandKind.Shipyard
+                || c.CurrentIsland == VoyageIslandKind.Battle || c.CurrentIsland == VoyageIslandKind.Elite))
+                Act(c, () => c.ResolveIslandOption(0));
+            if (!preview && c.UpgradeChoices != null && c.UpgradeChoices.Length > 0)
+            {
+                DrawUpgradeChoices(c, art, text);
+                return;
+            }
+            if (!preview && !c.IslandResolved && c.CurrentIsland == VoyageIslandKind.Market)
+            {
+                DrawMarket(c, art, text);
+                return;
+            }
             DrawPaper(art);
             var heading = new GUIStyle(title) { fontSize = 27 };
             var body = new GUIStyle(text) { fontSize = 18 };
@@ -36,9 +49,7 @@ namespace Ferryman.Voyage
 
             GUI.Label(new Rect(240f, 161f, 800f, 34f),
                 $"船体 {c.Vessel.Boat.CurrentHealth:0} / {c.Vessel.Boat.MaxHealth:0}   ·   本轮 {c.AvailableCoins} 金币   ·   {c.AvailableSpecialItems} 特殊道具", centered);
-            if (c.UpgradeChoices != null && c.UpgradeChoices.Length > 0)
-                DrawUpgradeChoices(c, art, heading, body, button);
-            else if (!c.IslandResolved)
+            if (!c.IslandResolved)
                 DrawIsland(c, art, heading, body, button);
             else
                 DrawMap(c.RouteMap, c, art, false, centered);
@@ -158,20 +169,15 @@ namespace Ferryman.Voyage
             }
         }
 
-        private static void DrawUpgradeChoices(VoyageController c, VoyageUIArt art, GUIStyle title, GUIStyle text,
-            GUIStyle button)
+        private static void DrawUpgradeChoices(VoyageController c, VoyageUIArt art, GUIStyle text)
         {
-            GUI.Label(new Rect(250f, 190f, 780f, 40f), "航行奖励 · 选择一项本轮强化", title);
             VoyageUpgradeKind[] choices = c.UpgradeChoices;
             for (int i = 0; i < choices.Length; i++)
             {
                 VoyageUpgradeKind kind = choices[i];
-                var card = new Rect(248f + i * 266f, 246f, 250f, 282f);
-                DrawCard(card, art, kind, text, VoyageUpgrades.Description(kind));
-                if (GUI.Button(new Rect(card.x + 30f, card.yMax - 55f, 190f, 40f), "获得强化", button))
+                if (DrawCard(CardArea(i, choices.Length, art.upgradeCard), art, kind, text))
                     Act(c, () => c.ChooseUpgrade(kind));
             }
-            GUI.Label(new Rect(250f, 557f, 780f, 45f), "本轮强化持续到航程结束，可与港口永久升级叠加。", text);
         }
 
         private static void DrawIsland(VoyageController c, VoyageUIArt art, GUIStyle title, GUIStyle text,
@@ -187,11 +193,6 @@ namespace Ferryman.Voyage
                     description = "在平静的海湾修整船只，或收集下一程所需的补给。";
                     options = new[] { "免费修复 300 船体", "收集补给 · 获得 40 金币" };
                     break;
-                case VoyageIslandKind.Shipyard:
-                    name = "漂流船坞";
-                    description = "船匠为你准备了一次免费强化。";
-                    options = new[] { "挑选船坞强化" };
-                    break;
                 case VoyageIslandKind.Treasure:
                     name = "遗落宝藏";
                     description = "打开岛上的宝箱，挑选一件航行装备。";
@@ -205,16 +206,7 @@ namespace Ferryman.Voyage
                 case VoyageIslandKind.Mystery:
                     name = "迷雾奇遇";
                     description = "海雾中有一艘搁浅的货船。搜寻物资需要付出代价。";
-                    options = new[] { "冒险打捞 · 消耗 100 船体\n获得 80 金币和 1 特殊道具", "交换装备 · 消耗 40 金币\n挑选一项强化", "直接离港" };
-                    break;
-                case VoyageIslandKind.Market:
-                    DrawMarket(c, art, title, text, button);
-                    return;
-                case VoyageIslandKind.Battle:
-                case VoyageIslandKind.Elite:
-                    name = c.CurrentIsland == VoyageIslandKind.Elite ? "精英战利品" : "战斗战利品";
-                    description = "成功穿过危险海域，领取这一程的奖励。";
-                    options = new[] { "领取航行强化" };
+                    options = new[] { "冒险打捞 · 消耗 100 船体\n获得 80 金币和 1 特殊道具", "挑选一项免费强化", "直接离港" };
                     break;
                 default:
                     options = new[] { "准备启航" };
@@ -228,94 +220,86 @@ namespace Ferryman.Voyage
                 int option = i;
                 bool previous = GUI.enabled;
                 if (c.CurrentIsland == VoyageIslandKind.Mystery)
-                    GUI.enabled = previous && (option == 0 ? c.Vessel.Boat.CurrentHealth > 100f
-                        : option != 1 || c.AvailableCoins >= 40 && Array.Exists(c.RunUpgrades, rank => rank < VoyageUpgrades.MaxRank));
+                    GUI.enabled = previous && (option != 0 || c.Vessel.Boat.CurrentHealth > 100f);
                 if (GUI.Button(new Rect(350f, 370f + i * 71f, 580f, 60f), options[i], button))
                     Act(c, () => c.ResolveIslandOption(option));
                 GUI.enabled = previous;
             }
         }
 
-        private static void DrawMarket(VoyageController c, VoyageUIArt art, GUIStyle title, GUIStyle text,
-            GUIStyle button)
+        private static void DrawMarket(VoyageController c, VoyageUIArt art, GUIStyle text)
         {
-            GUI.Label(new Rect(250f, 187f, 780f, 42f), "海上集市", title);
             var kinds = new[] { VoyageUpgradeKind.Attack, VoyageUpgradeKind.AttackSpeed, VoyageUpgradeKind.RepairSpeed };
             int[] runRanks = c.RunUpgrades;
-            for (int i = 0; i < kinds.Length; i++)
+            VoyageUpgradeKind[] available = Array.FindAll(kinds, kind => runRanks[(int)kind] < VoyageUpgrades.MaxRank);
+            if (available.Length == 0)
             {
-                int option = i;
-                VoyageUpgradeKind kind = kinds[i];
+                Act(c, () => c.ResolveIslandOption(4));
+                return;
+            }
+            for (int i = 0; i < available.Length; i++)
+            {
+                VoyageUpgradeKind kind = available[i];
+                int option = Array.IndexOf(kinds, kind);
                 int rank = runRanks[(int)kind];
                 int price = VoyageUpgrades.Price(kind, rank);
-                bool special = VoyageUpgrades.UsesSpecialItems(kind);
-                var card = new Rect(248f + i * 266f, 241f, 250f, 265f);
-                DrawCard(card, art, kind, text, VoyageUpgrades.Description(kind));
                 bool previous = GUI.enabled;
-                GUI.enabled = previous && rank < VoyageUpgrades.MaxRank
-                    && (special ? c.AvailableSpecialItems : c.AvailableCoins) >= price;
-                if (GUI.Button(new Rect(card.x + 30f, card.yMax - 54f, 190f, 39f), rank >= VoyageUpgrades.MaxRank
-                    ? "已达最高等级" : $"购买 · {price} {(special ? "道具" : "金币")}", button))
+                GUI.enabled = previous && c.AvailableCoins >= price;
+                if (DrawCard(CardArea(i, available.Length, art.upgradeCard), art, kind, text))
                     Act(c, () => c.ResolveIslandOption(option));
                 GUI.enabled = previous;
             }
-            bool enabled = GUI.enabled;
-            GUI.enabled = enabled && c.AvailableCoins >= 40 && c.Vessel.Boat.CurrentHealth < c.Vessel.Boat.MaxHealth;
-            if (GUI.Button(new Rect(316f, 542f, 330f, 48f), "修复 200 船体 · 40 金币", button))
-                Act(c, () => c.ResolveIslandOption(3));
-            GUI.enabled = enabled;
-            if (GUI.Button(new Rect(674f, 542f, 290f, 48f), "离开集市", button))
-                Act(c, () => c.ResolveIslandOption(4));
         }
 
-        public static void DrawPermanent(VoyageController c, VoyageUIArt art, GUIStyle title, GUIStyle text,
-            GUIStyle button)
+        public static bool DrawPermanent(VoyageController c, VoyageUIArt art, GUIStyle text)
         {
-            DrawPaper(art);
-            var heading = new GUIStyle(title) { fontSize = 27 };
-            var body = new GUIStyle(text) { fontSize = 16 };
-            heading.normal.textColor = Ink;
-            body.normal.textColor = Ink;
-            GUI.Label(new Rect(250f, 116f, 780f, 42f), "出发港 · 永久整备", heading);
-            GUI.Label(new Rect(295f, 161f, 690f, 32f),
-                $"已结算资产：{c.Progress.coins} 金币 · {c.Progress.specialItems} 特殊道具", body);
             int[] permanentRanks = c.PermanentUpgrades;
-            for (int i = 0; i < 6; i++)
+            var available = Array.FindAll((VoyageUpgradeKind[])Enum.GetValues(typeof(VoyageUpgradeKind)),
+                kind => permanentRanks[(int)kind] < VoyageUpgrades.MaxRank);
+            if (available.Length == 0)
+                return true;
+            for (int i = 0; i < available.Length; i++)
             {
-                var kind = (VoyageUpgradeKind)i;
-                int rank = permanentRanks[i];
-                int price = VoyageUpgrades.Price(kind, rank);
-                bool special = VoyageUpgrades.UsesSpecialItems(kind);
-                var area = new Rect(247f + (i % 3) * 267f, 195f + (i / 3) * 198f, 252f, 185f);
-                Fill(area, new Color(1f, 0.97f, 0.85f, 0.55f));
-                Texture2D icon = UpgradeIcon(art, kind);
-                if (icon != null)
-                    GUI.DrawTexture(new Rect(area.x + 12f, area.y + 12f, 49f, 49f), icon, ScaleMode.ScaleToFit);
-                GUI.Label(new Rect(area.x + 70f, area.y + 12f, 178f, 52f), $"{VoyageUpgrades.Name(kind)}\n等级 {rank}", body);
-                GUI.Label(new Rect(area.x + 12f, area.y + 75f, 226f, 48f), VoyageUpgrades.Description(kind), body);
+                VoyageUpgradeKind kind = available[i];
                 bool previous = GUI.enabled;
-                GUI.enabled = previous && !c.HasCheckpoint && rank < VoyageUpgrades.MaxRank
-                    && (special ? c.Progress.specialItems : c.Progress.coins) >= price;
-                if (GUI.Button(new Rect(area.x + 12f, area.y + 135f, 226f, 39f),
-                    rank >= VoyageUpgrades.MaxRank ? "已达最高等级" : $"升级 · {price} {(special ? "特殊道具" : "金币")}", button))
-                    Act(c, () => c.BuyPermanentUpgrade(kind));
+                GUI.enabled = previous && !c.HasCheckpoint;
+                bool acquired = false;
+                if (DrawCard(CardArea(i, available.Length, art.upgradeCard), art, kind, text))
+                    Act(c, () => acquired = c.BuyPermanentUpgrade(kind));
                 GUI.enabled = previous;
+                if (acquired)
+                    return true;
             }
-            GUI.Label(new Rect(265f, 586f, 750f, 36f), c.HasCheckpoint
-                ? "完成或放弃当前航程后可进行永久整备。" : "永久整备在每次新航程生效；本轮奖励在结算后可用于升级。", body);
+            return false;
         }
 
-        private static void DrawCard(Rect area, VoyageUIArt art, VoyageUpgradeKind kind, GUIStyle text, string description)
+        private static Rect CardArea(int index, int count, Texture2D card)
         {
-            Fill(area, Paper);
-            if (art.upgradeCard != null)
-                GUI.DrawTexture(area, art.upgradeCard, ScaleMode.StretchToFill);
-            var centered = new GUIStyle(text) { alignment = TextAnchor.MiddleCenter, fontSize = 18 };
-            GUI.Label(new Rect(area.x + 20f, area.y + 21f, area.width - 40f, 36f), VoyageUpgrades.Name(kind), centered);
+            const float gap = 28f;
+            float width = Mathf.Min(290f, (1200f - (count - 1) * gap) / count);
+            float height = width * card.height / card.width;
+            float totalWidth = count * width + (count - 1) * gap;
+            return new Rect((1280f - totalWidth) * 0.5f + index * (width + gap), (720f - height) * 0.5f, width, height);
+        }
+
+        private static bool DrawCard(Rect area, VoyageUIArt art, VoyageUpgradeKind kind, GUIStyle text)
+        {
+            GUI.DrawTexture(area, art.upgradeCard, ScaleMode.StretchToFill);
             Texture2D icon = UpgradeIcon(art, kind);
             if (icon != null)
-                GUI.DrawTexture(new Rect(area.center.x - 40f, area.y + 62f, 80f, 80f), icon, ScaleMode.ScaleToFit);
-            GUI.Label(new Rect(area.x + 28f, area.y + 147f, area.width - 56f, area.height - 211f), description, centered);
+                GUI.DrawTexture(new Rect(area.x + area.width * 0.265f, area.y + area.height * 0.185f,
+                    area.width * 0.475f, area.height * 0.375f), icon, ScaleMode.ScaleToFit);
+            var effect = new GUIStyle(text)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = Mathf.Clamp(Mathf.RoundToInt(area.width * 0.068f), 12, 20),
+                padding = new RectOffset(),
+                wordWrap = true
+            };
+            effect.normal.textColor = Ink;
+            GUI.Label(new Rect(area.x + area.width * 0.18f, area.y + area.height * 0.625f,
+                area.width * 0.64f, area.height * 0.18f), VoyageUpgrades.Description(kind), effect);
+            return GUI.Button(area, GUIContent.none, GUIStyle.none);
         }
 
         private static Texture2D UpgradeIcon(VoyageUIArt art, VoyageUpgradeKind kind)

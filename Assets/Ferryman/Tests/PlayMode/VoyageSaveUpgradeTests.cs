@@ -28,20 +28,23 @@ namespace Ferryman.Tests
         }
 
         [Test]
-        public void PurchasesUseTheirCurrencyAndIncreasingPricesAndPersistThroughSettlement()
+        public void FreePermanentUpgradesPreserveRewardsRespectCapsAndPersistThroughSettlement()
         {
             var store = new VoyageSaveStore(directory);
-            Assert.That(store.TryBuyUpgrade(VoyageUpgradeKind.Attack), Is.False);
+            Assert.That(store.TryBuyUpgrade(VoyageUpgradeKind.Durability), Is.True);
+            Assert.That(store.Progress.coins, Is.Zero);
+            Assert.That(store.Progress.specialItems, Is.Zero);
             store.Settle("funding", new RewardData { coins = 1000, specialItems = 30 });
             for (int rank = 0; rank < VoyageUpgrades.MaxRank; rank++)
             {
                 int coins = store.Progress.coins;
                 int items = store.Progress.specialItems;
                 Assert.That(store.TryBuyUpgrade(VoyageUpgradeKind.Attack), Is.True);
-                Assert.That(store.Progress.coins, Is.EqualTo(coins - VoyageUpgrades.Price(VoyageUpgradeKind.Attack, rank)));
+                Assert.That(store.Progress.coins, Is.EqualTo(coins));
                 Assert.That(store.Progress.specialItems, Is.EqualTo(items));
                 Assert.That(store.TryBuyUpgrade(VoyageUpgradeKind.RepairCount), Is.True);
-                Assert.That(store.Progress.specialItems, Is.EqualTo(items - VoyageUpgrades.Price(VoyageUpgradeKind.RepairCount, rank)));
+                Assert.That(store.Progress.specialItems, Is.EqualTo(items));
+                Assert.That(store.Progress.coins, Is.EqualTo(coins));
             }
             Assert.That(store.TryBuyUpgrade(VoyageUpgradeKind.Attack), Is.False);
             Assert.That(store.TryBuyUpgrade(VoyageUpgradeKind.RepairCount), Is.False);
@@ -49,8 +52,8 @@ namespace Ferryman.Tests
             store.Settle("next-run", new RewardData { coins = 10, specialItems = 2 });
             Assert.That(store.Settle("next-run", new RewardData { coins = 10, specialItems = 2 }), Is.False);
             var restored = new VoyageSaveStore(directory);
-            Assert.That(restored.Progress.coins, Is.EqualTo(260));
-            Assert.That(restored.Progress.specialItems, Is.EqualTo(17));
+            Assert.That(restored.Progress.coins, Is.EqualTo(1010));
+            Assert.That(restored.Progress.specialItems, Is.EqualTo(32));
             Assert.That(restored.Progress.upgrades[(int)VoyageUpgradeKind.Attack], Is.EqualTo(5));
             Assert.That(restored.Progress.upgrades[(int)VoyageUpgradeKind.RepairCount], Is.EqualTo(5));
             VoyageCheckpoint stale = CreateCheckpoint();
@@ -160,7 +163,7 @@ namespace Ferryman.Tests
             legacy.routePath = new int[0];
             store.SaveCheckpoint(legacy);
             Assert.That(store.TryBuyUpgrade(VoyageUpgradeKind.Attack), Is.True);
-            Assert.That(new VoyageSaveStore(directory).Progress.coins, Is.EqualTo(30));
+            Assert.That(new VoyageSaveStore(directory).Progress.coins, Is.EqualTo(80));
         }
 
         [Test]

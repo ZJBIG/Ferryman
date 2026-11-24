@@ -13,6 +13,7 @@ namespace Ferryman.Characters
         [SerializeField, Min(0f)] private float meleeRange = 1.5f;
         [SerializeField, Range(0f, 360f)] private float meleeAngle = 90f;
         [SerializeField, Min(0.01f)] private float meleeCooldown = 0.5f;
+        [SerializeField] private GameObject meleeEffectPrefab;
         [SerializeField] private GameObject meleeImpactEffectPrefab;
         [SerializeField] private UnityEvent meleePerformed = new UnityEvent();
         [Header("Repair")]
@@ -168,6 +169,8 @@ namespace Ferryman.Characters
                     Instantiate(meleeImpactEffectPrefab, contact, AimRotation);
             }
 
+            if (meleeEffectPrefab != null)
+                Instantiate(meleeEffectPrefab, origin + AimDirection * (meleeRange * 0.65f), AimRotation);
             meleePerformed.Invoke();
             return true;
         }

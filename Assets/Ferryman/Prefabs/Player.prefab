@@ -147,6 +147,7 @@ MonoBehaviour:
   meleeRange: 1.5
   meleeAngle: 90
   meleeCooldown: 0.5
+  meleeEffectPrefab: {fileID: 4182560539180930044, guid: 3a751be38e31cea4e83df0f05de51693, type: 3}
   meleeImpactEffectPrefab: {fileID: 5667738953813447188, guid: 9bbd514332db866448f4ae38565bec3a, type: 3}
   meleePerformed:
     m_PersistentCalls:

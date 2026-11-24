@@ -180,8 +180,6 @@ namespace Ferryman.Voyage
                     }
                     else if (option == 1)
                     {
-                        if (pendingReward.coins < 40 || runUpgrades.All(rank => rank >= VoyageUpgrades.MaxRank)) return false;
-                        pendingReward.coins -= 40;
                         OfferUpgrades();
                     }
                     else if (option != 2) return false;
