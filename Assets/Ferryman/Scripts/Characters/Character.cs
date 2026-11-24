@@ -167,6 +167,18 @@ namespace Ferryman.Characters
             return true;
         }
 
+        public virtual bool TryReceivePlayerKick(Vector2 velocity)
+        {
+            if (!ActionsEnabled || IsHostile || this is PlayerCharacter)
+                return false;
+            TryKnockBack(velocity);
+            stunnedUntil = Mathf.Max(stunnedUntil, Time.time + stunDuration / 3f);
+            if (movementBody != null)
+                movementBody.velocity = Vector2.zero;
+            ShowFeedback(new Color(0.65f, 0.65f, 0.65f), Mathf.Max(0f, stunnedUntil - Time.time));
+            return true;
+        }
+
         protected void ShowFeedback(Color color, float duration)
         {
             if (feedback != null)

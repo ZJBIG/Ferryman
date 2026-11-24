@@ -160,7 +160,7 @@ namespace Ferryman.Characters
                     if (!character.IsHostile)
                     {
                         Vector2 away = (Vector2)character.transform.position - origin;
-                        character.TryKnockBack((away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection) * 8f);
+                        character.TryReceivePlayerKick((away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection) * 8f);
                     }
                     else
                         DamageSystem.ApplyDamage(this, character, AttackPower);

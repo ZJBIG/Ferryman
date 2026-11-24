@@ -145,7 +145,7 @@ namespace Ferryman.Tests
             definition.stops[1].fixedSpecialEvent = special;
             definition.stops[3].fixedSpecialEvent = null;
             special.obstaclePrefab = Resources.Load<SeaEventDefinition>("Voyage/Events/DriftingBombs").obstaclePrefab;
-            special.obstacleCount = 1;
+            special.obstacleCount = 2;
             Assert.That(controller.StartVoyage(escort, 104), Is.True);
             yield return WaitFor(() => controller.StopIndex == 1 && controller.Phase == VoyagePhase.Sailing,
                 "rest before the bomb event");
@@ -155,11 +155,15 @@ namespace Ferryman.Tests
             yield return WaitFor(() => AtEvent(1), "bomb event after rest");
             Assert.That(Time.time - started, Is.GreaterThanOrEqualTo(remaining - Time.deltaTime));
             yield return AssertEventKeepsSailing(1);
-            var bomb = Object.FindObjectOfType<TimedBomb>();
-            yield return WaitFor(() => !bomb.IsInFlight, "bomb landing");
+            var bombs = Object.FindObjectsOfType<TimedBomb>();
+            yield return WaitFor(() => bombs.All(bomb => !bomb.IsInFlight), "bomb landing");
+            Assert.That(controller.Phase, Is.EqualTo(VoyagePhase.Event));
+            Assert.That(bombs[0].Explode(), Is.True);
+            yield return null;
+            Assert.That(controller.Phase, Is.EqualTo(VoyagePhase.Event), "The voyage left while a second bomb was pending.");
+            Assert.That(bombs[1].Explode(), Is.True);
             yield return WaitFor(() => controller.Phase == VoyagePhase.Sailing, "rest after the bomb event");
-            Assert.That(bomb, Is.Not.Null, "The voyage removed the bomb instead of continuing with it on deck.");
-            Assert.That(bomb.GetComponent<DestructibleObstacle>().IsCleared, Is.False);
+            Assert.That(Object.FindObjectsOfType<TimedBomb>().All(bomb => bomb.GetComponent<DestructibleObstacle>().IsCleared), Is.True);
             remaining = controller.SailingRemaining;
             Assert.That(remaining, Is.InRange(0.1f, 0.2f));
             started = Time.time;
@@ -189,9 +193,10 @@ namespace Ferryman.Tests
 
             yield return WaitFor(() => AtEvent(3), "special event");
             var stones = Object.FindObjectsOfType<DestructibleObstacle>();
-            Assert.That(stones.Length, Is.EqualTo(special.obstacleCount));
+            var newStones = stones.Where(stone => stone.IsInFlight).ToArray();
+            Assert.That(newStones.Length, Is.EqualTo(special.obstacleCount));
             Camera camera = Camera.main;
-            foreach (var stone in stones)
+            foreach (var stone in newStones)
             {
                 Assert.That(stone.IsInFlight, Is.True);
                 Assert.That(stone.GetComponent<Collider2D>().enabled, Is.False);
@@ -199,9 +204,9 @@ namespace Ferryman.Tests
                 stone.Clear();
                 Assert.That(stone.IsCleared, Is.False);
             }
-            float initialY = stones[0].transform.position.y;
+            float initialY = newStones[0].transform.position.y;
             yield return AssertEventKeepsSailing(3);
-            Assert.That(stones[0].transform.position.y, Is.LessThan(initialY));
+            Assert.That(newStones[0].transform.position.y, Is.LessThan(initialY));
             yield return WaitFor(() => stones.All(stone => !stone.IsInFlight), "special event objects landed");
             foreach (var stone in stones)
             {
@@ -245,7 +250,7 @@ namespace Ferryman.Tests
             QuiesceActors();
             yield return CompleteCombat(1);
             yield return WaitFor(() => AtEvent(3), "the later event before ship destruction");
-            var falling = Object.FindObjectsOfType<DestructibleObstacle>();
+            var falling = Object.FindObjectsOfType<DestructibleObstacle>().Where(item => item.IsInFlight).ToArray();
             Assert.That(falling.Length, Is.EqualTo(special.obstacleCount));
             Assert.That(falling.All(item => item.IsInFlight), Is.True);
             Assert.That(controller.PendingReward.coins, Is.EqualTo(encounter.reward.coins));
@@ -322,6 +327,7 @@ namespace Ferryman.Tests
             Assert.That(regional.pendingCoins, Is.EqualTo(encounter.reward.coins));
             Assert.That(regional.pendingSpecialItems, Is.EqualTo(encounter.reward.specialItems));
             Assert.That(regional.passengers.Length, Is.EqualTo(2));
+            Assert.That(regional.obstacles, Is.Not.Empty, "Carried obstacles were not checkpointed at the next island.");
             Assert.That(Vector2.Distance(regional.playerLocalPosition, playerBowPosition), Is.LessThan(0.001f));
             Assert.That(Vector2.Distance(regional.passengers.Single(item => item.profileId == escort.id).localPosition,
                 crewBowPosition), Is.LessThan(0.001f));
@@ -447,8 +453,12 @@ namespace Ferryman.Tests
             AssertSeaMonsterLayout(LiveEnemies());
             Assert.That(controller.PendingReward.coins, Is.EqualTo(before.coins));
             Assert.That(controller.PendingReward.specialItems, Is.EqualTo(before.specialItems));
+            yield return WaitFor(() => controller.WaveIndex == encounter.waves.Length, "all timed waves generated");
+            Assert.That(LiveEnemies().Length, Is.EqualTo(3), "A prior wave was removed during spawning.");
+            Assert.That(AtEvent(stop), Is.True, "The voyage left while monsters remained.");
+            foreach (EnemyCharacter enemy in LiveEnemies())
+                Kill(enemy);
             yield return WaitFor(() => !AtEvent(stop), "completion of combat at stop " + stop);
-            Assert.That(LiveEnemies().Length, Is.EqualTo(3), "Combat still waits for a kill before continuing.");
             Assert.That(controller.PendingReward.coins, Is.EqualTo(before.coins + encounter.reward.coins));
             Assert.That(controller.PendingReward.specialItems, Is.EqualTo(before.specialItems + encounter.reward.specialItems));
         }
@@ -481,6 +491,11 @@ namespace Ferryman.Tests
 
         private void AssertRestored(VoyageCheckpoint saved)
         {
+            var carried = Object.FindObjectsOfType<DestructibleObstacle>()
+                .Where(obstacle => obstacle.GetComponent<TimedBomb>() == null).ToArray();
+            Assert.That(carried.Length, Is.EqualTo(saved.obstacles?.Length ?? 0));
+            foreach (ObstacleState obstacle in saved.obstacles ?? Array.Empty<ObstacleState>())
+                Assert.That(carried.Any(item => Vector2.Distance(item.transform.localPosition, obstacle.localPosition) < 0.001f), Is.True);
             Assert.That(Vector2.Distance(controller.Vessel.Player.transform.localPosition, saved.playerLocalPosition),
                 Is.LessThan(0.001f));
             Assert.That(controller.Vessel.Boat.CurrentHealth, Is.EqualTo(saved.ship.health));

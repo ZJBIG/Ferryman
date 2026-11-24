@@ -27,6 +27,14 @@ namespace Ferryman.Characters
 
         public RepairPoint CurrentTarget => target;
         public bool IsRepairing => contributing;
+        public override bool TryReceivePlayerKick(Vector2 velocity)
+        {
+            if (!base.TryReceivePlayerKick(velocity))
+                return false;
+            PauseContributions();
+            return true;
+        }
+
         protected override bool CanAct => base.CanAct && boat != null && !boat.IsDestroyed;
 
         protected override void Awake()

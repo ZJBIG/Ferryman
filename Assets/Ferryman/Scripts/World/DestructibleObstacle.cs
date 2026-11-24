@@ -22,6 +22,10 @@ namespace Ferryman.World
 
         public bool IsCleared { get; private set; }
         public bool IsInFlight { get; private set; }
+        internal string VoyageEventId { get; set; }
+        internal int AppearanceIndex => appearances != null && visual != null ? Array.IndexOf(appearances, visual.sprite) : -1;
+        internal Vector2 WorldLandingPosition => IsInFlight && landingDeck != null
+            ? (Vector2)landingDeck.transform.TransformPoint(landingPosition) : (Vector2)transform.position;
         internal Bounds VisualBounds => visual != null ? visual.bounds : new Bounds(transform.position, Footprint);
         internal Vector2 Footprint
         {
@@ -56,6 +60,12 @@ namespace Ferryman.World
             visual.transform.localScale = visualScale * scale;
         }
 
+        internal void RestoreAppearance(int index)
+        {
+            if (appearances != null && index >= 0 && index < appearances.Length)
+                SetAppearance(appearances[index]);
+        }
+
         internal void FlyTo(BoatDeck deck, Vector2 destination, float seconds, float arc, Action onLanded = null)
         {
             IsInFlight = true;
@@ -68,7 +78,8 @@ namespace Ferryman.World
                 Destroy(gameObject);
                 return;
             }
-            flightOrigin = transform.position;
+            landingPosition = deck.transform.InverseTransformPoint(landingPosition);
+            flightOrigin = deck.transform.InverseTransformPoint(transform.position);
             launchedAt = Time.time;
             flightSeconds = seconds;
             arcHeight = arc;
@@ -87,21 +98,22 @@ namespace Ferryman.World
 
             float t = Mathf.Clamp01((Time.time - launchedAt) / flightSeconds);
             float travel = arcHeight > 0f ? t : t * t;
-            transform.position = Vector2.Lerp(flightOrigin, landingPosition, travel)
-                + Vector2.up * (Mathf.Sin(t * Mathf.PI) * arcHeight);
+            transform.position = landingDeck.transform.TransformPoint(Vector2.Lerp(flightOrigin, landingPosition, travel)
+                + Vector2.up * (Mathf.Sin(t * Mathf.PI) * arcHeight));
             if (t < 1f)
                 return;
             Physics2D.SyncTransforms();
-            if (!landingDeck.TryFindPlacement(landingPosition, Footprint, hitbox, out Vector2 touchdown))
+            Vector2 destination = landingDeck.transform.TransformPoint(landingPosition);
+            if (!landingDeck.TryFindPlacement(destination, Footprint, hitbox, out Vector2 touchdown))
             {
                 Destroy(gameObject);
                 return;
             }
-            if (touchdown != landingPosition)
+            if (touchdown != destination)
             {
                 // Finish the landing visibly if a character stepped into the original spot.
                 flightOrigin = landingPosition;
-                landingPosition = touchdown;
+                landingPosition = landingDeck.transform.InverseTransformPoint(touchdown);
                 launchedAt = Time.time;
                 flightSeconds = 0.12f;
                 arcHeight = 0.2f;

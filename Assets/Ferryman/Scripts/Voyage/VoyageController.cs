@@ -123,6 +123,20 @@ namespace Ferryman.Voyage
             deliveredPassengers = checkpoint.deliveredPassengers;
             CreateVessel();
             vessel.Boat.RestoreState(checkpoint.ship);
+            foreach (ObstacleState saved in checkpoint.obstacles ?? Array.Empty<ObstacleState>())
+            {
+                SeaEventDefinition source = definition.specialEvents.Select(entry => entry.definition)
+                    .Concat(definition.stops.Select(stop => stop.fixedSpecialEvent))
+                    .FirstOrDefault(item => item != null && item.id == saved.eventId);
+                if (source == null || source.obstaclePrefab.GetComponent<TimedBomb>() != null)
+                    throw new InvalidDataException("Carried obstacle has an unknown sea event.");
+                var item = Instantiate(source.obstaclePrefab, vessel.transform);
+                item.transform.localPosition = saved.localPosition;
+                var obstacle = item.GetComponent<DestructibleObstacle>();
+                obstacle.VoyageEventId = saved.eventId;
+                obstacle.RestoreAppearance(saved.appearanceIndex);
+                eventObstacles.Add(obstacle);
+            }
             RestoreActorPosition(vessel.Player, checkpoint.playerLocalPosition);
             foreach (PassengerState saved in checkpoint.passengers)
             {
@@ -225,6 +239,11 @@ namespace Ferryman.Voyage
                         yield return ExecuteEvent(eventPlan[index]);
                     if (!ActiveRun)
                         yield break;
+                    while (ActiveRun && (enemies.Any(enemy => enemy != null && enemy.Health > 0f)
+                        || FindObjectsOfType<TimedBomb>().Any(bomb => !bomb.GetComponent<DestructibleObstacle>().IsCleared)))
+                        yield return null;
+                    if (!ActiveRun)
+                        yield break;
                     Phase = VoyagePhase.Sailing;
                     Message = "继续航行";
                     yield return Sail(definition.sailingSeconds * 0.5f);
@@ -232,7 +251,7 @@ namespace Ferryman.Voyage
                 alreadyArrived = false;
                 if (!ActiveRun)
                     yield break;
-                CleanupHazards();
+                CleanupHazards(true);
                 vessel.SetActionsAllowed(false, true);
                 Phase = VoyagePhase.Leaving;
                 yield return AnimateExit();
@@ -431,9 +450,6 @@ namespace Ferryman.Voyage
                     continue;
                 landings.Add(landing);
             }
-            if (landings.Count != count && combatDrop < 0)
-                throw new InvalidOperationException("甲板没有足够的事件物品放置空间。");
-
             Camera view = Camera.main;
             float top = view != null
                 ? view.ViewportToWorldPoint(new Vector3(0.5f, 1f, view.WorldToViewportPoint(deck.transform.position).z)).y
@@ -441,8 +457,9 @@ namespace Ferryman.Voyage
             foreach (Rect landing in landings)
             {
                 var origin = new Vector2(landing.center.x, top + 1.5f);
-                var item = Instantiate(special.obstaclePrefab, origin, Quaternion.identity);
+                var item = Instantiate(special.obstaclePrefab, origin, Quaternion.identity, vessel.transform);
                 var obstacle = item.GetComponent<DestructibleObstacle>();
+                obstacle.VoyageEventId = special.id;
                 var bomb = item.GetComponent<TimedBomb>();
                 if (bomb != null)
                     bomb.Launch(vessel.Boat, landing.center, ObstacleDropSeconds, 0f);
@@ -577,6 +594,13 @@ namespace Ferryman.Voyage
                 upgradeChoices = UpgradeChoices,
                 playerLocalPosition = vessel.Player.transform.localPosition,
                 ship = vessel.Boat.CaptureState(),
+                obstacles = eventObstacles.Where(obstacle => obstacle != null && !obstacle.IsCleared
+                    && obstacle.GetComponent<TimedBomb>() == null).Select(obstacle => new ObstacleState
+                {
+                    eventId = obstacle.VoyageEventId,
+                    localPosition = vessel.transform.InverseTransformPoint(obstacle.WorldLandingPosition),
+                    appearanceIndex = obstacle.AppearanceIndex
+                }).ToArray(),
                 passengers = passengers.Select(passenger => new PassengerState
                 {
                     profileId = passenger.Definition.id,
@@ -681,7 +705,7 @@ namespace Ferryman.Voyage
             return true;
         }
 
-        private void CleanupHazards()
+        private void CleanupHazards(bool keepObstacles = false)
         {
             foreach (var enemy in enemies)
                 if (enemy != null)
@@ -701,12 +725,13 @@ namespace Ferryman.Voyage
                 Destroy(bomb.gameObject);
             }
             foreach (var obstacle in eventObstacles)
-                if (obstacle != null)
+                if (obstacle != null && (!keepObstacles || obstacle.GetComponent<TimedBomb>() != null))
                 {
                     obstacle.gameObject.SetActive(false);
                     Destroy(obstacle.gameObject);
                 }
-            eventObstacles.Clear();
+            eventObstacles.RemoveAll(obstacle => !keepObstacles || obstacle == null || obstacle.IsCleared
+                || obstacle.GetComponent<TimedBomb>() != null);
         }
 
         private void CleanupVessel()

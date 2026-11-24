@@ -167,7 +167,7 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
-        public IEnumerator FlyingKickPushesCrewOnceWithoutStunAndStopsAtDeckEdge()
+        public IEnumerator FlyingKickPushesCrewWithShortStunAndStopsAtDeckEdge()
         {
             var profile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner");
             player.GetComponent<Rigidbody2D>().position = new Vector2(0f, 1f);
@@ -177,6 +177,8 @@ namespace Ferryman.Tests
             crew.gameObject.AddComponent<CircleCollider2D>().isTrigger = true;
             Physics2D.SyncTransforms();
             Assert.That(player.TryMelee(Vector2.up), Is.True);
+            Assert.That(crew.IsStunned, Is.True);
+            Assert.That(crew.StunRemainingRatio, Is.EqualTo(1f / 3f).Within(0.03f));
             yield return new WaitForSeconds(0.35f);
             Assert.That(crew.transform.position.y, Is.GreaterThan(2.1f));
             Assert.That(crew.IsStunned, Is.False);
@@ -187,6 +189,18 @@ namespace Ferryman.Tests
             crew.enabled = false;
             yield return new WaitForSeconds(profile.fireInterval);
             Assert.That(crew.TryFire(Vector2.up), Is.True);
+            Assert.That(crew.TryReceiveDamage(1f), Is.True);
+            yield return new WaitForSeconds(0.2f);
+            float remaining = crew.StunRemainingRatio;
+            Assert.That(crew.TryReceivePlayerKick(Vector2.up), Is.True);
+            Assert.That(crew.StunRemainingRatio, Is.EqualTo(remaining).Within(0.02f), "A short kick shortened or added to a longer stun.");
+            Assert.That(crew.TryReceiveDamage(1f), Is.False, "Monster damage repeated the stun.");
+            yield return new WaitForSeconds(0.6f);
+            Assert.That(crew.StunRemainingRatio, Is.LessThan(1f / 3f));
+            Assert.That(crew.TryReceivePlayerKick(Vector2.up), Is.True);
+            Assert.That(crew.StunRemainingRatio, Is.EqualTo(1f / 3f).Within(0.03f));
+            yield return new WaitForSeconds(0.35f);
+            Assert.That(crew.IsStunned, Is.False);
         }
 
         [UnityTest]
@@ -223,6 +237,16 @@ namespace Ferryman.Tests
             yield return WaitFor(() => enemy == null, 2f, "Lethal projectile did not remove the enemy.");
             Assert.That(received, Is.EqualTo(2));
             Assert.That(sent, Is.EqualTo(2));
+            // An already stunned NPC lets enemy fire reach the player behind it.
+            Assert.That(crew.TryReceiveDamage(1f), Is.True);
+            var shooter = Object.Instantiate(Resources.Load<VoyageDefinition>("Voyage/DefaultVoyage")
+                .randomEncounters[0].waves[0].enemies[0].prefab, new Vector3(20f, 20f), Quaternion.identity);
+            shooter.enabled = false;
+            var incoming = FireFrom(shooter, new Vector3(0f, 1.5f), Vector2.down, 1f);
+            yield return WaitFor(() => player.IsStunned, 0.8f, "A stunned NPC blocked the enemy projectile.");
+            Assert.That(incoming == null || !incoming.Hitbox.enabled, Is.True);
+            Assert.That(crew.StunRemainingRatio, Is.LessThan(1f));
+            Object.Destroy(shooter.gameObject);
             Object.Destroy(crewObject);
         }
 

@@ -25,6 +25,14 @@ namespace Ferryman.Voyage
     }
 
     [Serializable]
+    public sealed class ObstacleState
+    {
+        public string eventId;
+        public Vector2 localPosition;
+        public int appearanceIndex;
+    }
+
+    [Serializable]
     public sealed class VoyageCheckpoint
     {
         public int version;
@@ -37,6 +45,7 @@ namespace Ferryman.Voyage
         public int deliveredPassengers;
         public Vector2 playerLocalPosition;
         public PassengerState[] passengers;
+        public ObstacleState[] obstacles;
         public BoatHealth.State ship;
         public int[] routePath;
         public int[] runUpgrades;
@@ -146,6 +155,12 @@ namespace Ferryman.Voyage
                 || checkpoint.passengers == null || checkpoint.ship == null)
                 throw new InvalidDataException("Voyage checkpoint is invalid or uses an unsupported version.");
             int[] ranks = VoyageUpgrades.ReadRanks(checkpoint.runUpgrades);
+            foreach (ObstacleState obstacle in checkpoint.obstacles ?? Array.Empty<ObstacleState>())
+            {
+                if (obstacle == null || string.IsNullOrWhiteSpace(obstacle.eventId) || obstacle.appearanceIndex < -1
+                    || !float.IsFinite(obstacle.localPosition.x) || !float.IsFinite(obstacle.localPosition.y))
+                    throw new InvalidDataException("Voyage checkpoint has an invalid carried obstacle.");
+            }
             if (checkpoint.routePath != null && checkpoint.routePath.Length > 0)
             {
                 if (checkpoint.stopIndex >= VoyageRouteMap.FinalDepth * 2 + 1)

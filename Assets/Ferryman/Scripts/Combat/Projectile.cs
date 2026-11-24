@@ -89,6 +89,8 @@ namespace Ferryman.Combat
             var target = other.GetComponentInParent<Character>();
             if (target == null || target == instigator || target.IsHostile == hostile)
                 return;
+            if (target.IsStunned && !target.IsHostile && !(target is PlayerCharacter))
+                return;
 
             Consume();
             if (impactEffectPrefab != null && !target.IsHostile)
