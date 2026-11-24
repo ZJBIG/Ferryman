@@ -81,6 +81,10 @@ namespace Ferryman.Tests
                 Assert.That(player.TryMelee(Vector2.right), Is.True);
                 int expected = entity == trigger ? 0 : 1;
                 Assert.That(ImpactCount(), Is.EqualTo(expected), "Wrong impact count for " + entity.name);
+                Assert.That(Object.FindObjectsOfType<SpriteEffect>().Any(effect => effect.name == "MeleeSwing(Clone)"), Is.False,
+                    "A kick added an extra effect on the player.");
+                Assert.That(player.transform.Find("Melee Outline").GetComponent<LineRenderer>().enabled, Is.False,
+                    "A kick restored the old outline effect on the player.");
                 entity.SetActive(false);
                 yield return new WaitForSeconds(0.55f);
                 Assert.That(ImpactCount(), Is.Zero, "Kick impact did not clean up.");
@@ -97,6 +101,9 @@ namespace Ferryman.Tests
             var shot = FireFrom(player, enemy.transform.position, Vector2.up, 1f);
             yield return WaitFor(() => shot == null, 0.3f, "The projectile did not hit the enemy.");
             Assert.That(ImpactCount(), Is.Zero, "Projectile added yellow feedback to an enemy.");
+            Assert.That(player.TryFire(Vector2.up), Is.True);
+            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Any(effect => effect.name == "MuzzleFlash(Clone)"), Is.False,
+                "Player shooting added an extra effect at the muzzle.");
             Object.Destroy(crewObject);
             Object.Destroy(solid);
             Object.Destroy(trigger);

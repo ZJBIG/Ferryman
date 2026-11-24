@@ -27,5 +27,11 @@ namespace Ferryman.Voyage
         public Texture2D settlement;
         public Texture2D dialogue;
         public Texture2D portrait;
+        public Texture2D upgradeCard;
+        public Texture2D upgradeAttack;
+        public Texture2D upgradeAttackSpeed;
+        public Texture2D upgradeDurability;
+        public Texture2D upgradeRepairSpeed;
+        public Texture2D upgradeRepairCount;
     }
 }

@@ -13,8 +13,6 @@ namespace Ferryman.Characters
         [SerializeField, Min(0f)] private float meleeRange = 1.5f;
         [SerializeField, Range(0f, 360f)] private float meleeAngle = 90f;
         [SerializeField, Min(0.01f)] private float meleeCooldown = 0.5f;
-        [SerializeField] private LineRenderer meleeOutline;
-        [SerializeField] private GameObject meleeEffectPrefab;
         [SerializeField] private GameObject meleeImpactEffectPrefab;
         [SerializeField] private UnityEvent meleePerformed = new UnityEvent();
         [Header("Repair")]
@@ -26,6 +24,17 @@ namespace Ferryman.Characters
         public BoatDeck MovementDeck => movementDeck;
         public BoatHealth BoatHealth => boatHealth;
         public bool IsRepairing => repairTargets.Count > 0;
+        public float RepairSpeed => repairSpeed;
+        public int RepairRange => repairRange;
+        public int SimultaneousRepairs => simultaneousRepairs;
+        public bool BlockMouseAttacks { get; set; }
+        public void ConfigureRepair(float speed, int range, int parallel)
+        {
+            StopRepairing();
+            repairSpeed = Mathf.Max(0f, speed);
+            repairRange = Mathf.Max(0, range);
+            simultaneousRepairs = Mathf.Max(1, parallel);
+        }
         protected override bool CanAct => base.CanAct && (boatHealth == null || !boatHealth.IsDestroyed);
 
         private readonly List<RepairPoint> repairTargets = new List<RepairPoint>();
@@ -33,7 +42,6 @@ namespace Ferryman.Characters
         private Vector2 moveInput;
         private Camera aimCamera;
         private float nextMeleeAt;
-        private float meleeVisibleUntil;
 
         protected override void Awake()
         {
@@ -52,8 +60,6 @@ namespace Ferryman.Characters
         private void Update()
         {
             moveInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-            if (meleeOutline != null)
-                meleeOutline.enabled = Time.time < meleeVisibleUntil;
             if (!CanAct)
             {
                 StopRepairing();
@@ -70,8 +76,8 @@ namespace Ferryman.Characters
                 Face(aimCamera.ScreenToWorldPoint(mouse) - transform.position);
             }
 
-            bool meleeRequested = Input.GetMouseButtonDown(1);
-            bool fireRequested = Input.GetMouseButton(0);
+            bool meleeRequested = !BlockMouseAttacks && Input.GetMouseButtonDown(1);
+            bool fireRequested = !BlockMouseAttacks && Input.GetMouseButton(0);
             // Attack intent interrupts repair even while the weapon is cooling down.
             if (moveInput.sqrMagnitude > 0f || meleeRequested || fireRequested)
                 StopRepairing();
@@ -162,10 +168,6 @@ namespace Ferryman.Characters
                     Instantiate(meleeImpactEffectPrefab, contact, AimRotation);
             }
 
-            if (meleeEffectPrefab != null)
-                Instantiate(meleeEffectPrefab, origin + AimDirection * (meleeRange * 0.65f), AimRotation);
-            else
-                ShowMeleeOutline(origin);
             meleePerformed.Invoke();
             return true;
         }
@@ -215,8 +217,6 @@ namespace Ferryman.Characters
             {
                 StopRepairing();
                 moveInput = Vector2.zero;
-                if (meleeOutline != null)
-                    meleeOutline.enabled = false;
             }
         }
 
@@ -253,28 +253,6 @@ namespace Ferryman.Characters
             StopRepairing();
             moveInput = Vector2.zero;
             body.velocity = Vector2.zero;
-            if (meleeOutline != null)
-                meleeOutline.enabled = false;
-        }
-
-        private void ShowMeleeOutline(Vector2 origin)
-        {
-            if (meleeOutline == null)
-                return;
-
-            const int segments = 16;
-            float facing = Mathf.Atan2(AimDirection.y, AimDirection.x) * Mathf.Rad2Deg;
-            meleeOutline.positionCount = segments + 2;
-            meleeOutline.SetPosition(0, origin);
-            for (int i = 0; i <= segments; i++)
-            {
-                float angle = (facing + Mathf.Lerp(-meleeAngle * 0.5f, meleeAngle * 0.5f,
-                    (float)i / segments)) * Mathf.Deg2Rad;
-                meleeOutline.SetPosition(i + 1,
-                    origin + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * meleeRange);
-            }
-            meleeOutline.enabled = true;
-            meleeVisibleUntil = Time.time + 0.12f;
         }
 
         protected override void OnDisable()
@@ -284,8 +262,6 @@ namespace Ferryman.Characters
             moveInput = Vector2.zero;
             if (body != null)
                 body.velocity = Vector2.zero;
-            if (meleeOutline != null)
-                meleeOutline.enabled = false;
         }
 
         private void OnDestroy()

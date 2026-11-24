@@ -35,3 +35,9 @@ MonoBehaviour:
   settlement: {fileID: 2800000, guid: 396bbe0096ff45408923ab8acafecda5, type: 3}
   dialogue: {fileID: 2800000, guid: 9a011bade9ce4271870cf899dd62d5d4, type: 3}
   portrait: {fileID: 2800000, guid: 01a010faca28473b87b78c56b6f772c2, type: 3}
+  upgradeRepairCount: {fileID: 2800000, guid: 8d73149466a640b4875b492f9b4b8811, type: 3}
+  upgradeAttack: {fileID: 2800000, guid: d2394e1e57a34f52b59706cfccb5ce57, type: 3}
+  upgradeAttackSpeed: {fileID: 2800000, guid: 35a485e4be0c46d6b09c952645057ee6, type: 3}
+  upgradeCard: {fileID: 2800000, guid: 7b91f9f6fb184afd94c23ac3cbf40bb5, type: 3}
+  upgradeDurability: {fileID: 2800000, guid: 80043dbf00cf499d80ad3b76ea5da147, type: 3}
+  upgradeRepairSpeed: {fileID: 2800000, guid: abe8871123d04c0ab04e3f46c1c17b54, type: 3}

@@ -64,6 +64,8 @@ namespace Ferryman.Editor
             VoyageDefinition definition = AssetDatabase.LoadAssetAtPath<VoyageDefinition>(Root + "Resources/Voyage/DefaultVoyage.asset");
             Require(definition != null && definition.stops.Length == 5, "Default voyage is absent or its route differs.");
             Require(definition.sailingSeconds == 10f, "Sea legs must allow five seconds of rest before and after events.");
+            Require(definition.branchingRoutes && VoyageRouteMap.Generate(7301).Nodes.Length == 20,
+                "Default voyage must enable the twenty-island branching expedition.");
             var uiArt = AssetDatabase.LoadAssetAtPath<VoyageUIArt>(Root + "Art/UI/VoyageUI.asset");
             Require(uiArt != null && uiArt.stunFill != null && uiArt.stunFill.isReadable, "UI art or readable stun mask is absent.");
             foreach (var field in typeof(VoyageUIArt).GetFields())
@@ -73,6 +75,8 @@ namespace Ferryman.Editor
             Require(vessel.Player.MovementDeck == vessel.Boat.Deck && vessel.Player.BoatHealth == vessel.Boat
                 && vessel.Player.DamageSystem == vessel.DamageSystem, "Vessel/player combat or deck bindings differ.");
             Require(vessel.Player.ProjectilePrefab != null, "Player weapon has no projectile.");
+            Require(new SerializedObject(vessel.Player).FindProperty("shotEffectPrefab").objectReferenceValue == null,
+                "Player must not spawn a second effect at the muzzle.");
             Require(new SerializedObject(vessel.Player).FindProperty("meleeImpactEffectPrefab").objectReferenceValue
                 == AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Effects/ProjectileImpact.prefab"),
                 "Player kick impact is not bound to the supplied hit effect.");

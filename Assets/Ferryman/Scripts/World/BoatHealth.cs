@@ -138,6 +138,36 @@ namespace Ferryman.World
             return true;
         }
 
+        public void ConfigureMaximumHealth(float maximum)
+        {
+            if (IsDestroyed)
+                return;
+            currentHealth = Mathf.Clamp(currentHealth + maximum - maxHealth, 1f, maximum);
+            maxHealth = maximum;
+            healthChanged.Invoke(currentHealth, maxHealth);
+        }
+
+        public void Resupply(float amount)
+        {
+            if (IsDestroyed || amount <= 0f)
+                return;
+            float restored = Mathf.Min(amount, maxHealth - currentHealth);
+            if (restored <= 0f)
+                return;
+            // Rebase remaining damage so repaired cracks cannot pay the same HP twice.
+            float missing = maxHealth - currentHealth - restored;
+            foreach (var point in repairPoints.Values)
+            {
+                point.StopAllRepairs();
+                Destroy(point.gameObject);
+            }
+            repairPoints.Clear();
+            currentHealth += restored;
+            pendingDamage = missing;
+            GenerateRepairPoints(Vector2.zero);
+            healthChanged.Invoke(currentHealth, maxHealth);
+        }
+
         private void GenerateRepairPoints(Vector2 hitPosition)
         {
             if (deck == null || repairPointPrefab == null)

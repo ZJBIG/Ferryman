@@ -24,7 +24,7 @@ namespace Ferryman.Characters
         public float AttackPower => attackPower;
         public Projectile ProjectilePrefab => projectilePrefab;
         public DamageSystem DamageSystem => damageSystem;
-        protected float FireInterval => fireInterval;
+        public float FireInterval => fireInterval;
         protected Vector2 AimDirection { get; private set; } = Vector2.right;
         protected Quaternion AimRotation { get; private set; } = Quaternion.identity;
 

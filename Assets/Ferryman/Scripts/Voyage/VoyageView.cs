@@ -12,7 +12,8 @@ namespace Ferryman.Voyage
             Title,
             ConfirmRestart,
             Route,
-            Passengers
+            Passengers,
+            Upgrades
         }
 
         [SerializeField] private Font font;
@@ -79,6 +80,8 @@ namespace Ferryman.Voyage
                 DrawCombat(screen, scale, offset);
                 if (controller.Phase == VoyagePhase.Island && controller.BoardingProfile != null)
                     DrawDialogue();
+                else if (controller.IsExpedition && controller.Phase == VoyagePhase.Island)
+                    VoyageExpeditionUI.Draw(controller, art, 0, false, inkTitle, ink, button);
             }
 
             if (controller.Fade > 0f)
@@ -104,6 +107,11 @@ namespace Ferryman.Voyage
                 case DeparturePage.Passengers:
                     DrawPassengers(screen);
                     break;
+                case DeparturePage.Upgrades:
+                    VoyageExpeditionUI.DrawPermanent(controller, art, inkTitle, ink, button);
+                    if (GUI.Button(new Rect(550f, 641f, 180f, 44f), "返回港口", button))
+                        page = DeparturePage.Title;
+                    break;
             }
         }
 
@@ -114,6 +122,8 @@ namespace Ferryman.Voyage
             GUI.DrawTexture(new Rect(686f, 109f, 201f, 207f), art.titleBai, ScaleMode.ScaleToFit);
             GUI.DrawTexture(new Rect(878f, 91f, 207f, 207f), art.titleDu, ScaleMode.ScaleToFit);
             GUI.DrawTexture(new Rect(1064f, 137f, 192f, 207f), art.titleRen, ScaleMode.ScaleToFit);
+            if (controller.Definition.branchingRoutes && GUI.Button(new Rect(931f, 329f, 264f, 43f), "港口永久整备", button))
+                page = DeparturePage.Upgrades;
             if (Oar(new Rect(725f, 378f, 516f, 99f), "新游戏", true))
             {
                 if (controller.HasCheckpoint)
@@ -171,6 +181,18 @@ namespace Ferryman.Voyage
 
         private void DrawRoute(Rect screen)
         {
+            if (controller.Definition.branchingRoutes)
+            {
+                VoyageExpeditionUI.Draw(controller, art, seed, true, inkTitle, ink, button);
+                if (GUI.Button(new Rect(337f, 628f, 190f, 45f), "返回", button))
+                    page = DeparturePage.Title;
+                if (GUI.Button(new Rect(753f, 628f, 190f, 45f), "选择乘客", button))
+                {
+                    passengerScroll = Vector2.zero;
+                    page = DeparturePage.Passengers;
+                }
+                return;
+            }
             Fill(screen, Shade);
             GUI.DrawTexture(new Rect(148f, 65f, 984f, 590f), art.parchment);
             GUI.Label(new Rect(272f, 163f, 736f, 56f), controller.Definition.displayName, inkTitle);

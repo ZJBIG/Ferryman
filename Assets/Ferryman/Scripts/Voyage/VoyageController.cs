@@ -26,7 +26,7 @@ namespace Ferryman.Voyage
         Error
     }
 
-    public sealed class VoyageController : MonoBehaviour
+    public sealed partial class VoyageController : MonoBehaviour
     {
         private VoyageDefinition definition;
         private VoyageSaveStore store;
@@ -96,9 +96,9 @@ namespace Ferryman.Voyage
             pendingReward = default;
             deliveredPassengers = 0;
             CanRetrySettlement = false;
-            eventPlan = VoyageEventPlanner.Build(definition, seed);
+            InitializeExpedition(definition.branchingRoutes, null);
             CreateVessel();
-            BoardPassenger(initialPassenger, definition.stops.Length - 1);
+            BoardPassenger(initialPassenger, ActiveStops.Length - 1);
             vessel.SetActionsAllowed(false, true);
             ActiveRun = true;
             StopIndex = 0;
@@ -114,12 +114,12 @@ namespace Ferryman.Voyage
             VoyageCheckpoint checkpoint = store.LoadCheckpoint(definition.id);
             if (checkpoint == null)
                 return false;
-            ValidatePassengers(checkpoint);
             seed = checkpoint.seed;
+            InitializeExpedition(checkpoint.routePath != null && checkpoint.routePath.Length > 0, checkpoint);
+            ValidatePassengers(checkpoint);
             runId = checkpoint.runId;
             pendingReward = new RewardData { coins = checkpoint.pendingCoins, specialItems = checkpoint.pendingSpecialItems };
             deliveredPassengers = checkpoint.deliveredPassengers;
-            eventPlan = VoyageEventPlanner.Build(definition, seed);
             CreateVessel();
             vessel.Boat.RestoreState(checkpoint.ship);
             RestoreActorPosition(vessel.Player, checkpoint.playerLocalPosition);
@@ -172,10 +172,10 @@ namespace Ferryman.Voyage
 
         private IEnumerator RunRoute(int firstStop, bool alreadyArrived)
         {
-            for (int index = firstStop; index < definition.stops.Length && ActiveRun; index++)
+            for (int index = firstStop; index < ActiveStops.Length && ActiveRun; index++)
             {
                 StopIndex = index;
-                VoyageStop stop = definition.stops[index];
+                VoyageStop stop = ActiveStops[index];
                 vessel.SetActionsAllowed(false, true);
                 Phase = VoyagePhase.Transition;
                 Fade = 1f;
@@ -197,12 +197,20 @@ namespace Ferryman.Voyage
                     }
                     Message = "抵达 " + stop.displayName;
                     SaveCheckpoint();
-                    if (index == definition.stops.Length - 1)
+                    if (index == ActiveStops.Length - 1)
                     {
                         FinishRun(true);
                         yield break;
                     }
-                    yield return WaitActive(definition.transitionSeconds);
+                    if (IsExpedition)
+                    {
+                        vessel.Player.BlockMouseAttacks = true;
+                        while (ActiveRun && StopIndex == index)
+                            yield return null;
+                        vessel.Player.BlockMouseAttacks = false;
+                    }
+                    else
+                        yield return WaitActive(definition.transitionSeconds);
                 }
                 else
                 {
@@ -424,8 +432,8 @@ namespace Ferryman.Voyage
 
         private IEnumerator BoardAtIsland(VoyageStop stop, int index)
         {
-            var futureIslands = Enumerable.Range(index + 1, definition.stops.Length - index - 1)
-                .Where(next => definition.stops[next].kind == VoyageStopKind.Island).ToArray();
+            var futureIslands = Enumerable.Range(index + 1, ActiveStops.Length - index - 1)
+                .Where(next => ActiveStops[next].kind == VoyageStopKind.Island).ToArray();
             if (futureIslands.Length == 0 || definition.passengerPool.Length == 0 || stop.maxBoardingPassengers <= 0)
                 yield break;
             var random = new Random(seed ^ index * 9973);
@@ -437,7 +445,7 @@ namespace Ferryman.Voyage
                 CrewDefinition profile = definition.passengerPool[random.Next(definition.passengerPool.Length)];
                 int destination = futureIslands[random.Next(futureIslands.Length)];
                 BoardingProfile = profile;
-                boardingDestination = definition.stops[destination].displayName;
+                boardingDestination = ActiveStops[destination].displayName;
                 Message = profile.displayName + " 将上船 · " + DescribeRole(profile) + " · 目的地 " + boardingDestination;
                 yield return WaitActive(definition.boardingNoticeSeconds);
                 BoardingProfile = null;
@@ -479,6 +487,7 @@ namespace Ferryman.Voyage
             DontDestroyOnLoad(vessel.gameObject);
             vessel.SetActionsAllowed(false, true);
             vessel.Boat.Destroyed.AddListener(OnBoatDestroyed);
+            ApplyUpgrades();
         }
 
         private void SaveCheckpoint()
@@ -493,6 +502,10 @@ namespace Ferryman.Voyage
                 pendingCoins = pendingReward.coins,
                 pendingSpecialItems = pendingReward.specialItems,
                 deliveredPassengers = deliveredPassengers,
+                routePath = IsExpedition ? routePath.ToArray() : null,
+                runUpgrades = IsExpedition ? runUpgrades : null,
+                islandResolved = IslandResolved,
+                upgradeChoices = UpgradeChoices,
                 playerLocalPosition = vessel.Player.transform.localPosition,
                 ship = vessel.Boat.CaptureState(),
                 passengers = passengers.Select(passenger => new PassengerState
@@ -555,6 +568,7 @@ namespace Ferryman.Voyage
             pendingReward = default;
             deliveredPassengers = 0;
             CleanupVessel();
+            ClearExpedition();
             routine = StartCoroutine(RunSafely(ReturnToDeparture()));
         }
 
@@ -563,6 +577,7 @@ namespace Ferryman.Voyage
             if (ActiveRun)
                 return;
             CleanupVessel();
+            ClearExpedition();
             routine = StartCoroutine(RunSafely(ReturnToDeparture()));
         }
 
@@ -701,7 +716,7 @@ namespace Ferryman.Voyage
 
         private void ValidatePassengers(VoyageCheckpoint checkpoint)
         {
-            if (checkpoint.stopIndex >= definition.stops.Length)
+            if (checkpoint.stopIndex >= ActiveStops.Length)
                 throw new InvalidDataException("Checkpoint route position is invalid.");
             Transform root = definition.vesselPrefab.transform;
             BoatDeck deck = definition.vesselPrefab.GetComponent<VoyageVessel>().Boat.Deck;
@@ -711,8 +726,8 @@ namespace Ferryman.Voyage
                 throw new InvalidDataException("Checkpoint player is outside the deck.");
             foreach (PassengerState passenger in checkpoint.passengers)
                 if (passenger == null || FindProfile(passenger.profileId) == null
-                    || passenger.destinationStopIndex <= checkpoint.stopIndex || passenger.destinationStopIndex >= definition.stops.Length
-                    || definition.stops[passenger.destinationStopIndex].kind != VoyageStopKind.Island
+                    || passenger.destinationStopIndex <= checkpoint.stopIndex || passenger.destinationStopIndex >= ActiveStops.Length
+                    || ActiveStops[passenger.destinationStopIndex].kind != VoyageStopKind.Island
                     || !float.IsFinite(passenger.localPosition.x) || !float.IsFinite(passenger.localPosition.y))
                     throw new InvalidDataException("Checkpoint passenger is invalid.");
                 else
@@ -756,6 +771,7 @@ namespace Ferryman.Voyage
         private void OnDestroy()
         {
             CleanupVessel();
+            ClearExpedition();
         }
     }
 }

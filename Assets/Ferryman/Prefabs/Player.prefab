@@ -139,7 +139,7 @@ MonoBehaviour:
   aimVisual: {fileID: 5082876501279003187}
   damageSystem: {fileID: 0}
   muzzle: {fileID: 690258357062984658}
-  shotEffectPrefab: {fileID: 8280731793023676188, guid: 87ec343bc0e3b6d4591cff279f327e3f, type: 3}
+  shotEffectPrefab: {fileID: 0}
   shotFired:
     m_PersistentCalls:
       m_Calls: []
@@ -147,8 +147,6 @@ MonoBehaviour:
   meleeRange: 1.5
   meleeAngle: 90
   meleeCooldown: 0.5
-  meleeOutline: {fileID: 6701571558239714683}
-  meleeEffectPrefab: {fileID: 4182560539180930044, guid: 3a751be38e31cea4e83df0f05de51693, type: 3}
   meleeImpactEffectPrefab: {fileID: 5667738953813447188, guid: 9bbd514332db866448f4ae38565bec3a, type: 3}
   meleePerformed:
     m_PersistentCalls:

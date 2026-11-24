@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: DefaultVoyage
   m_EditorClassIdentifier: 
   id: prototype-route-v1
+  branchingRoutes: 1
   displayName: "\u8FD1\u6D77\u6446\u6E21\u822A\u7EBF"
   vesselPrefab: {fileID: 7173089943932599496, guid: 25c59fd46a9b0b84daac789e91482640, type: 3}
   stops:

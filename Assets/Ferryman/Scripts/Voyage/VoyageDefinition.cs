@@ -35,6 +35,7 @@ namespace Ferryman.Voyage
         public string id;
         public string displayName;
         public GameObject vesselPrefab;
+        public bool branchingRoutes;
         public VoyageStop[] stops = Array.Empty<VoyageStop>();
         public CrewDefinition[] initialPassengers = Array.Empty<CrewDefinition>();
         public CrewDefinition[] passengerPool = Array.Empty<CrewDefinition>();

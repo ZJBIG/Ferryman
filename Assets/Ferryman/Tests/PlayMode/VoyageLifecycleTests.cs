@@ -48,6 +48,7 @@ namespace Ferryman.Tests
             var source = Resources.Load<VoyageDefinition>("Voyage/DefaultVoyage");
             Assert.That(source, Is.Not.Null, "Default voyage resources have not been generated.");
             definition = Clone(source);
+            definition.branchingRoutes = false;
             definition.id = "lifecycle-" + Guid.NewGuid().ToString("N");
             definition.sailingSeconds = 0.08f;
             definition.transitionSeconds = 0.04f;
