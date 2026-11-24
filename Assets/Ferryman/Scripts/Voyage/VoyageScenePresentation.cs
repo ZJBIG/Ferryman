@@ -55,7 +55,8 @@ namespace Ferryman.Voyage
         {
             if (controller == null)
                 controller = FindObjectOfType<VoyageController>();
-            bool sailing = controller != null && controller.Phase == VoyagePhase.Sailing;
+            bool sailing = controller != null && (controller.Phase == VoyagePhase.Sailing
+                || controller.Phase == VoyagePhase.Event);
             if (sailingWake != null)
                 sailingWake.SetActive(sailing);
             if (seaMotion != null && sailing)

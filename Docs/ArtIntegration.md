@@ -1,6 +1,6 @@
 # 美术素材接入说明
 
-本说明对照《美术需求文档.docx》，记录完整 V0.1 原型的素材入口。`场景.zip` 的船只、海面、船浪、岛岸建筑、码头与岸浪，以及 `物品与维修.zip` 的炸弹、石块、障碍物、破损和维修条已接入。人物、武器及未交付特效仍通过现有挂点替换占位显示；正式 UI 素材与界面入口见下文。仓库首页提供试玩入口和简要开发说明，本文件记录具体的接入约定。
+本说明对照《美术需求文档.docx》，记录完整 V0.1 原型的素材入口。`场景.zip` 的船只、海面、船浪、岛岸建筑、码头与岸浪，`物品与维修.zip` 的炸弹、石块、障碍物、破损和维修条，以及 `特效.zip` 的战斗与维修提示均已接入。人物、武器及未交付特效可通过现有挂点替换显示。正式 UI 素材与界面入口见下文。
 
 ## 当前技术基线
 
@@ -17,13 +17,13 @@
 | 战斗/维护船员 | BoxCollider2D，0.45 × 0.7 | `Visual/Body`、`Weapon` 或 `Repair Tool` |
 | 敌人 | 根节点 PolygonCollider2D 对齐各自身体轮廓，排除水花和手持炸弹 | `Sea Monster`；枪口独立转向 |
 | 石块/障碍物 | BoxCollider2D，1.2 × 0.94 | `Visual`，平面缩放 1.25；碰撞尺寸覆盖最大外观 |
-| 子弹 | CircleCollider2D，半径 0.09 | `Visual`，当前局部缩放 0.18 |
+| 子弹 | CircleCollider2D，半径 0.09 | `Flight Direction/Visual`，所有射手统一使用长轨迹外观 |
 | 定时炸弹 | BoxCollider2D，1.22 × 1.17 | `Visual`，平面缩放 1.45；引信条位于 Y=0.68 |
-| 维修点 | 无碰撞器；默认甲板网格 1 单位 | `Visual`，平面缩放 3.08；原位置容得下完整破损时保留该位置 |
+| 维修点 | 无碰撞器；默认甲板网格 1 单位 | `Visual`，平面缩放 1.45；最大可见范围约 0.92 × 0.72，原位置容得下完整破损时保留该位置 |
 
 ## 预制体入口
 
-资源位于 `Assets/Ferryman/Prefabs`。15 个预制体的根节点缩放均为 1，显示与物理尺寸独立。Vessel 嵌套原 Boat 与 Player，素材替换保留现有 GUID 和序列化引用；main 与五个保留场景复用 `Environment/SeaEnvironment.prefab`。
+资源位于 `Assets/Ferryman/Prefabs`。预制体的根节点缩放均为 1，显示与物理尺寸独立。Vessel 嵌套原 Boat 与 Player，素材替换保留现有 GUID 和序列化引用；main 与五个保留场景复用 `Environment/SeaEnvironment.prefab`。
 
 | 预制体 | 接入位置 | 用法 |
 | --- | --- | --- |
@@ -33,18 +33,18 @@
 | `Crew/MaintenanceCrew.prefab` | `Visual/Body`、`Repair Tool` | 维护外观与工具；动画读取刚体速度和 IsRepairing |
 | `Vessel.prefab` | 嵌套 `Boat` / `Player` | 整船由航程控制进出场；行为期间不动画化根节点 |
 | 玩家、敌人 | `Visual/Muzzle` | 将挂点移至武器发射口；CombatCharacter 组件的 `Muzzle` 字段已绑定，随显示转向。未绑定时使用 `Muzzle Distance`，默认 0.75 |
-| `Projectile.prefab` | `Visual` | 放置飞弹、弹道、TrailRenderer 或飞行粒子；`Visual Root` 沿实际飞行方向旋转，根节点的圆形碰撞器保持独立 |
+| `Projectile.prefab` | `Flight Direction/Visual` | `Flight Direction` 沿飞行方向旋转，原画在 Visual 层转为本地 +X 朝前；根节点的圆形碰撞器保持独立 |
 | `Stone.prefab` | `Visual` | 替换障碍物显示时按最大可见外观核对根碰撞器尺寸和落地空间 |
 | `Boat.prefab` | `Hull Visual`、`Wing Left`、`Wing Right` | 分别显示原画船体和左右翅膀；旧 `Deck Surface` 占位层已删除，船舱与箱子为图中装饰 |
 | `Environment/SeaEnvironment.prefab` | `Sea Motion/Sea Surface -1..2`、`Sailing Wake` | 原海图交替镜像循环，上方镜像一排覆盖海战取景；船浪使用三帧 Animator |
 | `TimedBomb.prefab` | `Visual`、`Fuse Bar` | 替换炸弹与引信显示；`Fuse Fill` 指向横向填充挂点，倒计时缩放其 X 轴，清除/爆炸时随根移除 |
 | `RepairPoint.prefab` | `Visual`、`Progress Bar` | 固定损坏外观；进度条放在点上方，`Progress Fill` 指向横向填充挂点，维修时缩放其 X 轴 |
 
-`Aim Marker` 白色短线和 `Melee Outline` 橙色扇形是占位反馈。接入武器和挥击特效后，可在显示层停用短线，并清空玩家的 `Melee Outline` 引用。`Deck Boundary` 的 LineRenderer 已关闭，保留整个对象及闭合 EdgeCollider2D，不添加覆盖全甲板的实心碰撞。
+`Aim Marker` 白色短线用于持续显示瞄准方向。玩家配置的近战挥击图取代了 `Melee Outline` 橙色扇形，占位线仍用于未绑定挥击图的角色。`Deck Boundary` 的 LineRenderer 已关闭，保留整个对象及闭合 EdgeCollider2D。
 
 ## 物品与维修素材
 
-新包的 9 张独立图片均为静态外观，编号代表不同样式，不作为帧动画。`111维修示意.png` 对齐船体原画后，示例破损的可见范围约 310×262 船图像素，换算后采用 3.08 倍显示比例。原图画布与透明度保持交付内容，Pivot 对齐可见物品中心；物品使用 1800 PPU，破损和维修条使用 1000 PPU。
+新包的 9 张独立图片均为静态外观，编号代表不同样式，不作为帧动画。破损采用 1.45 倍显示比例，最大可见范围约 0.92 × 0.72 世界单位，与落地炸弹约 0.99 单位的最长边匹配。原图画布与透明度保持交付内容，Pivot 对齐可见物品中心；物品使用 1800 PPU，破损和维修条使用 1000 PPU。
 
 | 原包资源 | 项目资源 | 显示入口 |
 | --- | --- | --- |
@@ -58,6 +58,21 @@
 维修条保留 `Progress Bar → Fill → Visual`。Progress Bar 父层平面缩放 1.25，外框和填充一起放大，位于破损上方 Y=1.02。填充从内框左侧增长；100% 的不透明区域覆盖原画矩形 `(1090,920)–(2150,1082)`，父层缩放前的宽高基准为 `1.06 × 0.162`，略压入手绘黑边，Frame 绘制在 Fill 上方。Fill 的局部位置为 `(-0.385,-0.0125)`，素材宽高缩放 `1060/981`、`162/122` 放在其 Visual 子层，Fill 本身仅承载进度比例，避免运行时的 `(比例,1,1)` 覆盖素材高度。松键、中断和完成的显示规则沿用原实现。
 
 ## 动画与特效触发
+
+特效包的编号图每次触发随机选一张，实例存续期间保持所选外观。新增贴图位于 `Art/Effects`，一次性效果位于 `Prefabs/Effects`。受击、眩晕和炸弹警告复用 `Art/UI/Combat` 中已经接入的同款图片。
+
+| 素材 | 显示时机 |
+| --- | --- |
+| 攻击特效 1–3 | 玩家、战斗船员和射击敌人成功开火时，在枪口沿瞄准方向显示 0.10 秒 |
+| 子弹轨迹 | 所有射手固定使用 `ProjectileTrailLong`，沿飞行方向显示，保留阵营颜色；短轨迹素材保留供美术替换 |
+| 命中反馈 1–2 | 玩家飞踢命中非敌方实体（人物、石块、炸弹、船上实心物体），以及敌方子弹命中玩家或友军时，在接触位置显示 0.15 秒；敌人只使用原有红色受击反馈 |
+| 近战挥击 1–2 | 玩家执行近战时，在攻击方向显示 0.15 秒，挥空也显示 |
+| 受击 | 怪物实际受伤后，沿用航程界面在其身体可见像素上的红色提示；子弹和飞踢不再叠加黄色命中特效 |
+| 眩晕 | 玩家和友军眩晕时，显示在现有眩晕进度环内 |
+| 敌人死亡 | 敌人被击败后，在死亡位置独立显示 0.40 秒 |
+| 炸弹 | 落地后引信计时期间，显示在倒计时条旁 |
+| 炸弹被摧毁 | 近战清除炸弹时，在原落点独立显示烟雾 0.30 秒 |
+| 维修表现 | 在有人维修时显示在维修点进度条右侧，最后一位维修者离开或维修完成时隐藏 |
 
 以下 UnityEvent 可以在 Inspector 中绑定显示子物体的 `Animator.SetTrigger(string)` 或 `ParticleSystem.Play()`。事件不要求已有 Animator Controller；实际素材交付时再配置动画参数和过渡。
 
@@ -92,14 +107,15 @@
 
 | Inspector 字段 | 所在组件 | 行为 |
 | --- | --- | --- |
-| `Impact Effect Prefab` | `Projectile` | 命中敌对角色时在命中位置独立生成；目标眩晕免疫时仍生成。穿过边界、发起者、友军和石块时不生成 |
+| `Impact Effect Prefab` | `Projectile` | 敌方子弹命中玩家或友军时在命中位置独立生成；目标眩晕免疫时仍生成。敌人受伤使用原有红色反馈；穿过边界、发起者、同阵营角色和石块时不生成 |
+| `Melee Impact Effect Prefab` | `PlayerCharacter` | 飞踢命中非敌方实体时在接触位置独立生成，同一实体只触发一次；敌人使用原有红色受击反馈 |
 | `Death Effect Prefab` | `EnemyCharacter` | 生命归零时在敌人位置独立生成 |
 | `Cleared Effect Prefab` | `DestructibleObstacle` | 石块或炸弹被清除时在障碍物位置独立生成；同一对象只生成一次 |
 | `Explosion Effect Prefab` | `TimedBomb` | 引信爆炸时在炸弹位置独立生成；提前清除时不触发爆炸，不同时触发清除特效 |
 | `Completed Effect Prefab` | `RepairPoint` | 维修完成时独立生成，随后损坏点与进度条销毁 |
 | `Disembark Effect Prefab` | `Passenger` | 到站下船时独立生成，乘客行为与碰撞立即停用并销毁 |
 
-这些字段默认留空。特效实例位于场景中，不挂在即将销毁的对象下，使用特效预制体自身的播放设置。玩家近战踢中石块或炸弹时，立即关闭碰撞并移除逻辑对象，引信条随炸弹根节点移除。原 `Visual` 从根节点脱离，保留当次外观，沿远离玩家的方向旋转飞出相机视口后销毁。常规清理和引信爆炸沿用原来的独立表现入口。敌人死亡动画使用独立死亡特效预制体。
+命中、炸弹清除和敌人死亡使用独立的特效预制体，由 `SpriteEffect` 到时销毁。玩家近战踢中石块或炸弹时，立即关闭碰撞并移除逻辑对象，引信条随炸弹根节点移除。原 `Visual` 从根节点脱离，保留当次外观，沿远离玩家的方向旋转飞出相机视口后销毁。定时引爆的独立特效入口等待对应的爆炸素材。
 
 特效资源必须自行结束并清理：简单粒子设置 `Looping` 关闭、`Play On Awake` 开启、`Stop Action = Destroy`；动画特效由其完成回调清理。飞行特效作为子弹的显示子物体，在子弹消耗或 5 秒寿命结束时随之清理。
 
@@ -122,7 +138,7 @@ Departure、Sea、Island、FinalIsland 和 Prototype 保留为原区域演示与
 
 船浪与岸浪各使用 6 FPS 的三帧循环 Animator，这是交付包中的全部帧动画。main 的三站岸浪分别绑定同一岸浪 Controller；船体、翅膀、建筑和码头保持交付的静态图。船浪与船只共用世界原点；岛岸各图层共用局部位置 `(1.278,7.1)`，避免帧间抖动。单独替换岛屿地面时保持其与建筑、码头及岸浪的画布对齐。
 
-`VoyageScenePresentation` 的 Sea Motion、Sailing Wake 和 Scroll Loop Width 决定滚动、水花启停及循环宽度。航行时滚动、事件时停止。main 另外绑定 Island Stops，按路线 `sceneName` 匹配岛屿子节点；重复海路和不同路线长度不依赖固定站点索引。区域切换在过场遮罩期间重置海面位置和镜头。船只进出场由 Controller 的左入/右出整体平移和 Fade 驱动；演出期间暂停角色刚体模拟，结束恢复行为。正式动画保持显示与实际甲板位置一致，避免额外动画化船根造成双重位移。
+`VoyageScenePresentation` 的 Sea Motion、Sailing Wake 和 Scroll Loop Width 决定滚动、水花启停及循环宽度。每段海路事件前后各航行休整 5 秒，合计 10 秒；战斗、炸弹和落石期间游戏时间正常推进，海面继续滚动、船浪照常播放，角色保持行动。main 另外绑定 Island Stops，按路线 `sceneName` 匹配岛屿子节点；重复海路和不同路线长度不依赖固定站点索引。区域切换在过场遮罩期间重置海面位置和镜头。船只进出场由 Controller 的左入/右出整体平移和 Fade 驱动；演出期间暂停角色刚体模拟，结束恢复行为。正式动画保持显示与实际甲板位置一致，避免额外动画化船根造成双重位移。
 
 摄像机固定 X=2.306。main 岛屿区域 Y=3.3、Size=8.6，普通航行 Y=0、Size=6，两种战斗遭遇使用 `EncounterDefinition` 的 Y=3.5、Size=9.5。镜头平滑移到战斗取景后才生成首波，战斗结束恢复航行镜头。以 16:9 取景，船顶位于距画面底部约 59% 处，海怪位于上方 Y=8.5。投弹伏击的两个出生点间距为 4.4 单位。
 

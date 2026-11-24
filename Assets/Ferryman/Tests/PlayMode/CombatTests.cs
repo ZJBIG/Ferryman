@@ -54,6 +54,115 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
+        public IEnumerator KicksShowImpactOnSolidEntitiesAndEnemiesKeepOnlyRedFeedback()
+        {
+            var stone = FindStones()[0];
+            var bomb = Object.FindObjectsOfType<TimedBomb>(true).First();
+            var crewObject = new GameObject("Kick Feedback Crew");
+            var crew = crewObject.AddComponent<CrewMember>();
+            crew.Hitbox.isTrigger = false;
+            crew.gameObject.AddComponent<BoxCollider2D>().size = new Vector2(0.4f, 0.4f);
+            var solid = new GameObject("Kick Feedback Solid");
+            solid.AddComponent<BoxCollider2D>().size = new Vector2(0.5f, 0.5f);
+            var trigger = new GameObject("Kick Feedback Trigger");
+            trigger.AddComponent<BoxCollider2D>().isTrigger = true;
+            crewObject.SetActive(false);
+            solid.SetActive(false);
+            trigger.SetActive(false);
+            var impactField = typeof(PlayerCharacter).GetField("meleeImpactEffectPrefab", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(impactField, Is.Not.Null);
+            Assert.That(impactField.GetValue(player), Is.Not.Null, "The player has no kick impact prefab.");
+
+            foreach (var entity in new[] { stone.gameObject, bomb.gameObject, crewObject, solid, trigger })
+            {
+                entity.transform.position = Vector2.right;
+                entity.SetActive(true);
+                Physics2D.SyncTransforms();
+                Assert.That(player.TryMelee(Vector2.right), Is.True);
+                int expected = entity == trigger ? 0 : 1;
+                Assert.That(ImpactCount(), Is.EqualTo(expected), "Wrong impact count for " + entity.name);
+                entity.SetActive(false);
+                yield return new WaitForSeconds(0.55f);
+                Assert.That(ImpactCount(), Is.Zero, "Kick impact did not clean up.");
+            }
+
+            enemy.transform.position = Vector2.right;
+            Physics2D.SyncTransforms();
+            float health = enemy.Health;
+            Assert.That(player.TryMelee(Vector2.right), Is.True);
+            Assert.That(enemy.Health, Is.LessThan(health));
+            Assert.That(ImpactCount(), Is.Zero, "Melee added yellow feedback to an enemy.");
+            var feedback = typeof(EnemyCharacter).GetMethod("TryGetHitFeedbackPosition", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(feedback.Invoke(enemy, new object[] { Vector3.zero }), Is.True);
+            var shot = FireFrom(player, enemy.transform.position, Vector2.up, 1f);
+            yield return WaitFor(() => shot == null, 0.3f, "The projectile did not hit the enemy.");
+            Assert.That(ImpactCount(), Is.Zero, "Projectile added yellow feedback to an enemy.");
+            Object.Destroy(crewObject);
+            Object.Destroy(solid);
+            Object.Destroy(trigger);
+        }
+
+        private static int ImpactCount()
+        {
+            return Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name == "ProjectileImpact(Clone)");
+        }
+
+        [UnityTest]
+        public IEnumerator BombPushesPlayerAndCrewWithoutStunOrCharacterDamage()
+        {
+            var profile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner");
+            var crew = (CombatCrewMember)Object.Instantiate(profile.prefab, new Vector2(1.5f, 0f), Quaternion.identity);
+            crew.InitializeCrew(player.BoatHealth, damageSystem, player.ProjectilePrefab, profile);
+            var bomb = Object.FindObjectsOfType<TimedBomb>(true).First();
+            bomb.transform.position = new Vector2(0.75f, 0f);
+            bomb.BindBoat(player.BoatHealth);
+            bomb.gameObject.SetActive(true);
+            player.enabled = true;
+            Physics2D.SyncTransforms();
+            int received = 0;
+            damageSystem.DamageReceived.AddListener((source, target, amount) => received++);
+
+            player.BoatHealth.ApplyDamage(100f, new Vector2(-0.5f, 0f));
+            Assert.That(player.TryRepair(0f), Is.True);
+
+            Assert.That(bomb.Explode(), Is.True);
+            Assert.That(bomb.Explode(), Is.False);
+            Assert.That(player.IsRepairing, Is.False, "Bomb knockback did not interrupt repair.");
+            yield return new WaitForSeconds(0.12f);
+            Assert.That(player.transform.position.x, Is.LessThan(-0.2f));
+            Assert.That(crew.transform.position.x, Is.GreaterThan(1.7f));
+            Assert.That(player.IsStunned || crew.IsStunned, Is.False);
+            Assert.That(player.Health, Is.EqualTo(100f));
+            Assert.That(crew.Health, Is.EqualTo(100f));
+            Assert.That(received, Is.Zero);
+            Assert.That(player.BoatHealth.CurrentHealth, Is.EqualTo(800f));
+            Assert.That(player.TryFire(Vector2.up), Is.True, "Bomb knockback blocked attacks.");
+        }
+
+        [UnityTest]
+        public IEnumerator FlyingKickPushesCrewOnceWithoutStunAndStopsAtDeckEdge()
+        {
+            var profile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner");
+            player.GetComponent<Rigidbody2D>().position = new Vector2(0f, 1f);
+            player.transform.position = player.GetComponent<Rigidbody2D>().position;
+            var crew = (CombatCrewMember)Object.Instantiate(profile.prefab, new Vector2(0f, 2f), Quaternion.identity);
+            crew.InitializeCrew(player.BoatHealth, damageSystem, player.ProjectilePrefab, profile);
+            crew.gameObject.AddComponent<CircleCollider2D>().isTrigger = true;
+            Physics2D.SyncTransforms();
+            Assert.That(player.TryMelee(Vector2.up), Is.True);
+            yield return new WaitForSeconds(0.35f);
+            Assert.That(crew.transform.position.y, Is.GreaterThan(2.1f));
+            Assert.That(crew.IsStunned, Is.False);
+            Assert.That(crew.Health, Is.EqualTo(100f));
+            Assert.That(player.MovementDeck.HasClearFloor(crew.Hitbox.bounds.center,
+                (Vector2)crew.Hitbox.bounds.size - Vector2.one * 0.04f), Is.True,
+                "Knockback pushed crew through the deck boundary.");
+            crew.enabled = false;
+            yield return new WaitForSeconds(profile.fireInterval);
+            Assert.That(crew.TryFire(Vector2.up), Is.True);
+        }
+
+        [UnityTest]
         public IEnumerator ProjectileCrossesDeckFiltersAlliesAndAppliesEachHitOnce()
         {
             Bounds deckBounds = player.MovementDeck.GetComponent<EdgeCollider2D>().bounds;

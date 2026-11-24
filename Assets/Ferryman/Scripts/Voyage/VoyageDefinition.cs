@@ -42,7 +42,7 @@ namespace Ferryman.Voyage
         public SpecialEventEntry[] specialEvents = Array.Empty<SpecialEventEntry>();
         [Min(0)] public int enemyEncounterCount = 1;
         [Min(0)] public int specialEventCount = 1;
-        [Min(0.01f)] public float sailingSeconds = 6f;
+        [Min(0.01f)] public float sailingSeconds = 10f;
         [Min(0.01f)] public float transitionSeconds = 0.8f;
         [Min(0.01f)] public float boardingNoticeSeconds = 3f;
     }

@@ -10,6 +10,8 @@ namespace Ferryman.Characters
     {
         private BoatHealth boat;
         private Rigidbody2D body;
+        private bool hasTarget;
+        private float wanderSpeed;
 
         protected override bool CanAct => base.CanAct && boat != null && !boat.IsDestroyed;
 
@@ -30,6 +32,7 @@ namespace Ferryman.Characters
                 throw new InvalidOperationException("Combat crew is already assigned to a boat.");
 
             boat = owner;
+            wanderSpeed = Mathf.Max(0.1f, definition.moveSpeed) * 0.5f;
             ConfigureCombat(system, projectile, definition.attackPower, definition.fireInterval);
             boat.Destroyed.AddListener(StopMovement);
         }
@@ -37,7 +40,10 @@ namespace Ferryman.Characters
         private void Update()
         {
             if (!CanAct)
+            {
+                hasTarget = false;
                 return;
+            }
 
             Character target = null;
             float nearest = float.PositiveInfinity;
@@ -52,7 +58,8 @@ namespace Ferryman.Characters
                 target = candidate;
                 nearest = distance;
             }
-            if (target != null)
+            hasTarget = target != null;
+            if (hasTarget)
             {
                 Face((Vector2)target.transform.position - body.position);
                 TryFire((Vector2)target.transform.position - body.position);
@@ -61,7 +68,7 @@ namespace Ferryman.Characters
 
         private void FixedUpdate()
         {
-            StopMovement();
+            MoveBody(hasTarget ? Vector2.zero : Wander(boat != null ? boat.Deck : null, wanderSpeed));
         }
 
         private void StopMovement()

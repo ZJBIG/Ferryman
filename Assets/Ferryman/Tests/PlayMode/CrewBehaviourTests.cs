@@ -42,6 +42,7 @@ namespace Ferryman.Tests
             foreach (var projectile in Object.FindObjectsOfType<Projectile>())
                 Object.Destroy(projectile.gameObject);
             player.enabled = false;
+            player.GetComponent<Rigidbody2D>().interpolation = RigidbodyInterpolation2D.None;
             player.GetComponent<Rigidbody2D>().position = new Vector2(5.4f, -0.8f);
             player.Move(Vector2.zero);
             Physics2D.SyncTransforms();
@@ -55,6 +56,58 @@ namespace Ferryman.Tests
             foreach (var definition in definitions)
                 Object.DestroyImmediate(definition);
             definitions.Clear();
+        }
+
+        [UnityTest]
+        public IEnumerator IdleCrewWanderInsideDeckAndStopWhenActionsAreDisabled()
+        {
+            foreach (var actor in Object.FindObjectsOfType<EnemyCharacter>())
+                actor.gameObject.SetActive(false);
+            var profile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner");
+            var fighter = (CombatCrewMember)Object.Instantiate(profile.prefab, Vector2.zero, Quaternion.identity);
+            fighter.InitializeCrew(boat, player.DamageSystem, player.ProjectilePrefab, profile);
+            var mechanic = CreateMaintenance(new Vector2(2f, 0f), 2f, 10f, 1);
+            Vector2 fighterStart = fighter.transform.position;
+            Vector2 mechanicStart = mechanic.transform.position;
+            float until = Time.realtimeSinceStartup + 3f;
+            bool fighterMoved = false;
+            bool mechanicMoved = false;
+            while ((!fighterMoved || !mechanicMoved) && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+                fighterMoved |= Vector2.Distance(fighter.transform.position, fighterStart) > 0.25f;
+                mechanicMoved |= Vector2.Distance(mechanic.transform.position, mechanicStart) > 0.25f;
+                foreach (var actor in new Character[] { fighter, mechanic })
+                    Assert.That(boat.Deck.HasClearFloor(actor.Hitbox.bounds.center,
+                        (Vector2)actor.Hitbox.bounds.size - Vector2.one * 0.04f), Is.True);
+            }
+            Assert.That(fighterMoved && mechanicMoved, Is.True, "Idle crew did not wander.");
+            fighter.SetActionsAllowed(false);
+            mechanic.SetActionsAllowed(false);
+            Vector2 fighterStopped = fighter.transform.position;
+            Vector2 mechanicStopped = mechanic.transform.position;
+            yield return new WaitForSeconds(0.1f);
+            Assert.That((Vector2)fighter.transform.position, Is.EqualTo(fighterStopped));
+            Assert.That((Vector2)mechanic.transform.position, Is.EqualTo(mechanicStopped));
+        }
+
+        [UnityTest]
+        public IEnumerator KnockbackInterruptsMaintenanceAndResumesWithoutStun()
+        {
+            boat.ApplyDamage(100f, Vector2.zero);
+            RepairPoint point = boat.RepairPoints.Single();
+            var mechanic = CreateMaintenance(new Vector2(0.8f, 0f), 2f, 10f, 1);
+            yield return WaitFor(() => mechanic.IsRepairing, 1f, "Maintenance crew did not begin repair.");
+            float progress = point.Progress;
+            Vector2 position = mechanic.transform.position;
+            Assert.That(mechanic.TryKnockBack(Vector2.right * 8f), Is.True);
+            Assert.That(mechanic.IsRepairing || point.IsBeingRepaired || mechanic.IsStunned, Is.False);
+            yield return new WaitForSeconds(0.12f);
+            Assert.That(point.Progress, Is.EqualTo(progress));
+            Assert.That(mechanic.transform.position.x, Is.GreaterThan(position.x + 0.2f));
+            yield return WaitFor(() => point.Progress > progress, 2f, "Maintenance did not resume after knockback.");
+            Assert.That(mechanic.IsStunned, Is.False);
+            Assert.That(mechanic.Health, Is.EqualTo(100f));
         }
 
         [UnityTest]
@@ -113,6 +166,7 @@ namespace Ferryman.Tests
             var selectTarget = typeof(EnemyCharacter).GetMethod("SelectTarget", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(selectTarget.Invoke(enemy, null), Is.SameAs(crew));
             playerBody.position = new Vector2(3f, 2f);
+            player.transform.position = playerBody.position;
             Physics2D.SyncTransforms();
             Assert.That(selectTarget.Invoke(enemy, null), Is.SameAs(player));
             Assert.That(selectTarget.Invoke(hunter, null), Is.SameAs(crew));

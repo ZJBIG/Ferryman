@@ -56,9 +56,10 @@ namespace Ferryman.Characters
 
         private void Update()
         {
-            if (!CanAct)
+            if (!CanAct || IsKnockedBack)
             {
-                PauseContributions();
+                if (!IsKnockedBack)
+                    PauseContributions();
                 return;
             }
             if (working)
@@ -84,9 +85,14 @@ namespace Ferryman.Characters
 
         private void FixedUpdate()
         {
+            if (CanAct && !working && target == null)
+            {
+                MoveBody(Wander(boat.Deck, moveSpeed * 0.5f));
+                return;
+            }
             if (!CanAct || working || target == null || target.IsComplete || !target.isActiveAndEnabled || path.Count == 0)
             {
-                body.velocity = Vector2.zero;
+                MoveBody(Vector2.zero);
                 return;
             }
 
@@ -99,12 +105,12 @@ namespace Ferryman.Characters
                     continue;
                 pathIndex = i;
                 routeBlocked = false;
-                body.velocity = delta.normalized * Mathf.Min(moveSpeed, delta.magnitude / Time.fixedDeltaTime);
+                MoveBody(delta.normalized * Mathf.Min(moveSpeed, delta.magnitude / Time.fixedDeltaTime));
                 return;
             }
 
             routeBlocked = true;
-            body.velocity = Vector2.zero;
+            MoveBody(Vector2.zero);
         }
 
         private void FindWork()
@@ -253,6 +259,14 @@ namespace Ferryman.Characters
             if (!base.TryReceiveDamage(damage))
                 return false;
             PauseContributions();
+            return true;
+        }
+
+        public override bool TryKnockBack(Vector2 velocity)
+        {
+            if (!CanAct || !base.TryKnockBack(velocity))
+                return false;
+            StopWork();
             return true;
         }
 

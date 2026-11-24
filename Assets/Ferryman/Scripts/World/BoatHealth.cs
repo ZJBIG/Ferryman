@@ -9,7 +9,7 @@ namespace Ferryman.World
 {
     public sealed class BoatHealth : MonoBehaviour
     {
-        private static readonly Vector2 RepairArtworkSize = new Vector2(1.96f, 1.54f);
+        private static readonly Vector2 RepairArtworkSize = new Vector2(0.92f, 0.72f);
 
         [Serializable]
         public sealed class State

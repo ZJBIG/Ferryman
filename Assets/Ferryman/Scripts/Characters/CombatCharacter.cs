@@ -15,6 +15,7 @@ namespace Ferryman.Characters
         [SerializeField] private DamageSystem damageSystem;
         [Header("Weapon Presentation")]
         [SerializeField] private Transform muzzle;
+        [SerializeField] private GameObject shotEffectPrefab;
         [SerializeField] private UnityEvent shotFired = new UnityEvent();
 
         private float nextFireAt;
@@ -25,6 +26,7 @@ namespace Ferryman.Characters
         public DamageSystem DamageSystem => damageSystem;
         protected float FireInterval => fireInterval;
         protected Vector2 AimDirection { get; private set; } = Vector2.right;
+        protected Quaternion AimRotation { get; private set; } = Quaternion.identity;
 
         public void ConfigureCombat(DamageSystem system, Projectile projectile, float power, float interval)
         {
@@ -40,9 +42,9 @@ namespace Ferryman.Characters
                 return;
 
             AimDirection = direction.normalized;
+            AimRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(AimDirection.y, AimDirection.x) * Mathf.Rad2Deg);
             if (aimVisual != null)
-                aimVisual.rotation = Quaternion.Euler(0f, 0f,
-                    Mathf.Atan2(AimDirection.y, AimDirection.x) * Mathf.Rad2Deg);
+                aimVisual.rotation = AimRotation;
         }
 
         public virtual bool TryFire(Vector2 direction)
@@ -57,6 +59,8 @@ namespace Ferryman.Characters
                 : (Vector2)transform.position + AimDirection * muzzleDistance;
             var projectile = Instantiate(projectilePrefab, origin, Quaternion.identity);
             projectile.Launch(AimDirection, AttackPower, this, damageSystem);
+            if (shotEffectPrefab != null)
+                Instantiate(shotEffectPrefab, origin, AimRotation);
             shotFired.Invoke();
             return true;
         }

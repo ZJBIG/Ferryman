@@ -131,7 +131,7 @@ MonoBehaviour:
   appearances:
   - {fileID: 21300000, guid: b1b284655ccb2c34e82e4a85867c7b39, type: 3}
   - {fileID: 21300000, guid: 3bf2d93846dfb104eb03653e86e7dcb1, type: 3}
-  clearedEffectPrefab: {fileID: 0}
+  clearedEffectPrefab: {fileID: 6458569554103875810, guid: d6120156465d40347ab8cd7eb4b851bb, type: 3}
 --- !u!114 &853591217009229110
 MonoBehaviour:
   m_ObjectHideFlags: 0

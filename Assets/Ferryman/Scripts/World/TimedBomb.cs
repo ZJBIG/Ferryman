@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Ferryman.Characters;
 using UnityEngine;
 
 namespace Ferryman.World
@@ -73,6 +75,16 @@ namespace Ferryman.World
             if (IsInFlight || !obstacle.Remove(false))
                 return false;
 
+            var pushed = new HashSet<Character>();
+            Vector2 origin = transform.position;
+            foreach (var hit in Physics2D.OverlapCircleAll(origin, 1.6f))
+            {
+                var character = hit.GetComponentInParent<Character>();
+                if (character == null || character.IsHostile || !pushed.Add(character))
+                    continue;
+                Vector2 away = (Vector2)character.transform.position - origin;
+                character.TryKnockBack((away.sqrMagnitude > 0.0001f ? away.normalized : Vector2.up) * 8f);
+            }
             if (targetBoat != null)
                 targetBoat.ApplyDamage(damage, transform.position);
             if (explosionEffectPrefab != null)

@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using Ferryman.World;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -19,6 +21,14 @@ namespace Ferryman.Characters
         private Color originalColor;
         private Coroutine feedback;
         private bool actionsEnabled = true;
+        private Rigidbody2D movementBody;
+        private Vector2 knockbackVelocity;
+        private float knockbackUntil;
+        private const float KnockbackSeconds = 0.25f;
+        private Vector2 wanderTarget;
+        private bool wandering;
+        private float nextWanderAt;
+        private readonly List<RaycastHit2D> wanderHits = new List<RaycastHit2D>();
         private static Character[] sceneCharacters;
         private static int sceneCharactersFrame = -1;
 
@@ -39,6 +49,63 @@ namespace Ferryman.Characters
         public bool ActionsEnabled => actionsEnabled;
         public virtual bool IsHostile => false;
         protected virtual bool CanAct => actionsEnabled && !IsStunned && (!IsHostile || Health > 0f);
+        protected bool IsKnockedBack => Time.time < knockbackUntil;
+
+        public virtual bool TryKnockBack(Vector2 velocity)
+        {
+            if (!ActionsEnabled || movementBody == null || !movementBody.simulated || velocity.sqrMagnitude <= 0f)
+                return false;
+            knockbackVelocity = velocity;
+            knockbackUntil = Time.time + KnockbackSeconds;
+            wandering = false;
+            return true;
+        }
+
+        protected void MoveBody(Vector2 velocity)
+        {
+            if (!ActionsEnabled)
+            {
+                movementBody.velocity = Vector2.zero;
+                return;
+            }
+            Vector2 push = knockbackVelocity * Mathf.Clamp01((knockbackUntil - Time.time) / KnockbackSeconds);
+            movementBody.velocity = (CanAct ? velocity : Vector2.zero) + push;
+        }
+
+        protected Vector2 Wander(BoatDeck deck, float speed)
+        {
+            if (!CanAct || IsKnockedBack || deck == null || Time.time < nextWanderAt)
+                return Vector2.zero;
+            if (!wandering)
+            {
+                Vector2Int grid = deck.GridSize;
+                for (int attempt = 0; attempt < 12; attempt++)
+                {
+                    Vector2 candidate = deck.CellToWorld(new Vector2Int(Random.Range(0, grid.x), Random.Range(0, grid.y)));
+                    Vector2 delta = candidate - movementBody.position;
+                    if (delta.magnitude < 0.5f || !deck.CanPlace(candidate, (Vector2)hitbox.bounds.size + Vector2.one * 0.04f, hitbox)
+                        || hitbox.Cast(delta.normalized, new ContactFilter2D { useTriggers = false }, wanderHits, delta.magnitude) > 0)
+                        continue;
+                    wanderTarget = candidate;
+                    wandering = true;
+                    break;
+                }
+                if (!wandering)
+                {
+                    nextWanderAt = Time.time + 0.5f;
+                    return Vector2.zero;
+                }
+            }
+            Vector2 offset = wanderTarget - movementBody.position;
+            if (offset.magnitude <= 0.08f
+                || hitbox.Cast(offset.normalized, new ContactFilter2D { useTriggers = false }, wanderHits, offset.magnitude) > 0)
+            {
+                wandering = false;
+                nextWanderAt = Time.time + Random.Range(0.5f, 1.5f);
+                return Vector2.zero;
+            }
+            return offset.normalized * Mathf.Min(speed, offset.magnitude / Time.fixedDeltaTime);
+        }
 
         protected static Character[] SceneCharacters
         {
@@ -66,6 +133,8 @@ namespace Ferryman.Characters
             actionsEnabled = allowed;
             if (!allowed)
             {
+                knockbackUntil = 0f;
+                wandering = false;
                 var body = GetComponent<Rigidbody2D>();
                 if (body != null)
                     body.velocity = Vector2.zero;
@@ -75,6 +144,7 @@ namespace Ferryman.Characters
         protected virtual void Awake()
         {
             MaxHealth = health;
+            movementBody = GetComponent<Rigidbody2D>();
             if (hitbox == null)
                 hitbox = GetComponent<Collider2D>();
             if (visual == null)
@@ -89,6 +159,7 @@ namespace Ferryman.Characters
                 return false;
 
             stunnedUntil = Time.time + stunDuration;
+            knockbackUntil = 0f;
             var body = GetComponent<Rigidbody2D>();
             if (body != null)
                 body.velocity = Vector2.zero;
@@ -118,6 +189,8 @@ namespace Ferryman.Characters
 
         protected virtual void OnDisable()
         {
+            knockbackUntil = 0f;
+            wandering = false;
             if (feedback != null)
                 StopCoroutine(feedback);
             feedback = null;

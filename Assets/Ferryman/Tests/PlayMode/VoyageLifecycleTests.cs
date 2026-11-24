@@ -135,7 +135,37 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
-        public IEnumerator WavesPauseVoyagePassengersBoardAndSuccessfulSettlementReturnsToAFullShip()
+        public IEnumerator SeaRestIsSplitEvenlyAndFallingBombsKeepSailing()
+        {
+            definition.sailingSeconds = 0.4f;
+            definition.enemyEncounterCount = 0;
+            definition.stops[1].fixedEncounter = null;
+            definition.stops[1].fixedSpecialEvent = special;
+            definition.stops[3].fixedSpecialEvent = null;
+            special.obstaclePrefab = Resources.Load<SeaEventDefinition>("Voyage/Events/DriftingBombs").obstaclePrefab;
+            special.obstacleCount = 1;
+            Assert.That(controller.StartVoyage(escort, 104), Is.True);
+            yield return WaitFor(() => controller.StopIndex == 1 && controller.Phase == VoyagePhase.Sailing,
+                "rest before the bomb event");
+            float remaining = controller.SailingRemaining;
+            Assert.That(remaining, Is.InRange(0.1f, 0.2f));
+            float started = Time.time;
+            yield return WaitFor(() => AtEvent(1), "bomb event after rest");
+            Assert.That(Time.time - started, Is.GreaterThanOrEqualTo(remaining - Time.deltaTime));
+            yield return AssertEventKeepsSailing(1);
+            var bomb = Object.FindObjectOfType<TimedBomb>();
+            yield return WaitFor(() => !bomb.IsInFlight, "bomb landing");
+            bomb.GetComponent<DestructibleObstacle>().Clear();
+            yield return WaitFor(() => controller.Phase == VoyagePhase.Sailing, "rest after the bomb event");
+            remaining = controller.SailingRemaining;
+            Assert.That(remaining, Is.InRange(0.1f, 0.2f));
+            started = Time.time;
+            yield return WaitFor(() => controller.Phase == VoyagePhase.Leaving, "leaving after rest");
+            Assert.That(Time.time - started, Is.GreaterThanOrEqualTo(remaining - Time.deltaTime));
+        }
+
+        [UnityTest]
+        public IEnumerator WavesKeepSailingPassengersBoardAndSuccessfulSettlementReturnsToAFullShip()
         {
             Assert.That(controller.StartVoyage(escort, 104), Is.True);
             QuiesceActors();
@@ -167,7 +197,7 @@ namespace Ferryman.Tests
                 Assert.That(stone.IsCleared, Is.False);
             }
             float initialY = stones[0].transform.position.y;
-            yield return AssertEventPaused(3);
+            yield return AssertEventKeepsSailing(3);
             Assert.That(stones[0].transform.position.y, Is.LessThan(initialY));
             yield return WaitFor(() => stones.All(stone => !stone.IsInFlight), "special event objects landed");
             foreach (var stone in stones)
@@ -354,7 +384,7 @@ namespace Ferryman.Tests
             yield return WaitFor(() => AtEvent(stop) && controller.WaveIndex == 0 && LiveEnemies().Length == 2,
                 "first wave at stop " + stop);
             RewardData before = controller.PendingReward;
-            yield return AssertEventPaused(stop);
+            yield return AssertEventKeepsSailing(stop);
             Kill(LiveEnemies()[0]);
             yield return null;
             QuiesceActors();
@@ -371,18 +401,30 @@ namespace Ferryman.Tests
             Assert.That(controller.PendingReward.specialItems, Is.EqualTo(before.specialItems + encounter.reward.specialItems));
         }
 
-        private IEnumerator AssertEventPaused(int stop)
+        private IEnumerator AssertEventKeepsSailing(int stop)
         {
             QuiesceActors();
             Transform motion = GameObject.Find("Environment/Sea Motion")?.transform;
             Assert.That(motion, Is.Not.Null);
             Vector3 position = motion.localPosition;
             float remaining = controller.SailingRemaining;
+            float started = Time.time;
+            float timeScale = Time.timeScale;
             yield return new WaitForSeconds(0.12f);
             QuiesceActors();
             Assert.That(AtEvent(stop), Is.True, "The voyage advanced while an event was unresolved.");
             Assert.That(controller.SailingRemaining, Is.EqualTo(remaining));
-            Assert.That(motion.localPosition, Is.EqualTo(position), "The sea kept scrolling during an event.");
+            Assert.That(Time.time, Is.GreaterThan(started), "An event paused game time.");
+            Assert.That(Time.timeScale, Is.EqualTo(timeScale));
+            Assert.That(motion.localPosition.x, Is.LessThan(position.x), "A sea event stopped sailing.");
+            var wake = motion.parent.Find("Sailing Wake");
+            Assert.That(wake.gameObject.activeSelf, Is.True);
+            Assert.That(wake.GetComponent<Animator>().enabled, Is.True);
+            foreach (var actor in controller.Vessel.GetComponentsInChildren<Character>())
+            {
+                Assert.That(actor.ActionsEnabled, Is.True);
+                Assert.That(actor.GetComponent<Rigidbody2D>().simulated, Is.True);
+            }
         }
 
         private void AssertRestored(VoyageCheckpoint saved)

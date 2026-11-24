@@ -10,6 +10,7 @@ namespace Ferryman.World
         [SerializeField] private Sprite[] appearances;
         [SerializeField] private GameObject progressBar;
         [SerializeField] private Transform progressFill;
+        [SerializeField] private GameObject repairEffect;
         [SerializeField] private GameObject completedEffectPrefab;
         [SerializeField] private UnityEvent repairStarted = new UnityEvent();
         [SerializeField] private UnityEvent repairStopped = new UnityEvent();
@@ -101,6 +102,8 @@ namespace Ferryman.World
 
         private void UpdateProgressBar()
         {
+            if (repairEffect != null)
+                repairEffect.SetActive(IsBeingRepaired);
             if (progressBar != null)
                 progressBar.SetActive(IsBeingRepaired);
             if (progressFill != null)

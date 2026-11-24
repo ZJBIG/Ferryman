@@ -102,7 +102,7 @@ namespace Ferryman.Tests
             Assert.That(boat.RepairPoints.All(point => boat.Deck.ContainsCell(point.Cell)), Is.True);
             Assert.That(boat.RepairPoints.Count(point => BoatDeck.CellDistance(origin, point.Cell) == 1), Is.EqualTo(8));
             Assert.That(boat.RepairPoints.Max(point => BoatDeck.CellDistance(origin, point.Cell)), Is.EqualTo(2));
-            Assert.That(boat.RepairPoints.All(point => boat.Deck.HasClearFloor(point.transform.position, new Vector2(1.96f, 1.54f))), Is.True);
+            Assert.That(boat.RepairPoints.All(point => boat.Deck.HasClearFloor(point.transform.position, new Vector2(0.92f, 0.72f))), Is.True);
             Assert.That(player.IsRepairing, Is.False);
             Assert.That(boat.RepairPoints.All(point => !point.IsBeingRepaired), Is.True);
             Assert.That(replacement.BeginRepair(player), Is.False);
@@ -330,7 +330,7 @@ namespace Ferryman.Tests
             Assert.That(deck.ContainsFloor(deck.transform.TransformPoint(legacy.localPosition)), Is.False);
             boat.RestoreState(checkpoint);
             var relocated = boat.RepairPoints.Single(item => item.Progress == 15f);
-            Assert.That(deck.HasClearFloor(relocated.transform.position, new Vector2(1.96f, 1.54f)), Is.True);
+            Assert.That(deck.HasClearFloor(relocated.transform.position, new Vector2(0.92f, 0.72f)), Is.True);
         }
 
         private RepairPoint DamageCell(Vector2Int cell)

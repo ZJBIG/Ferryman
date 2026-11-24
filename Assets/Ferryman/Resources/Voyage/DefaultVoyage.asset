@@ -70,6 +70,6 @@ MonoBehaviour:
     maxAppearances: 1
   enemyEncounterCount: 1
   specialEventCount: 1
-  sailingSeconds: 8
+  sailingSeconds: 10
   transitionSeconds: 1
   boardingNoticeSeconds: 3

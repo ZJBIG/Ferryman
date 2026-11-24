@@ -45,7 +45,7 @@ namespace Ferryman.Editor
             CheckAppearances(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/TimedBomb.prefab").GetComponent<DestructibleObstacle>(),
                 1.45f, "Items/BombRound", "Items/BombDynamite");
             var repairArt = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/RepairPoint.prefab");
-            CheckAppearances(repairArt.GetComponent<RepairPoint>(), 3.08f, "Repair/HoleSplinter", "Repair/HoleWide");
+            CheckAppearances(repairArt.GetComponent<RepairPoint>(), 1.45f, "Repair/HoleSplinter", "Repair/HoleWide");
             var repairFields = new SerializedObject(repairArt.GetComponent<RepairPoint>());
             var bar = (GameObject)repairFields.FindProperty("progressBar").objectReferenceValue;
             var fill = (Transform)repairFields.FindProperty("progressFill").objectReferenceValue;
@@ -63,6 +63,7 @@ namespace Ferryman.Editor
                 "Repair fill does not cover the drawn inner frame from its left edge.");
             VoyageDefinition definition = AssetDatabase.LoadAssetAtPath<VoyageDefinition>(Root + "Resources/Voyage/DefaultVoyage.asset");
             Require(definition != null && definition.stops.Length == 5, "Default voyage is absent or its route differs.");
+            Require(definition.sailingSeconds == 10f, "Sea legs must allow five seconds of rest before and after events.");
             var uiArt = AssetDatabase.LoadAssetAtPath<VoyageUIArt>(Root + "Art/UI/VoyageUI.asset");
             Require(uiArt != null && uiArt.stunFill != null && uiArt.stunFill.isReadable, "UI art or readable stun mask is absent.");
             foreach (var field in typeof(VoyageUIArt).GetFields())
@@ -72,6 +73,9 @@ namespace Ferryman.Editor
             Require(vessel.Player.MovementDeck == vessel.Boat.Deck && vessel.Player.BoatHealth == vessel.Boat
                 && vessel.Player.DamageSystem == vessel.DamageSystem, "Vessel/player combat or deck bindings differ.");
             Require(vessel.Player.ProjectilePrefab != null, "Player weapon has no projectile.");
+            Require(new SerializedObject(vessel.Player).FindProperty("meleeImpactEffectPrefab").objectReferenceValue
+                == AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Effects/ProjectileImpact.prefab"),
+                "Player kick impact is not bound to the supplied hit effect.");
             BoatDeck deck = vessel.Boat.Deck;
             Require(deck.GridSize == new Vector2Int(15, 5)
                 && deck.WorldToCell(deck.transform.TransformPoint(new Vector2(6f, 0f))) == new Vector2Int(11, 2)

@@ -14,6 +14,8 @@ namespace Ferryman.Characters
         [SerializeField, Range(0f, 360f)] private float meleeAngle = 90f;
         [SerializeField, Min(0.01f)] private float meleeCooldown = 0.5f;
         [SerializeField] private LineRenderer meleeOutline;
+        [SerializeField] private GameObject meleeEffectPrefab;
+        [SerializeField] private GameObject meleeImpactEffectPrefab;
         [SerializeField] private UnityEvent meleePerformed = new UnityEvent();
         [Header("Repair")]
         [SerializeField] private BoatHealth boatHealth;
@@ -94,7 +96,7 @@ namespace Ferryman.Characters
         {
             if (direction.sqrMagnitude > 0f)
                 StopRepairing();
-            body.velocity = CanAct ? Vector2.ClampMagnitude(direction, 1f) * MoveSpeed : Vector2.zero;
+            MoveBody(Vector2.ClampMagnitude(direction, 1f) * MoveSpeed);
         }
 
         public override bool TryFire(Vector2 direction)
@@ -133,30 +135,44 @@ namespace Ferryman.Characters
             Camera kickCamera = aimCamera != null ? aimCamera : Camera.main;
             foreach (var hit in hits)
             {
+                var character = hit.GetComponentInParent<Character>();
                 var obstacle = hit.GetComponentInParent<DestructibleObstacle>();
+                if (character == this || hit.isTrigger && character == null && obstacle == null)
+                    continue;
+                Object entity = obstacle != null ? (Object)obstacle : character != null ? character : hit.gameObject;
+                if (!struck.Add(entity))
+                    continue;
+                Vector2 contact = hit.ClosestPoint(origin);
                 if (obstacle != null)
                 {
-                    if (struck.Add(obstacle))
-                    {
-                        Vector2 away = (Vector2)obstacle.transform.position - origin;
-                        obstacle.Kick(away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection, kickCamera);
-                    }
-                    continue;
+                    Vector2 away = (Vector2)obstacle.transform.position - origin;
+                    obstacle.Kick(away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection, kickCamera);
                 }
-
-                var character = hit.GetComponentInParent<Character>();
-                if (character != null && struck.Add(character))
-                    DamageSystem.ApplyDamage(this, character, AttackPower);
+                else if (character != null)
+                {
+                    if (!character.IsHostile)
+                    {
+                        Vector2 away = (Vector2)character.transform.position - origin;
+                        character.TryKnockBack((away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection) * 8f);
+                    }
+                    else
+                        DamageSystem.ApplyDamage(this, character, AttackPower);
+                }
+                if (meleeImpactEffectPrefab != null && (character == null || !character.IsHostile))
+                    Instantiate(meleeImpactEffectPrefab, contact, AimRotation);
             }
 
-            ShowMeleeOutline(origin);
+            if (meleeEffectPrefab != null)
+                Instantiate(meleeEffectPrefab, origin + AimDirection * (meleeRange * 0.65f), AimRotation);
+            else
+                ShowMeleeOutline(origin);
             meleePerformed.Invoke();
             return true;
         }
 
         public bool TryRepair(float deltaTime)
         {
-            if (!CanAct || boatHealth == null || boatHealth.Deck == null || repairSpeed <= 0f || deltaTime < 0f)
+            if (!CanAct || IsKnockedBack || boatHealth == null || boatHealth.Deck == null || repairSpeed <= 0f || deltaTime < 0f)
             {
                 StopRepairing();
                 return false;
@@ -219,6 +235,14 @@ namespace Ferryman.Characters
         public override bool TryReceiveDamage(float damage)
         {
             if (!base.TryReceiveDamage(damage))
+                return false;
+            StopRepairing();
+            return true;
+        }
+
+        public override bool TryKnockBack(Vector2 velocity)
+        {
+            if (!CanAct || !base.TryKnockBack(velocity))
                 return false;
             StopRepairing();
             return true;

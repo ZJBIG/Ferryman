@@ -91,7 +91,7 @@ namespace Ferryman.Combat
                 return;
 
             Consume();
-            if (impactEffectPrefab != null)
+            if (impactEffectPrefab != null && !target.IsHostile)
                 Instantiate(impactEffectPrefab, transform.position, Quaternion.identity);
             if (damageSystem != null)
                 damageSystem.ApplyDamage(instigator, target, damage);
