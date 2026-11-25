@@ -8,6 +8,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: projectilePrefab
+      value:
+      objectReference: {fileID: 1655716014380622067, guid: 468ceb7d2e785a42b899a8c32b014160, type: 3}
     - target: {fileID: 2942608305332904749, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_Name
       value: Large Gunner
@@ -22,7 +26,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: fireInterval
-      value: 1.2
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 5161385487632147957, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_LocalScale.x
@@ -80,6 +84,30 @@ PrefabInstance:
       propertyPath: hitbox
       value:
       objectReference: {fileID: 3232955598140890241}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: attackFrames.Array.size
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: attackFrames.Array.data[0]
+      value:
+      objectReference: {fileID: -3720448195741216973, guid: dbd307e4b4395f9fb2aec98796fb2f9e, type: 3}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: attackFrames.Array.data[1]
+      value:
+      objectReference: {fileID: -7613595178269094245, guid: dbd307e4b4395f9fb2aec98796fb2f9e, type: 3}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: attackFrames.Array.data[2]
+      value:
+      objectReference: {fileID: 7661671138987183289, guid: dbd307e4b4395f9fb2aec98796fb2f9e, type: 3}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: attackFrames.Array.data[3]
+      value:
+      objectReference: {fileID: 4564484092870245864, guid: dbd307e4b4395f9fb2aec98796fb2f9e, type: 3}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: attackStunDuration
+      value: 2.5
+      objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 8344003705530662006, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
     m_RemovedGameObjects: []
@@ -138,60 +166,60 @@ PolygonCollider2D:
   m_AutoTiling: 0
   m_Points:
     m_Paths:
-    - - {x: -0.3817, y: 1.0483}
-      - {x: -0.2188, y: 1.1162}
-      - {x: -0.1221, y: 1.0811}
-      - {x: 0.056, y: 1.0951}
-      - {x: 0.3002, y: 1.0015}
-      - {x: 0.5471, y: 0.9056}
-      - {x: 0.659, y: 0.7886}
-      - {x: 0.7074, y: 0.6552}
-      - {x: 0.8524, y: 0.5546}
-      - {x: 0.9669, y: 0.337}
-      - {x: 1.1094, y: 0.1544}
-      - {x: 1.1552, y: -0.0234}
-      - {x: 1.2086, y: -0.1264}
-      - {x: 1.1246, y: -0.2527}
-      - {x: 1.1272, y: -0.3463}
-      - {x: 1.0585, y: -0.4469}
-      - {x: 1.1577, y: -0.5873}
-      - {x: 1.2213, y: -0.7652}
-      - {x: 1.2137, y: -0.8798}
-      - {x: 1.1246, y: -0.922}
-      - {x: 0.972, y: -0.9173}
-      - {x: 0.7862, y: -0.8518}
-      - {x: 0.6285, y: -0.7348}
-      - {x: 0.5496, y: -0.6786}
-      - {x: 0.4275, y: -0.7137}
-      - {x: 0.3868, y: -0.8915}
-      - {x: 0.285, y: -1.0436}
-      - {x: 0.1679, y: -1.1162}
-      - {x: -0.028, y: -1.1209}
-      - {x: -0.1832, y: -1.0741}
-      - {x: -0.2901, y: -0.9758}
-      - {x: -0.3868, y: -0.8167}
-      - {x: -0.4071, y: -0.6903}
-      - {x: -0.6158, y: -0.6529}
-      - {x: -0.7124, y: -0.7699}
-      - {x: -0.8575, y: -0.8681}
-      - {x: -1.1094, y: -0.8986}
-      - {x: -1.2112, y: -0.8471}
-      - {x: -1.2264, y: -0.7207}
-      - {x: -1.1704, y: -0.5499}
-      - {x: -1.0585, y: -0.4259}
-      - {x: -1.1552, y: -0.3463}
-      - {x: -1.1577, y: -0.2434}
-      - {x: -1.2341, y: -0.0866}
-      - {x: -1.229, y: 0.0023}
-      - {x: -1.1628, y: 0.0585}
-      - {x: -1.1425, y: 0.1708}
-      - {x: -1.0839, y: 0.2902}
-      - {x: -1.0992, y: 0.4048}
-      - {x: -1.0229, y: 0.5218}
-      - {x: -0.8956, y: 0.5569}
-      - {x: -0.8524, y: 0.6482}
-      - {x: -0.9109, y: 0.6973}
-      - {x: -0.8524, y: 0.7792}
-      - {x: -0.7328, y: 0.826}
-      - {x: -0.6488, y: 0.9688}
-      - {x: -0.514, y: 1.0577}
+    - - {x: -0.49621, y: 1.36279}
+      - {x: -0.28444, y: 1.45106}
+      - {x: -0.15873, y: 1.40543}
+      - {x: 0.0728, y: 1.42363}
+      - {x: 0.39026, y: 1.30195}
+      - {x: 0.71123, y: 1.17728}
+      - {x: 0.8567, y: 1.02518}
+      - {x: 0.91962, y: 0.85176}
+      - {x: 1.10812, y: 0.72098}
+      - {x: 1.25697, y: 0.4381}
+      - {x: 1.44222, y: 0.20072}
+      - {x: 1.50176, y: -0.03042}
+      - {x: 1.57118, y: -0.16432}
+      - {x: 1.46198, y: -0.32851}
+      - {x: 1.46536, y: -0.45019}
+      - {x: 1.37605, y: -0.58097}
+      - {x: 1.50501, y: -0.76349}
+      - {x: 1.58769, y: -0.99476}
+      - {x: 1.57781, y: -1.14374}
+      - {x: 1.46198, y: -1.1986}
+      - {x: 1.2636, y: -1.19249}
+      - {x: 1.02206, y: -1.10734}
+      - {x: 0.81705, y: -0.95524}
+      - {x: 0.71448, y: -0.88218}
+      - {x: 0.55575, y: -0.92781}
+      - {x: 0.50284, y: -1.15895}
+      - {x: 0.3705, y: -1.35668}
+      - {x: 0.21827, y: -1.45106}
+      - {x: -0.0364, y: -1.45717}
+      - {x: -0.23816, y: -1.39633}
+      - {x: -0.37713, y: -1.26854}
+      - {x: -0.50284, y: -1.06171}
+      - {x: -0.52923, y: -0.89739}
+      - {x: -0.80054, y: -0.84877}
+      - {x: -0.92612, y: -1.00087}
+      - {x: -1.11475, y: -1.12853}
+      - {x: -1.44222, y: -1.16818}
+      - {x: -1.57456, y: -1.10123}
+      - {x: -1.59432, y: -0.93691}
+      - {x: -1.52152, y: -0.71487}
+      - {x: -1.37605, y: -0.55367}
+      - {x: -1.50176, y: -0.45019}
+      - {x: -1.50501, y: -0.31642}
+      - {x: -1.60433, y: -0.11258}
+      - {x: -1.5977, y: 0.00299}
+      - {x: -1.51164, y: 0.07605}
+      - {x: -1.48525, y: 0.22204}
+      - {x: -1.40907, y: 0.37726}
+      - {x: -1.42896, y: 0.52624}
+      - {x: -1.32977, y: 0.67834}
+      - {x: -1.16428, y: 0.72397}
+      - {x: -1.10812, y: 0.84266}
+      - {x: -1.18417, y: 0.90649}
+      - {x: -1.10812, y: 1.01296}
+      - {x: -0.95264, y: 1.0738}
+      - {x: -0.84344, y: 1.25944}
+      - {x: -0.6682, y: 1.37501}

@@ -16,6 +16,10 @@ namespace Ferryman.Characters
         public CrewRole role;
         public Character prefab;
         public Sprite portrait;
+        public Sprite deckSprite;
+        public Sprite[] walkFrames;
+        public Sprite[] skillFrames;
+        [Min(0.1f)] public float deckSpriteScale = 1f;
         [Min(0.1f)] public float moveSpeed = 2f;
         [Min(0f)] public float repairSpeed = 25f;
         [Min(0)] public int repairRange = 1;

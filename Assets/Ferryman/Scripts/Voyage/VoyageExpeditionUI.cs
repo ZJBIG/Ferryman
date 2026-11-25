@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Ferryman.Characters;
 using UnityEngine;
 
 namespace Ferryman.Voyage
@@ -97,6 +100,7 @@ namespace Ferryman.Voyage
             mapScroll = GUI.BeginScrollView(viewport, mapScroll, new Rect(0f, 0f, mapWidth, viewport.height),
                 false, false, GUIStyle.none, GUIStyle.none);
             DrawMapPaper(art.parchment, mapWidth, viewport.height);
+            var passengerBadges = preview || c.Passengers.Count == 0 ? null : PassengerBadgesByIsland(map, c);
             foreach (var node in map.Nodes)
             {
                 Vector2 start = Position(node);
@@ -127,15 +131,72 @@ namespace Ferryman.Voyage
                 else
                     Fill(new Rect(point.x - 7f, point.y - 7f, 14f, 14f), Ink);
                 GUI.color = previous;
-                GUI.Label(iconArea, new GUIContent(string.Empty, node.Name + " · " + node.Description), GUIStyle.none);
+                string tooltip = node.Name + " · " + node.Description;
+                if (passengerBadges != null && passengerBadges.TryGetValue(node.id, out CrewDefinition[] passengers))
+                {
+                    tooltip += " · 下船顾客 " + string.Join("、", passengers.Select(passenger => passenger.displayName));
+                    DrawPassengerBadges(iconArea, passengers, tooltip, text);
+                }
+                var hint = new GUIContent(string.Empty, tooltip);
+                GUI.Label(iconArea, hint, GUIStyle.none);
                 if (reachable && GUI.Button(iconArea,
-                    new GUIContent(string.Empty, node.Description), GUIStyle.none))
+                    hint, GUIStyle.none))
                     Act(c, () => c.SelectDestination(node.id));
             }
             GUI.EndScrollView();
             if (!string.IsNullOrEmpty(GUI.tooltip))
-                GUI.Label(new Rect(180f, 602f, 920f, 32f), GUI.tooltip,
-                    new GUIStyle(text) { fontSize = 16, alignment = TextAnchor.MiddleCenter, normal = { textColor = Ink } });
+                GUI.Label(new Rect(180f, 600f, 920f, 46f), GUI.tooltip,
+                    new GUIStyle(text) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperCenter, normal = { textColor = Ink } });
+        }
+
+        private static Dictionary<int, CrewDefinition[]> PassengerBadgesByIsland(VoyageRouteMap map, VoyageController controller)
+        {
+            var badges = new Dictionary<int, List<CrewDefinition>>();
+            int current = controller.CurrentNodeId;
+            foreach (var group in controller.Passengers.GroupBy(passenger => passenger.DestinationStopIndex))
+            {
+                var canReach = new bool[map.Nodes.Length];
+                canReach[current] = true;
+                // Stop each possible branch at its first eligible island after the requested depth.
+                foreach (var node in map.Nodes)
+                {
+                    if (!canReach[node.id])
+                        continue;
+                    if (node.id != current && node.depth * 2 >= group.Key && VoyageController.CanDisembarkAt(node.kind))
+                    {
+                        if (!badges.TryGetValue(node.id, out List<CrewDefinition> passengers))
+                            badges[node.id] = passengers = new List<CrewDefinition>();
+                        passengers.AddRange(group.Select(passenger => passenger.Definition));
+                        continue;
+                    }
+                    foreach (int next in node.next)
+                        canReach[next] = true;
+                }
+            }
+            return badges.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray());
+        }
+
+        private static void DrawPassengerBadges(Rect iconArea, CrewDefinition[] passengers, string tooltip, GUIStyle text)
+        {
+            const int visibleSlots = 3;
+            const float size = 21f;
+            const float gap = 2f;
+            var label = new GUIStyle(text) { fontSize = 12, alignment = TextAnchor.MiddleCenter, normal = { textColor = Ink } };
+            var hint = new GUIContent(string.Empty, tooltip);
+            for (int i = 0; i < Mathf.Min(passengers.Length, visibleSlots); i++)
+            {
+                var badge = new Rect(iconArea.xMax - 14f + i * (size + gap), iconArea.yMax - 14f, size, size);
+                CrewDefinition profile = passengers[i];
+                if (i == visibleSlots - 1 && passengers.Length > visibleSlots)
+                    GUI.Label(badge, "+" + (passengers.Length - i), label);
+                else if (profile.portrait != null)
+                {
+                    VoyageView.DrawPortraitImage(profile.portrait, badge);
+                }
+                else
+                    GUI.Label(badge, profile.role == CrewRole.Combat ? "战" : "修", label);
+                GUI.Label(badge, hint, GUIStyle.none);
+            }
         }
 
         private static Vector2 Position(VoyageRouteNode node)
@@ -277,7 +338,7 @@ namespace Ferryman.Voyage
                 case VoyageIslandKind.Rescue:
                     name = "求援灯塔";
                     description = "救起一位旅客。他将随船出航，并在岗位上帮助你。";
-                    options = new[] { "招募战斗乘客", "招募维护乘客" };
+                    options = new[] { "招募战斗乘客", "招募维护乘客", "直接离港" };
                     break;
                 case VoyageIslandKind.Mystery:
                     name = "迷雾奇遇";
@@ -297,6 +358,8 @@ namespace Ferryman.Voyage
                 bool previous = GUI.enabled;
                 if (c.CurrentIsland == VoyageIslandKind.Mystery)
                     GUI.enabled = previous && (option != 0 || c.Vessel.Boat.CurrentHealth > 100f);
+                else if (c.CurrentIsland == VoyageIslandKind.Rescue && option < 2)
+                    GUI.enabled = previous && c.CanBoardRole(option == 0 ? CrewRole.Combat : CrewRole.Maintenance);
                 if (GUI.Button(new Rect(350f, 370f + i * 71f, 580f, 60f), options[i], button))
                     Act(c, () => c.ResolveIslandOption(option));
                 GUI.enabled = previous;
@@ -338,7 +401,7 @@ namespace Ferryman.Voyage
             {
                 VoyageUpgradeKind kind = available[i];
                 bool previous = GUI.enabled;
-                GUI.enabled = previous && !c.HasCheckpoint;
+                GUI.enabled = previous && c.CanChoosePermanentUpgrade;
                 bool acquired = false;
                 if (DrawCard(CardArea(i, available.Length, art.upgradeCard), art, kind, text))
                     Act(c, () => acquired = c.BuyPermanentUpgrade(kind));

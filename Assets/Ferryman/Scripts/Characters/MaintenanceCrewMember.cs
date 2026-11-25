@@ -13,6 +13,7 @@ namespace Ferryman.Characters
         private BoxCollider2D footprint;
         private float moveSpeed;
         private float repairSpeed;
+        private float relationRepairMultiplier = 1f;
         private int repairRange;
         private int simultaneousRepairs;
         private RepairPoint target;
@@ -27,6 +28,19 @@ namespace Ferryman.Characters
 
         public RepairPoint CurrentTarget => target;
         public bool IsRepairing => contributing;
+
+        internal void RefreshCrewRelations(string profileId, ISet<string> aboardProfiles)
+        {
+            relationRepairMultiplier = 1f;
+            if (profileId == "carpenter-beaver" && aboardProfiles.Contains("caulker-otter")
+                || profileId == "caulker-otter" && aboardProfiles.Contains("carpenter-beaver"))
+                relationRepairMultiplier += 0.3f;
+            if (profileId == "mechanic-rhino" && aboardProfiles.Contains("carpenter-beaver")
+                || profileId == "carpenter-beaver" && aboardProfiles.Contains("mechanic-rhino"))
+                relationRepairMultiplier += 0.2f;
+            if (profileId == "caulker-otter" && aboardProfiles.Contains("cannoneer-boar"))
+                relationRepairMultiplier -= 0.2f;
+        }
         public override bool TryReceivePlayerKick(Vector2 velocity)
         {
             if (!base.TryReceivePlayerKick(velocity))
@@ -93,7 +107,7 @@ namespace Ferryman.Characters
 
         private void FixedUpdate()
         {
-            if (CanAct && !working && target == null)
+            if (CanAct && !working && (target == null || target.IsComplete || !target.isActiveAndEnabled || path.Count == 0))
             {
                 MoveBody(Wander(boat.Deck, moveSpeed * 0.5f));
                 return;
@@ -118,7 +132,7 @@ namespace Ferryman.Characters
             }
 
             routeBlocked = true;
-            MoveBody(Vector2.zero);
+            MoveBody(Wander(boat.Deck, moveSpeed * 0.5f));
         }
 
         private void FindWork()
@@ -164,13 +178,20 @@ namespace Ferryman.Characters
             }
 
             contributing = repairTargets.Count > 0 && repairSpeed > 0f;
+            if (contributing)
+            {
+                float direction = repairTargets[0].transform.position.x - body.position.x;
+                if (Visual != null && SkillFrames?.Length > 0 && Mathf.Abs(direction) > 0.05f)
+                    Visual.flipX = direction < 0f;
+                PlayVisualFrames(SkillFrames, 0.56f, loop: true);
+            }
             if (repairSpeed <= 0f)
             {
                 StopWork();
                 return;
             }
             foreach (var point in repairTargets)
-                point.AddProgress(this, repairSpeed * Time.deltaTime);
+                point.AddProgress(this, repairSpeed * relationRepairMultiplier * Time.deltaTime * ActionSpeed);
             repairTargets.RemoveAll(point => point == null || point.IsComplete);
             if (repairTargets.Count == 0)
                 StopWork();
@@ -244,6 +265,7 @@ namespace Ferryman.Characters
         private void PauseContributions()
         {
             contributing = false;
+            StopVisualFrames();
             foreach (var point in repairTargets)
                 if (point != null)
                     point.EndRepair(this);
@@ -262,9 +284,9 @@ namespace Ferryman.Characters
             nextPathAt = 0f;
         }
 
-        public override bool TryReceiveDamage(float damage)
+        public override bool TryReceiveDamage(float damage, float attackStunDuration = 0f)
         {
-            if (!base.TryReceiveDamage(damage))
+            if (!base.TryReceiveDamage(damage, attackStunDuration))
                 return false;
             PauseContributions();
             return true;

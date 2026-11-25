@@ -4,12 +4,13 @@ using UnityEngine;
 
 namespace Ferryman.Characters
 {
-    public sealed class EnemyCharacter : CombatCharacter
+    public sealed partial class EnemyCharacter : CombatCharacter
     {
         public enum AttackKind
         {
             Projectile,
-            Bomb
+            Bomb,
+            BoardingMelee
         }
         public enum TargetPreference
         {
@@ -22,6 +23,7 @@ namespace Ferryman.Characters
         private sealed class BombPose
         {
             public Sprite heldPose;
+            public Sprite[] heldFrames;
             public Sprite projectile;
             public Vector2 launchOffset;
             public Vector2[] bodyOutline = System.Array.Empty<Vector2>();
@@ -29,16 +31,22 @@ namespace Ferryman.Characters
 
         [SerializeField] private PlayerCharacter target;
         [SerializeField] private GameObject deathEffectPrefab;
+        [SerializeField] private DestructibleObstacle deathObstaclePrefab;
         [SerializeField] private AttackKind attackKind;
         [SerializeField] private TargetPreference targetPreference;
         [SerializeField] private string displayName;
+        [SerializeField] private bool isBoss;
         [SerializeField] private TimedBomb bombPrefab;
         [SerializeField, Min(0.01f)] private float bombInterval = 3f;
         [SerializeField] private BombPose[] bombPoses;
+        [SerializeField] private Sprite[] attackFrames;
+        [SerializeField, Min(0f)] private float projectileSlowSeconds;
+        [SerializeField, Min(0f)] private float attackStunDuration;
 
         private BoatHealth boat;
         private float nextBombAt;
         private BombPose pendingBomb;
+        private bool bossWindingUp;
         private Sprite idleSprite;
         private Vector2[] idleBodyOutline;
         private Vector3 idleBodyAnchor;
@@ -49,9 +57,40 @@ namespace Ferryman.Characters
         private float BombWindup => Mathf.Min(0.5f, bombInterval * 0.5f);
 
         public override bool IsHostile => true;
+        public bool IsBoss => isBoss;
         public AttackKind AttackType => attackKind;
         public TargetPreference PreferredTarget => targetPreference;
         public TimedBomb BombPrefab => bombPrefab;
+        internal float AttackStunDuration => attackStunDuration;
+        internal DestructibleObstacle DeathObstaclePrefab => deathObstaclePrefab;
+        internal BoatHealth ProjectileHullTarget => targetPreference == TargetPreference.ShipFirst ? boat : null;
+        internal float ProjectileSlowSeconds => projectileSlowSeconds;
+        internal Bounds SpawnBounds
+        {
+            get
+            {
+                Bounds bounds = VisualBounds;
+                void Include(Sprite sprite)
+                {
+                    if (sprite == null || Visual == null)
+                        return;
+                    Bounds frame = sprite.bounds;
+                    bounds.Encapsulate(Visual.transform.TransformPoint(frame.min));
+                    bounds.Encapsulate(Visual.transform.TransformPoint(frame.max));
+                }
+                foreach (Sprite frame in attackFrames ?? System.Array.Empty<Sprite>())
+                    Include(frame);
+                foreach (BombPose pose in bombPoses ?? System.Array.Empty<BombPose>())
+                {
+                    Include(pose.heldPose);
+                    foreach (Sprite frame in pose.heldFrames ?? System.Array.Empty<Sprite>())
+                        Include(frame);
+                }
+                if (Hitbox != null)
+                    bounds.Encapsulate(Hitbox.bounds);
+                return bounds;
+            }
+        }
         internal Vector3 HealthBarAnchor
         {
             get
@@ -71,7 +110,25 @@ namespace Ferryman.Characters
             target = player;
             ConfigureCombat(system, ProjectilePrefab, AttackPower,
                 attackKind == AttackKind.Bomb ? bombInterval : FireInterval);
-            if (attackKind == AttackKind.Bomb && bombPoses != null && bombPoses.Length > 0)
+            if (attackKind != AttackKind.BoardingMelee && boat != null && Visual != null)
+            {
+                bool mirrored = transform.position.x > boat.Deck.GetComponent<EdgeCollider2D>().bounds.max.x;
+                if (Visual.flipX != mirrored && Hitbox is PolygonCollider2D outline)
+                {
+                    for (int path = 0; path < outline.pathCount; path++)
+                    {
+                        Vector2[] points = outline.GetPath(path);
+                        for (int i = 0; i < points.Length; i++)
+                            points[i].x = -points[i].x;
+                        outline.SetPath(path, points);
+                    }
+                    outline.offset = new Vector2(-outline.offset.x, outline.offset.y);
+                }
+                Visual.flipX = mirrored;
+            }
+            if (IsBoss)
+                nextBombAt = Time.time + 1.2f;
+            else if (attackKind == AttackKind.Bomb && bombPoses != null && bombPoses.Length > 0)
                 nextBombAt = Time.time + BombWindup;
         }
 
@@ -87,6 +144,14 @@ namespace Ferryman.Characters
                 UpdateBombThrow();
                 return;
             }
+            if (attackKind == AttackKind.BoardingMelee)
+                return;
+            if (targetPreference == TargetPreference.ShipFirst)
+            {
+                if (boat != null)
+                    TryFire(boat.Deck.transform.position - transform.position);
+                return;
+            }
 
             Character aimedTarget = SelectTarget();
             if (aimedTarget == null)
@@ -95,10 +160,23 @@ namespace Ferryman.Characters
             TryFire(AimDirection);
         }
 
+        public override bool TryFire(Vector2 direction)
+        {
+            if (!base.TryFire(direction))
+                return false;
+            PlayVisualFrames(attackFrames, Mathf.Min(FireInterval, 0.48f));
+            return true;
+        }
+
         private void UpdateBombThrow()
         {
             if (boat == null || bombPrefab == null)
                 return;
+            if (IsBoss && !bossWindingUp && Time.time >= nextBombAt - BombWindup)
+            {
+                bossWindingUp = true;
+                PlayVisualFrames(attackFrames, BombWindup * 2f);
+            }
             if (pendingBomb == null && bombPoses != null && bombPoses.Length > 0
                 && Time.time >= nextBombAt - BombWindup)
             {
@@ -107,31 +185,43 @@ namespace Ferryman.Characters
                 {
                     idleBodyAnchor = transform.InverseTransformPoint(HealthBarAnchor);
                     idleBodyOutline ??= outline.GetPath(0);
-                    outline.SetPath(0, pose.bodyOutline);
+                    Vector2[] points = (Vector2[])pose.bodyOutline.Clone();
+                    if (Visual.flipX)
+                    {
+                        for (int i = 0; i < points.Length; i++)
+                            points[i].x = -points[i].x;
+                    }
+                    outline.SetPath(0, points);
                 }
                 pendingBomb = pose;
                 idleSprite = Visual.sprite;
                 Visual.sprite = pendingBomb.heldPose;
+                PlayVisualFrames(pose.heldFrames, BombWindup, loop: true);
                 nextBombAt = Mathf.Max(nextBombAt, Time.time + BombWindup);
             }
             if (Time.time < nextBombAt)
                 return;
 
             nextBombAt = Time.time + bombInterval;
+            bossWindingUp = false;
             if (TryChooseBombLanding(out Vector2 landing))
             {
                 Face(landing - (Vector2)transform.position);
-                Vector3 origin = pendingBomb != null ? Visual.transform.TransformPoint(pendingBomb.launchOffset) : transform.position;
+                Vector2 launchOffset = pendingBomb != null ? pendingBomb.launchOffset : Vector2.zero;
+                if (Visual.flipX)
+                    launchOffset.x = -launchOffset.x;
+                Vector3 origin = pendingBomb != null ? Visual.transform.TransformPoint(launchOffset) : transform.position;
                 var bomb = Instantiate(bombPrefab, origin, Quaternion.identity);
                 if (pendingBomb != null)
                 {
                     // The released artwork includes the edge hidden by the claw in the held pose.
-                    bomb.GetComponent<DestructibleObstacle>().SetAppearance(pendingBomb.projectile, 0.7f);
+                    bomb.GetComponent<DestructibleObstacle>().SetAppearance(pendingBomb.projectile);
                 }
                 bomb.Throw(boat, landing);
             }
             if (pendingBomb != null)
             {
+                StopVisualFrames();
                 Visual.sprite = idleSprite;
                 if (idleBodyOutline != null && Hitbox is PolygonCollider2D outline)
                     outline.SetPath(0, idleBodyOutline);
@@ -168,8 +258,7 @@ namespace Ferryman.Characters
             int bestPriority = int.MaxValue;
             foreach (var character in SceneCharacters)
             {
-                if (character == null || !character.gameObject.activeInHierarchy || character.IsHostile
-                    || !character.ActionsEnabled || character.IsStunned || character.Hitbox == null || !character.Hitbox.enabled)
+                if (!CanTarget(character))
                     continue;
                 int priority = targetPreference == TargetPreference.CrewFirst && character is PlayerCharacter ? 1 : 0;
                 float distance = (character.transform.position - transform.position).sqrMagnitude;
@@ -182,6 +271,10 @@ namespace Ferryman.Characters
             }
             return best;
         }
+
+        private static bool CanTarget(Character character) => character != null && character.gameObject.activeInHierarchy
+            && !character.IsHostile && character.ActionsEnabled && !character.IsStunned
+            && character.Hitbox != null && character.Hitbox.enabled;
 
         internal bool TryGetHitFeedbackPosition(out Vector3 position)
         {
@@ -235,7 +328,7 @@ namespace Ferryman.Characters
             }
         }
 
-        public override bool TryReceiveDamage(float damage)
+        public override bool TryReceiveDamage(float damage, float attackStunDuration = 0f)
         {
             if (damage <= 0f || Health <= 0f)
                 return false;
@@ -248,8 +341,13 @@ namespace Ferryman.Characters
             {
                 Hitbox.enabled = false;
                 enabled = false;
-                if (deathEffectPrefab != null)
-                    Instantiate(deathEffectPrefab, transform.position, Quaternion.identity);
+                bool leftRemains = LeaveBoardingRemains();
+                if (deathEffectPrefab != null && !leftRemains)
+                {
+                    var splash = Instantiate(deathEffectPrefab, transform.position, Quaternion.identity);
+                    if (IsBoss)
+                        splash.transform.localScale *= 2f;
+                }
                 Destroy(gameObject);
             }
             return true;

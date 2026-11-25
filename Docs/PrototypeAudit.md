@@ -22,14 +22,14 @@
 
 | 策划位置 | 实现与可观察行为 | 证据 |
 | --- | --- | --- |
-| 1 核心循环 | 选择首位乘客、自动摆渡、途中上客、战斗/维修协作、到站下客、本轮与永久奖励 | `VoyageController`、main 默认入口、完整航程成功回归 |
+| 1 核心循环 | 空船启航、自动摆渡、途中上客、战斗/维修协作、非战斗岛屿下客、本轮与永久奖励 | `VoyageController`、main 默认入口、完整航程成功回归 |
 | 2.1 船只 | 固定船型、独立全局 HP、自动航行、甲板维修网格 | Vessel 嵌套 Boat/Player；`BoatHealth` / `BoatDeck`；引用与移动/维修回归 |
 | 2.2 摄像机 | 正俯视、固定 X=2.306；岛屿 Y=3.3/Size=8.6、海路 Y=0/Size=6；战斗 Y=3.5/Size=9.5，平滑切换后生成怪物，船位于画面下方约 3/5 内 | 场景 Camera、VoyageScenePresentation、VoyageController；Encounter 的 cameraSize / cameraHeight |
 | 3.1 操作 | 旧 Input Manager；Update 读输入、FixedUpdate 写刚体；鼠标连线决定方向，只旋转显示子物体 | `PlayerCharacter` / `CombatCharacter`；三项移动回归和资源参数检查 |
 | 3.2 远程 | 手持武器/Muzzle、左键连射、无限子弹、无装弹；玩家与 NPC 成功射击播放现有枪口特效，统一长轨迹子弹 | TryFire/Launch、Player.prefab；跨边界、自身/友军过滤、单次命中回归 |
 | 3.3 近战 | 90° 扇形伤敌、清除石块/炸弹、弹开友方 NPC；两键同时输入时近战优先；反馈只在目标接触点生成，敌人使用红色反馈，玩家无自身挥击特效 | TryMelee；扇形边角、范围排除、实体去重、飞踢击退与命中反馈回归 |
 | 3.4 眩晕 | 玩家/友军不扣血或死亡；1 秒眩晕，停止动作、免伤、重复命中不延长，结束恢复 | Character.TryReceiveDamage / IsStunned；实帧眩晕和岗位恢复回归 |
-| 4.1 固定岗位 | 首位乘客选择前显示职责；途中乘客对话等待 3 秒后自动上船；无 NPC 指令；战斗只战斗、维护只维修；接驳岛可选择岗位乘客 | CrewDefinition、Passenger、两类 CrewMember、VoyageView、VoyageExpedition；岗位隔离回归 |
+| 4.1 固定岗位 | 出发时不接客；途中乘客对话等待 3 秒后自动上船，同动物不重复在船；无 NPC 指令；战斗只战斗、维护只维修；接驳岛可选择未在船的岗位乘客或离港 | CrewDefinition、Passenger、两类 CrewMember、VoyageView、VoyageExpedition；岗位隔离回归 |
 | 4.2 岗位特色 | 两种战斗数值组合、两种维护速度/范围/并行组合，均自主工作；空闲时在甲板内闲逛，任务优先 | 四个 CrewDefinition 资源；岗位、闲逛边界与并行回归 |
 | 5 航程与岛屿 | 默认分支图 20 节点，一轮 8 岛、7 航段；战斗/精英、补给、船坞、集市、接驳、宝藏和遗迹活动；只能选相连下一层；曲虚线/曲实线区分探索；main 内复用三组岛岸、保留左入右出；海路前后各 5 秒，事件期间持续航行 | VoyageRouteMap、VoyageExpedition、VoyageExpeditionUI、VoyageScenePresentation；图可达性与路径用例、完整航程回归 |
 | 6.1 事件规则 | 分支每个目标对应至多一海路事件，战斗/精英/终点固定海战，其他岛可能海战或特殊事件；旧线性模式仍使用固定事件与随机池 | VoyageExpedition.PrepareLeg、VoyageDefinition / VoyageEventPlanner；图种子还原与旧事件调度回归 |
@@ -71,6 +71,12 @@
 验证日志、XML、截图和构建产物位于忽略的 `.local`；现有 PlayMode、资源校验与构建入口负责复现。历史构建对 URP 资源产生的自动重序列化已恢复至构建前内容。默认资源可由 Inspector 修改，仓库保留资源检查/构建入口。
 
 2026-11-24 本轮 PlayMode **46/46 通过**，证据为 `.local/expedition-results.xml`。包含分支图连通/确定性/合法路径，八岛七段完整活动与单次奖励、六类升级局内和永久叠加、15 个槽位存档、已选支路与待选升级恢复、1250 HP 恢复、购买/写盘失败/去重/旧文件兼容，以及既有移动、战斗、维修、岗位和线性航程回归。完整分支航程验证 main 场景 handle 不变，海路事件中时间、海面和船浪持续。Unity 编译与资源校验通过，证据为 `.local/expedition-validation.log`。本次未重新发布 Windows exe，README 的发布包仍是旧线性版本。
+
+2026-11-25 乘客规则、NPC 显示与海鸥投放调整后，Unity 资源校验通过（`.local/verify-npc-gulls.log`），针对性 PlayMode **27/27 通过**，完整 PlayMode **58/58 通过**（`.local/npc-gulls-targeted.xml`、`.local/npc-gulls-all.xml`）。覆盖空船启航、同动物上客去重与旧重复存档合并、海战/精英延后下客和恢复、分支首个可下客岛标记、NPC 躺倒不调色、多海鸥各投一个物体、战斗海鸥投弹、飞行及落地炸弹占位/清除复用，以及既有移动、维修、岗位、路线和存档回归。人物显示放大 20%，动物贴图采样已调整；画面观感留待实机确认，本次未重新打包 Windows exe。
+
+2026-11-25 NPC 与海怪进一步放大、海鸥拍翼、遇袭对白、怪物状态效果、船体/爪击反馈及登船蟹残骸完成后，Unity 资源校验通过（`.local/npc-updates-final-verify-headless.log`）。完整 PlayMode 初轮 68/71 通过（`.local/npc-updates-final-playmode-headless.xml`）；修正缩放坐标的浮点比较、两枚炸弹重叠玩家的测试摆位及战斗等待测试的引信前提后，受影响回归 5/5 通过（`.local/npc-updates-completion-headless.xml`），71 项现已分批全部通过。覆盖 4:3 六怪安全生成、镜像轮廓、减速与长眩晕、飞踢伤害、爪击与残骸清除特效、拥挤甲板残骸落位及跨关/检查点恢复。资源校验和上述回归使用 `-batchmode -nographics`，仍由真实 Unity 帧推进；常规渲染验证因纹理内存/显存分配失败中断。本次未重新打包 Windows exe。
+
+2026-11-25 队友试玩版 `v0.2-playtest.1` 加入 38,000 HP 巨像、每波最多十二只海怪/每场最多四波、每波多批海鸥、关键剧情点击推进和同船关系效果。复杂生成路径的 PlayMode 检查 1/1 通过（`.local/team-playtest-spawn-final.xml`），覆盖 4:3 十二怪预警、距船/模型间距及逐波清场；简单数值与文案未增加或重跑回归。Windows64 构建成功、0 错误（`.local/team-playtest-build.log`），12 条警告来自无图形环境的天空探针及纹理设备上限；独立程序通过 Direct3D 11 正常启动，启动日志无异常/纹理分配失败（`.local/team-playtest-player.log`），检查期间未改变既有存档文件。完整游玩 ZIP 已打包，包含 exe、UnityPlayer、Mono 与游戏数据，排除 Burst 调试资料；无需安装 Unity，解压后运行 `Ferryman.exe`。下载入口见 README。
 
 ## 美术与后续内容
 

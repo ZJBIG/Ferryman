@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Ferryman.Voyage;
 using UnityEngine;
 using UnityEngine.Events;
 using Random = UnityEngine.Random;
@@ -9,7 +10,7 @@ namespace Ferryman.World
 {
     public sealed class BoatHealth : MonoBehaviour
     {
-        private static readonly Vector2 RepairArtworkSize = new Vector2(0.92f, 0.72f);
+        private Vector2 RepairArtworkSize => Vector2.Scale(new Vector2(1.4f, 1.22f), deck.transform.lossyScale);
 
         [Serializable]
         public sealed class State
@@ -118,7 +119,7 @@ namespace Ferryman.World
                 deck = GetComponentInChildren<BoatDeck>();
         }
 
-        public bool ApplyDamage(float damage, Vector2 hitPosition)
+        public bool ApplyDamage(float damage, Vector2 hitPosition, bool randomizeRepairPosition = false)
         {
             if (damage <= 0f || IsDestroyed)
                 return false;
@@ -126,7 +127,11 @@ namespace Ferryman.World
             float accepted = Mathf.Min(damage, currentHealth);
             currentHealth -= accepted;
             pendingDamage += accepted;
-            GenerateRepairPoints(hitPosition);
+            int previousPoints = repairPoints.Count;
+            GenerateRepairPoints(hitPosition, randomizeRepairPosition);
+            VoyageAudio.Play(Sound.HullHit, Mathf.Lerp(0.34f, 0.58f, accepted / repairPointHealth), hitPosition);
+            if (repairPoints.Count > previousPoints)
+                VoyageAudio.Play(Sound.HullBreak, 0.67f, hitPosition);
             healthChanged.Invoke(currentHealth, maxHealth);
             damaged.Invoke(hitPosition, accepted);
             if (IsDestroyed)
@@ -166,9 +171,10 @@ namespace Ferryman.World
             pendingDamage = missing;
             GenerateRepairPoints(Vector2.zero);
             healthChanged.Invoke(currentHealth, maxHealth);
+            VoyageAudio.Play(Sound.RepairDone, 0.72f, transform.position);
         }
 
-        private void GenerateRepairPoints(Vector2 hitPosition)
+        private void GenerateRepairPoints(Vector2 hitPosition, bool randomize = false)
         {
             if (deck == null || repairPointPrefab == null)
                 return;
@@ -177,7 +183,21 @@ namespace Ferryman.World
             Vector2Int origin = deck.WorldToCell(firstPosition);
             while (pendingDamage >= repairPointHealth)
             {
-                if (!TryFindFreeCell(repairPoints.Keys, origin, firstPosition, out Vector2Int cell, out Vector2 position))
+                Vector2Int cell;
+                Vector2 position;
+                if (randomize)
+                {
+                    var candidates = new List<Vector2Int>();
+                    Vector2Int size = deck.GridSize;
+                    for (int x = 0; x < size.x; x++)
+                        for (int y = 0; y < size.y; y++)
+                            AddCandidate(new Vector2Int(x, y), repairPoints.Keys, candidates);
+                    if (candidates.Count == 0)
+                        break;
+                    cell = candidates[Random.Range(0, candidates.Count)];
+                    position = deck.CellToWorld(cell);
+                }
+                else if (!TryFindFreeCell(repairPoints.Keys, origin, firstPosition, out cell, out position))
                     break;
 
                 AddRepairPoint(cell, position);

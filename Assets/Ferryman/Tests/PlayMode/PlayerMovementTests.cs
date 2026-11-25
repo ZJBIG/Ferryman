@@ -95,7 +95,9 @@ namespace Ferryman.Tests
             body.position = Vector2.zero;
             Step(Vector2.left, 100);
             float cabinSide = body.position.x;
-            Assert.That(cabinSide, Is.InRange(-3.25f, -3.1f), "The middle cabin wall did not block the player.");
+            var cabinWall = deck.transform.Find("Cabin Side").GetComponent<BoxCollider2D>();
+            Assert.That(cabinSide, Is.EqualTo(cabinWall.bounds.max.x + playerCollider.bounds.extents.x).Within(0.03f),
+                "The middle cabin wall did not block the player.");
             body.position = Vector2.zero;
             Step(Vector2.up, 100);
             Step(Vector2.left, 100);

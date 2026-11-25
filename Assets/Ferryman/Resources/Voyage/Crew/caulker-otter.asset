@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e54b71bf547243b68082e9dd2e03cd03, type: 3}
+  m_Name: caulker-otter
+  m_EditorClassIdentifier: 
+  id: caulker-otter
+  displayName: "\u8865\u6F0F\u6C34\u736D"
+  role: 1
+  prefab: {fileID: 7934793890512362643, guid: d37025f05612972419bc54d553dcfedd, type: 3}
+  portrait: {fileID: 21300000, guid: a76708a0b9824152a8d68de99ec32184, type: 3}
+  deckSprite: {fileID: 21300000, guid: 0b6e6ffc96024e878e22befc3d8efcd6, type: 3}
+  walkFrames:
+  - {fileID: 7951820234127863907, guid: 24a47469edfa5622a01a310827d0c41a, type: 3}
+  - {fileID: -5233386952648747702, guid: 24a47469edfa5622a01a310827d0c41a, type: 3}
+  - {fileID: -189249634485327382, guid: 24a47469edfa5622a01a310827d0c41a, type: 3}
+  - {fileID: 1825311564632973274, guid: 24a47469edfa5622a01a310827d0c41a, type: 3}
+  skillFrames:
+  - {fileID: 5644597986435887881, guid: 11641a95901e5eb2912f4d428d4a0698, type: 3}
+  - {fileID: -2641255959084056585, guid: 11641a95901e5eb2912f4d428d4a0698, type: 3}
+  - {fileID: 6078066210650635000, guid: 11641a95901e5eb2912f4d428d4a0698, type: 3}
+  - {fileID: -3650229955726711408, guid: 11641a95901e5eb2912f4d428d4a0698, type: 3}
+  moveSpeed: 2
+  repairSpeed: 25
+  repairRange: 1
+  simultaneousRepairs: 1
+  attackPower: 0
+  fireInterval: 1
+  coinsReward: 35
+  specialItemsReward: 1

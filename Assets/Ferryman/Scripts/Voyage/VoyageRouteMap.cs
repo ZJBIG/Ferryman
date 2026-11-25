@@ -63,7 +63,7 @@ namespace Ferryman.Voyage
                     case VoyageIslandKind.Rescue: return "营救受困乘客，为船员队伍增添帮手。";
                     case VoyageIslandKind.Treasure: return "寻找宝藏，获得金币与航程升级。";
                     case VoyageIslandKind.Mystery: return "遭遇未知事件，作出选择并承担结果。";
-                    case VoyageIslandKind.Destination: return "完成最后一段航路，抵达终点并结算。";
+                    case VoyageIslandKind.Destination: return "闯过封锁线，靠港送达乘客。";
                     default: return "探索岛屿。";
                 }
             }

@@ -14,6 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: prototype-route-v1
   branchingRoutes: 1
+  storyCampaign: 1
+  finalBossEncounter: {fileID: 11400000, guid: 7dbdc4f507f74058995111259759f1be, type: 2}
   displayName: "\u8FD1\u6D77\u6446\u6E21\u822A\u7EBF"
   vesselPrefab: {fileID: 7173089943932599496, guid: 25c59fd46a9b0b84daac789e91482640, type: 3}
   stops:
@@ -58,17 +60,27 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 56af141116db6ca4da2abd0a7ca7c5c8, type: 2}
   - {fileID: 11400000, guid: 126dea6270cff194abd91c2ce9599f31, type: 2}
   passengerPool:
-  - {fileID: 11400000, guid: 54749bfdc975b38479a79c9d9786531b, type: 2}
-  - {fileID: 11400000, guid: 6703c365025ba154db65b438575a40ba, type: 2}
-  - {fileID: 11400000, guid: 56af141116db6ca4da2abd0a7ca7c5c8, type: 2}
-  - {fileID: 11400000, guid: 126dea6270cff194abd91c2ce9599f31, type: 2}
+  - {fileID: 11400000, guid: a839e187139244d1b04e1b9f37ba847b, type: 2}
+  - {fileID: 11400000, guid: 35627a7fbaeb4e9aa1dd7f16b7e3daeb, type: 2}
+  - {fileID: 11400000, guid: d966d7a0524241f9a5d84bd5328ff9cc, type: 2}
+  - {fileID: 11400000, guid: a49c0b6421014c28aa5921684ddb17aa, type: 2}
+  - {fileID: 11400000, guid: 76f6ad43bfae4f2e8d99faec7ca6b6c5, type: 2}
+  - {fileID: 11400000, guid: a230fae4db304985b186d4c1af10a8d0, type: 2}
   randomEncounters:
   - {fileID: 11400000, guid: f17a51c196a2b484ab52e84af7ca003d, type: 2}
+  - {fileID: 11400000, guid: cac6e311c34b52faa04ae3987d83007b, type: 2}
+  - {fileID: 11400000, guid: d8955f9ad1b45ddaa8dfec60ad55a60f, type: 2}
   specialEvents:
   - definition: {fileID: 11400000, guid: f1d90f8d2e3fdbc4081c6dd66bf6e083, type: 2}
-    maxAppearances: 1
+    maxAppearances: 0
   - definition: {fileID: 11400000, guid: 6f7a29485b534ea4da1e611b975ea304, type: 2}
     maxAppearances: 1
+  obstacleCarrier: {fileID: 21300000, guid: 0209bc02c5b74c7d8bf2d475cbeae212, type: 3}
+  obstacleCarrierFrames:
+  - {fileID: 21300000, guid: 13a768e7161c5b92becec7577fdb225d, type: 3}
+  - {fileID: 21300000, guid: 1774ab845bc85db49dd03702ff7c65d9, type: 3}
+  - {fileID: 21300000, guid: 824b99bb0c74571e959f234deeecb043, type: 3}
+  - {fileID: 21300000, guid: 3ddac44e33dd5bfeb9029bf2f25aa481, type: 3}
   enemyEncounterCount: 1
   specialEventCount: 1
   sailingSeconds: 10

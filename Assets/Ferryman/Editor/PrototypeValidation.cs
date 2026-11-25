@@ -43,9 +43,9 @@ namespace Ferryman.Editor
             CheckAppearances(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Stone.prefab").GetComponent<DestructibleObstacle>(),
                 1.25f, "Items/StoneWide", "Items/StoneTall", "Items/DeckObstacle");
             CheckAppearances(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/TimedBomb.prefab").GetComponent<DestructibleObstacle>(),
-                1.45f, "Items/BombRound", "Items/BombDynamite");
+                2.45f, "Items/BombRound", "Items/BombDynamite");
             var repairArt = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/RepairPoint.prefab");
-            CheckAppearances(repairArt.GetComponent<RepairPoint>(), 1.45f, "Repair/HoleSplinter", "Repair/HoleWide");
+            CheckAppearances(repairArt.GetComponent<RepairPoint>(), 2.2f, "Repair/HoleSplinter", "Repair/HoleWide");
             var repairFields = new SerializedObject(repairArt.GetComponent<RepairPoint>());
             var bar = (GameObject)repairFields.FindProperty("progressBar").objectReferenceValue;
             var fill = (Transform)repairFields.FindProperty("progressFill").objectReferenceValue;
@@ -66,6 +66,18 @@ namespace Ferryman.Editor
             Require(definition.sailingSeconds == 10f, "Sea legs must allow five seconds of rest before and after events.");
             Require(definition.branchingRoutes && VoyageRouteMap.Generate(7301).Nodes.Length == 20,
                 "Default voyage must enable the twenty-island branching expedition.");
+            Require(definition.storyCampaign && definition.finalBossEncounter != null,
+                "Default voyage is missing the three-round campaign or final battle.");
+            var bossWaves = definition.finalBossEncounter.waves;
+            Require(bossWaves is { Length: 1 } && bossWaves[0].enemies is { Length: 1 }
+                && bossWaves[0].enemies[0].count == 1 && bossWaves[0].enemies[0].prefab is { IsBoss: true },
+                "The final battle must spawn a single boss.");
+            foreach (string cue in new[] { "WaterBubbles", "WaterSplash", "AllyHorn", "SeaAlly", "TrashGather", "TrashBreak" })
+                Require(Resources.Load<AudioClip>("Audio/Sfx/" + cue) != null, "Missing voyage cue: " + cue);
+            Require(Resources.Load<AudioClip>("Audio/Music/FinalBattle") != null, "Missing final battle music.");
+            var owl = definition.passengerPool.FirstOrDefault(profile => profile != null && profile.id == "sharpshooter-owl");
+            Require(owl != null && owl.prefab is CombatCrewMember && owl.portrait != null && owl.deckSprite != null,
+                "Owl passenger profile, portrait or deck sprite is missing.");
             var uiArt = AssetDatabase.LoadAssetAtPath<VoyageUIArt>(Root + "Art/UI/VoyageUI.asset");
             Require(uiArt != null && uiArt.stunFill != null && uiArt.stunFill.isReadable, "UI art or readable stun mask is absent.");
             foreach (var field in typeof(VoyageUIArt).GetFields())
@@ -75,6 +87,7 @@ namespace Ferryman.Editor
             Require(vessel.Player.MovementDeck == vessel.Boat.Deck && vessel.Player.BoatHealth == vessel.Boat
                 && vessel.Player.DamageSystem == vessel.DamageSystem, "Vessel/player combat or deck bindings differ.");
             Require(vessel.Player.ProjectilePrefab != null, "Player weapon has no projectile.");
+            Sprite captainAmmo = vessel.Player.ProjectilePrefab.GetComponentInChildren<SpriteRenderer>().sprite;
             Require(new SerializedObject(vessel.Player).FindProperty("shotEffectPrefab").objectReferenceValue
                 == AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Effects/MuzzleFlash.prefab"),
                 "Player ranged attack is not bound to the supplied muzzle effect.");
@@ -101,12 +114,45 @@ namespace Ferryman.Editor
             {
                 Require(crew != null && crew.prefab != null && crew.prefab.GetComponent<Passenger>() != null, "Passenger profile/prefab is absent.");
                 Require(crew.role == CrewRole.Combat ? crew.prefab is CombatCrewMember : crew.prefab is MaintenanceCrewMember, "Crew prefab does not match its fixed job.");
-                Require(crew.prefab.GetComponent<BoxCollider2D>().size == new Vector2(0.45f, 0.7f), "Crew navigation footprint differs.");
+                if (crew.prefab is CombatCrewMember gunner)
+                    Require(gunner.ProjectilePrefab != null
+                        && gunner.ProjectilePrefab.GetComponentInChildren<SpriteRenderer>().sprite != captainAmmo,
+                        "Combat crew must have its own ammunition.");
+                Require(crew.prefab.GetComponent<BoxCollider2D>().size == new Vector2(0.585f, 0.91f), "Crew navigation footprint differs.");
+                CheckFrames(crew.walkFrames, 4, crew.id + "/walk");
+                CheckFrames(crew.skillFrames, 4, crew.id + "/skill");
+            }
+            var animatedEnemies = Resources.LoadAll<EncounterDefinition>("Voyage/Events")
+                .SelectMany(encounter => encounter.waves)
+                .SelectMany(wave => wave.enemies)
+                .Select(group => group.prefab)
+                .Distinct().ToArray();
+            var enemyAmmo = animatedEnemies.Where(actor => actor.AttackType == EnemyCharacter.AttackKind.Projectile)
+                .Select(actor => actor.ProjectilePrefab != null
+                    ? actor.ProjectilePrefab.GetComponentInChildren<SpriteRenderer>()?.sprite : null).ToArray();
+            Require(enemyAmmo.All(sprite => sprite != null && sprite != captainAmmo)
+                && enemyAmmo.Distinct().Count() == enemyAmmo.Length, "Ranged sea monsters must each have a unique projectile sprite.");
+            Require(bossWaves[0].enemies[0].prefab.BombPrefab != null
+                && bossWaves[0].enemies[0].prefab.BombPrefab.gameObject != bomb, "The colossus must have a separate bomb.");
+            foreach (EnemyCharacter actor in animatedEnemies)
+            {
+                using var fields = new SerializedObject(actor);
+                var poses = fields.FindProperty("bombPoses");
+                if (poses.arraySize == 0)
+                {
+                    CheckFrames(ReadFrames(fields.FindProperty("attackFrames")), actor.IsBoss ? 6 : 4, actor.name, readable: true);
+                    if (actor.AttackType == EnemyCharacter.AttackKind.BoardingMelee)
+                        CheckFrames(ReadFrames(fields.FindProperty("boardingWalkFrames")), 4, actor.name + "/walk", readable: true);
+                    continue;
+                }
+                for (int i = 0; i < poses.arraySize; i++)
+                    CheckFrames(ReadFrames(poses.GetArrayElementAtIndex(i).FindPropertyRelative("heldFrames")), 4,
+                        actor.name + "/throw " + i, readable: true);
             }
             foreach (EncounterDefinition encounter in definition.randomEncounters.Concat(definition.stops.Select(stop => stop.fixedEncounter)).Where(item => item != null).Distinct())
             {
                 Require(encounter.waves != null && encounter.waves.Length > 0, "Encounter has no waves.");
-                Require(encounter.waveInterval >= 0.1f && float.IsFinite(encounter.waveInterval), "Encounter wave interval is invalid.");
+                Require(encounter.waveInterval >= 0.1f && float.IsFinite(encounter.waveInterval), "Encounter obstacle flyby timing is invalid.");
                 foreach (WaveDefinition wave in encounter.waves)
                 {
                     Require(wave != null && wave.enemies != null && wave.enemies.Length > 0, "Encounter has an empty wave.");
@@ -114,9 +160,15 @@ namespace Ferryman.Editor
                     {
                         Require(group != null && group.prefab != null && group.count > 0, "Enemy group is incomplete.");
                         bool bombing = group.prefab.AttackType == EnemyCharacter.AttackKind.Bomb;
-                        Require(bombing ? group.prefab.PreferredTarget == EnemyCharacter.TargetPreference.ShipFirst && group.prefab.BombPrefab != null
-                            : group.prefab.PreferredTarget != EnemyCharacter.TargetPreference.ShipFirst && group.prefab.ProjectilePrefab != null,
-                            "Enemy attack and target configuration differ.");
+                        bool validAttack = group.prefab.AttackType switch
+                        {
+                            EnemyCharacter.AttackKind.Bomb => group.prefab.PreferredTarget == EnemyCharacter.TargetPreference.ShipFirst
+                                && group.prefab.BombPrefab != null,
+                            EnemyCharacter.AttackKind.BoardingMelee => group.prefab.PreferredTarget == EnemyCharacter.TargetPreference.CrewFirst
+                                && group.prefab.GetComponent<Rigidbody2D>()?.bodyType == RigidbodyType2D.Dynamic,
+                            _ => group.prefab.ProjectilePrefab != null
+                        };
+                        Require(validAttack, "Enemy attack and target configuration differ.");
                         Require(group.prefab.Hitbox is PolygonCollider2D outline && outline.GetTotalPointCount() > 4
                             && group.prefab.GetComponentsInChildren<Collider2D>().Length == 1,
                             "Enemy must use one body contour as its hitbox.");
@@ -142,7 +194,10 @@ namespace Ferryman.Editor
                 Require(special != null && special.obstaclePrefab != null && special.obstaclePrefab.GetComponent<DestructibleObstacle>() != null
                     && special.obstacleCount > 0, "Special event has no clearable items.");
             PlannedVoyageEvent[] plan = VoyageEventPlanner.Build(definition, 42);
-            Require(plan[1].kind == VoyageEventKind.Combat && plan[1].isFixed && plan[3].kind == VoyageEventKind.Special,
+            Require(definition.obstacleCarrier != null, "The obstacle seagull sprite is missing.");
+            CheckFrames(definition.obstacleCarrierFrames, 4, "seagull/flight");
+            Require(plan[1].kind == VoyageEventKind.Combat && plan[1].isFixed && plan[3].kind == VoyageEventKind.Special
+                && plan[3].specialEvent.obstaclePrefab.GetComponent<TimedBomb>() != null,
                 "Default fixed and random events differ.");
             var boundary = deck.GetComponent<EdgeCollider2D>();
             var line = deck.GetComponent<LineRenderer>();
@@ -215,7 +270,7 @@ namespace Ferryman.Editor
             EditorSceneManager.OpenScene(Root + "Scenes/main.unity");
             Directory.CreateDirectory(".local");
             File.WriteAllText(".local/prototype-resource-observations.txt",
-                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed hull outline, six cabin/cargo colliders, 15 x 5 repair grid including the bow.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.45 x 0.7 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\nMain UI layout anchors are present and inactive.\n");
+                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed hull outline, six cabin/cargo colliders, 15 x 5 repair grid including the bow.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.585 x 0.91 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\nMain UI layout anchors are present and inactive.\n");
             Debug.Log("Ferryman full prototype resource verification passed.");
         }
 
@@ -289,6 +344,16 @@ namespace Ferryman.Editor
         {
             Require(Mathf.Abs(new SerializedObject(target).FindProperty(field).floatValue - expected) < 0.0001f,
                 target.name + "/" + field + " differs.");
+        }
+
+        private static Sprite[] ReadFrames(SerializedProperty frames) => Enumerable.Range(0, frames.arraySize)
+            .Select(index => frames.GetArrayElementAtIndex(index).objectReferenceValue as Sprite).ToArray();
+
+        private static void CheckFrames(Sprite[] frames, int count, string name, bool readable = false)
+        {
+            Require(frames != null && frames.Length == count && frames.Distinct().Count() == count
+                && frames.All(frame => frame != null && (!readable || frame.texture.isReadable)),
+                name + " needs " + count + " distinct valid animation frames.");
         }
 
         private static void Require(bool condition, string message)

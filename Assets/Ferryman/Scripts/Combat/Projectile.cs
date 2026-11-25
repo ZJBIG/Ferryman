@@ -1,4 +1,6 @@
 using Ferryman.Characters;
+using Ferryman.Voyage;
+using Ferryman.World;
 using UnityEngine;
 
 namespace Ferryman.Combat
@@ -20,6 +22,9 @@ namespace Ferryman.Combat
         private Vector2 direction;
         private float damage;
         private DamageSystem damageSystem;
+        private BoatHealth hullTarget;
+        private float slowSeconds;
+        private float stunSeconds;
         private bool hostile;
         private bool launched;
         private bool consumed;
@@ -58,6 +63,12 @@ namespace Ferryman.Combat
             this.damageSystem = damageSystem;
             // Keep allegiance after the shooter dies while this projectile is still in flight.
             hostile = instigator.IsHostile;
+            if (instigator is EnemyCharacter enemy)
+            {
+                hullTarget = enemy.ProjectileHullTarget;
+                slowSeconds = enemy.ProjectileSlowSeconds;
+                stunSeconds = enemy.AttackStunDuration;
+            }
             launched = true;
             expiresAt = Time.time + lifetime;
             if (instigator.Hitbox != null)
@@ -66,7 +77,12 @@ namespace Ferryman.Combat
                 visualRoot.rotation = Quaternion.Euler(0f, 0f,
                     Mathf.Atan2(this.direction.y, this.direction.x) * Mathf.Rad2Deg);
             if (useFactionTint && visual != null)
-                visual.color = hostile ? new Color(1f, 0.25f, 0.15f) : new Color(1f, 0.85f, 0.15f);
+            {
+                visual.color = !hostile ? new Color(1f, 0.85f, 0.15f)
+                    : slowSeconds > 0f ? new Color(0.52f, 0.84f, 1f)
+                    : hullTarget != null ? new Color(0.95f, 0.55f, 0.28f)
+                    : new Color(1f, 0.25f, 0.15f);
+            }
         }
 
         private void FixedUpdate()
@@ -86,17 +102,35 @@ namespace Ferryman.Combat
             if (consumed || !launched)
                 return;
 
+            if (hullTarget != null)
+            {
+                if (other is EdgeCollider2D && other.transform == hullTarget.Deck.transform)
+                {
+                    Vector2 contact = other.ClosestPoint(transform.position);
+                    Consume();
+                    if (hullTarget.ApplyDamage(damage, contact, randomizeRepairPosition: true) && impactEffectPrefab != null)
+                        Instantiate(impactEffectPrefab, contact, Quaternion.identity);
+                }
+                return;
+            }
+
             var target = other.GetComponentInParent<Character>();
             if (target == null || target == instigator || target.IsHostile == hostile)
                 return;
-            if (target.IsStunned && !target.IsHostile && !(target is PlayerCharacter))
+            if (slowSeconds <= 0f && target.IsStunned && !target.IsHostile && !(target is PlayerCharacter))
                 return;
 
             Consume();
             if (impactEffectPrefab != null && !target.IsHostile)
                 Instantiate(impactEffectPrefab, transform.position, Quaternion.identity);
+            if (slowSeconds > 0f)
+            {
+                target.ApplySlow(slowSeconds);
+                VoyageAudio.Play(Sound.WaterBubbles, 0.34f, transform.position);
+                return;
+            }
             if (damageSystem != null)
-                damageSystem.ApplyDamage(instigator, target, damage);
+                damageSystem.ApplyDamage(instigator, target, damage, stunSeconds);
         }
 
         private void Consume()

@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbc0ce7ab84048e9a7fd046fc0412750, type: 3}
+  m_Name: GarbageTideColossus
+  m_EditorClassIdentifier: 
+  id: garbage-tide-colossus
+  displayName: "\u5783\u573E\u6F6E\u5DE8\u50CF"
+  waves:
+  - enemies:
+    - prefab: {fileID: 4237392762737264246, guid: d843ec6cfce84a22a96b809dfd4982a7, type: 3}
+      count: 1
+      spawnPosition: {x: 0, y: 9}
+  waveInterval: 8
+  reward:
+    coins: 250
+    specialItems: 5
+  cameraSize: 9.5
+  cameraHeight: 3.5

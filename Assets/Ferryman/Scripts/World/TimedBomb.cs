@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Ferryman.Characters;
+using Ferryman.Voyage;
 using UnityEngine;
 
 namespace Ferryman.World
@@ -16,6 +17,7 @@ namespace Ferryman.World
         [SerializeField, Min(0f)] private float throwArcHeight = 0.7f;
 
         private DestructibleObstacle obstacle;
+        private AudioSource fuseAudio;
         private float detonateAt;
 
         public BoatHealth TargetBoat => targetBoat;
@@ -40,14 +42,22 @@ namespace Ferryman.World
         public void Throw(BoatHealth boat, Vector2 destination)
         {
             Launch(boat, destination, throwSeconds, throwArcHeight);
+            VoyageAudio.Play(Sound.BombThrow, position: transform.position);
         }
 
         internal void Launch(BoatHealth boat, Vector2 destination, float seconds, float arcHeight)
         {
             targetBoat = boat;
+            StopFuseAudio();
             if (fuseFill != null)
                 fuseFill.parent.gameObject.SetActive(false);
-            obstacle.FlyTo(boat.Deck, destination, seconds, arcHeight, StartFuse);
+            obstacle.FlyTo(boat.Deck, destination, seconds, arcHeight, FinishLanding);
+        }
+
+        private void FinishLanding()
+        {
+            VoyageAudio.Play(Sound.BombLand, 0.62f, transform.position);
+            StartFuse();
         }
 
         private void StartFuse()
@@ -62,8 +72,12 @@ namespace Ferryman.World
 
         private void LateUpdate()
         {
-            if (IsInFlight)
+            if (IsInFlight || obstacle.IsCleared)
                 return;
+            if (fuseAudio == null)
+                fuseAudio = VoyageAudio.StartLoop(gameObject, Sound.Fuse, 0.245f, true);
+            else if (!fuseAudio.isPlaying)
+                fuseAudio.Play();
             if (fuseFill != null)
                 fuseFill.localScale = new Vector3(Mathf.Clamp01((detonateAt - Time.time) / fuseSeconds), 1f, 1f);
             if (Time.time >= detonateAt)
@@ -77,6 +91,7 @@ namespace Ferryman.World
 
             var pushed = new HashSet<Character>();
             Vector2 origin = transform.position;
+            VoyageAudio.Play(Sound.Explosion, 0.85f, origin);
             foreach (var hit in Physics2D.OverlapCircleAll(origin, 1.6f))
             {
                 var character = hit.GetComponentInParent<Character>();
@@ -90,6 +105,17 @@ namespace Ferryman.World
             if (explosionEffectPrefab != null)
                 Instantiate(explosionEffectPrefab, transform.position, Quaternion.identity);
             return true;
+        }
+
+        internal void StopFuseAudio()
+        {
+            if (fuseAudio != null)
+                fuseAudio.Stop();
+        }
+
+        private void OnDisable()
+        {
+            StopFuseAudio();
         }
     }
 }

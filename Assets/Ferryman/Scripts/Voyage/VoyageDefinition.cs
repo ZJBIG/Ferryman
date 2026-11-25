@@ -36,11 +36,15 @@ namespace Ferryman.Voyage
         public string displayName;
         public GameObject vesselPrefab;
         public bool branchingRoutes;
+        public bool storyCampaign;
+        public EncounterDefinition finalBossEncounter;
         public VoyageStop[] stops = Array.Empty<VoyageStop>();
         public CrewDefinition[] initialPassengers = Array.Empty<CrewDefinition>();
         public CrewDefinition[] passengerPool = Array.Empty<CrewDefinition>();
         public EncounterDefinition[] randomEncounters = Array.Empty<EncounterDefinition>();
         public SpecialEventEntry[] specialEvents = Array.Empty<SpecialEventEntry>();
+        public Sprite obstacleCarrier;
+        public Sprite[] obstacleCarrierFrames = Array.Empty<Sprite>();
         [Min(0)] public int enemyEncounterCount = 1;
         [Min(0)] public int specialEventCount = 1;
         [Min(0.01f)] public float sailingSeconds = 10f;

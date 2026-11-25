@@ -69,7 +69,7 @@ namespace Ferryman.Tests
             Assert.That(boat.RepairPoints.Count, Is.EqualTo(2));
             var first = boat.RepairPoints.Single(point => point.Cell == origin);
             var neighbor = boat.RepairPoints.Single(point => point != first);
-            Assert.That((Vector2)first.transform.position, Is.EqualTo(hit));
+            Assert.That(Vector2.Distance(first.transform.position, hit), Is.LessThan(0.0001f));
             Assert.That(BoatDeck.CellDistance(origin, neighbor.Cell), Is.EqualTo(1));
             Assert.That(first.BeginRepair(player), Is.True);
             Assert.That(first.BeginRepair(enemy), Is.True);
@@ -214,7 +214,8 @@ namespace Ferryman.Tests
             TimedBomb exploding = bombs[1];
             TimedBomb thrown = Object.Instantiate(exploding, Vector2.up * 6f, Quaternion.identity);
             cleared.transform.position = Vector2.right;
-            exploding.transform.position = Vector2.left;
+            Vector2 explodingPosition = Vector2.left * 2f;
+            exploding.transform.position = explodingPosition;
             var clearEffect = new GameObject("Test Bomb Clear Effect");
             var explosionEffect = new GameObject("Test Bomb Explosion Effect");
             SetField(cleared.GetComponent<DestructibleObstacle>(), "clearedEffectPrefab", clearEffect);
@@ -225,8 +226,12 @@ namespace Ferryman.Tests
             Transform bombVisual = cleared.transform.Find("Visual");
             Transform fuseBar = cleared.transform.Find("Fuse Bar");
             Physics2D.SyncTransforms();
+            Assert.That(exploding.transform.Find("Visual").GetComponent<SpriteRenderer>().bounds.max.x,
+                Is.LessThan(body.position.x), "The intact bomb must lie entirely behind the melee sector.");
             Assert.That(player.TryMelee(Vector2.right), Is.True);
             Assert.That(cleared.GetComponent<DestructibleObstacle>().IsCleared, Is.True);
+            Assert.That(exploding.GetComponent<DestructibleObstacle>().IsCleared, Is.False,
+                "Melee cleared the bomb behind the player.");
             Assert.That(cleared.GetComponentsInChildren<Collider2D>(), Is.Empty);
             Assert.That(bombVisual.parent, Is.Null);
             cleared.GetComponent<DestructibleObstacle>().Clear();
@@ -243,7 +248,7 @@ namespace Ferryman.Tests
             yield return WaitFor(() => exploding == null, 2f, "The intact bomb did not explode after its fuse.");
             Assert.That(boat.CurrentHealth, Is.EqualTo(900f));
             Assert.That(boat.RepairPoints.Count, Is.EqualTo(1));
-            Assert.That((Vector2)boat.RepairPoints.Single().transform.position, Is.EqualTo(Vector2.left));
+            Assert.That(Vector2.Distance(boat.RepairPoints.Single().transform.position, explodingPosition), Is.LessThan(0.0001f));
             Assert.That(player.IsStunned, Is.False, "Boat damage added an unrequested character AOE hit.");
             Assert.That(player.Health, Is.EqualTo(100f));
             Assert.That(EffectCount(explosionEffect), Is.EqualTo(1));
@@ -268,7 +273,8 @@ namespace Ferryman.Tests
             Assert.That(thrownFuse.gameObject.activeSelf, Is.True);
             Assert.That(thrownFuse.Find("Fill").localScale.x, Is.GreaterThan(0.9f));
             Assert.That((Vector2)thrown.transform.position, Is.Not.EqualTo(planned));
-            Assert.That(boat.Deck.CanPlace(thrown.transform.position, thrownSize), Is.True);
+            Assert.That(boat.Deck.CanPlace(thrown.transform.position, thrownSize,
+                ignoredObstacle: thrown.GetComponent<DestructibleObstacle>()), Is.True);
             Object.Destroy(thrown.gameObject);
 
             foreach (var effect in Object.FindObjectsOfType<Transform>()
@@ -293,10 +299,10 @@ namespace Ferryman.Tests
             bomb.gameObject.SetActive(true);
             bomb.Throw(boat, landing);
             yield return WaitFor(() => bomb != null && !bomb.IsInFlight, 1.5f, "The bomb did not land on the bow.");
-            Assert.That((Vector2)bomb.transform.position, Is.EqualTo(landing));
+            Assert.That(Vector2.Distance(bomb.transform.position, landing), Is.LessThan(0.0001f));
             Assert.That(bomb.Explode(), Is.True);
             RepairPoint point = boat.RepairPoints.Single(item => item.Cell == bowCell);
-            Assert.That((Vector2)point.transform.position, Is.EqualTo(landing));
+            Assert.That(Vector2.Distance(point.transform.position, landing), Is.LessThan(0.0001f));
 
             Vector2 stoneLanding = deck.CellToWorld(new Vector2Int(13, 2));
             var stoneTemplate = Object.FindObjectsOfType<DestructibleObstacle>(true)
@@ -307,7 +313,7 @@ namespace Ferryman.Tests
             Assert.That(flyTo, Is.Not.Null);
             flyTo.Invoke(stone, new object[] { deck, stoneLanding, 0.4f, 0f, null });
             yield return WaitFor(() => stone != null && !stone.IsInFlight, 1.5f, "The stone did not land on the bow.");
-            Assert.That((Vector2)stone.transform.position, Is.EqualTo(stoneLanding));
+            Assert.That(Vector2.Distance(stone.transform.position, stoneLanding), Is.LessThan(0.0001f));
             var stoneHitbox = stone.GetComponent<BoxCollider2D>();
             Assert.That(stoneHitbox.enabled && deck.CanPlace(stoneLanding, stoneHitbox.size, stoneHitbox), Is.True);
 
@@ -319,9 +325,10 @@ namespace Ferryman.Tests
             BoatHealth.State checkpoint = boat.CaptureState();
             boat.RestoreState(checkpoint);
             Assert.That(boat.CurrentHealth, Is.EqualTo(800f));
-            Assert.That((Vector2)boat.RepairPoints.Single(item => item.Cell == oldEdge).transform.position, Is.EqualTo(legacyPosition));
+            Assert.That(Vector2.Distance(boat.RepairPoints.Single(item => item.Cell == oldEdge).transform.position, legacyPosition),
+                Is.LessThan(0.0001f));
             var restored = boat.RepairPoints.Single(item => item.Cell == bowCell);
-            Assert.That((Vector2)restored.transform.position, Is.EqualTo(landing));
+            Assert.That(Vector2.Distance(restored.transform.position, landing), Is.LessThan(0.0001f));
             Assert.That(restored.Progress, Is.EqualTo(25f));
 
             BoatHealth.PointState legacy = checkpoint.points.Single(item => item.cell == oldEdge);

@@ -47,7 +47,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   visual: {fileID: 8779552168706909532}
   appearances: []
-  lifetime: 0.4
+  lifetime: 0.78
+  expandAndFade: 1
 --- !u!1 &9159600904317941703
 GameObject:
   m_ObjectHideFlags: 0
@@ -121,7 +122,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 17
-  m_Sprite: {fileID: 21300000, guid: 377405f8aba4ddd4b8f758dabba4a9b6, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 90f112d0610c4a1eace5cee74bfd99ea, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0

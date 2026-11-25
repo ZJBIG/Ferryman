@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Ferryman.Voyage;
 using Ferryman.World;
 using UnityEngine;
 using UnityEngine.Events;
@@ -115,13 +116,14 @@ namespace Ferryman.Characters
         public bool TryMelee(Vector2 direction)
         {
             StopRepairing();
-            if (!CanAct || Time.time < nextMeleeAt || direction.sqrMagnitude < 0.0001f
+            if (!CanAct || ActionTime < nextMeleeAt || direction.sqrMagnitude < 0.0001f
                 || DamageSystem == null)
                 return false;
 
             Face(direction);
-            nextMeleeAt = Time.time + meleeCooldown;
-            Vector2 origin = transform.position;
+            nextMeleeAt = ActionTime + meleeCooldown;
+            Vector2 origin = body.position;
+            VoyageAudio.Play(Sound.KickSwing, 0.66f, origin);
             var hits = new HashSet<Collider2D>();
             foreach (var hit in Physics2D.OverlapCircleAll(origin, meleeRange))
             {
@@ -160,11 +162,14 @@ namespace Ferryman.Characters
                     if (!character.IsHostile)
                     {
                         Vector2 away = (Vector2)character.transform.position - origin;
-                        character.TryReceivePlayerKick((away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection) * 8f);
+                        if (character.TryReceivePlayerKick((away.sqrMagnitude > 0.0001f ? away.normalized : AimDirection) * 8f))
+                            VoyageAudio.Play(Sound.KickFlesh, position: contact);
                     }
                     else
                         DamageSystem.ApplyDamage(this, character, AttackPower);
                 }
+                else
+                    VoyageAudio.Play(Sound.KickWood, position: contact);
                 if (meleeImpactEffectPrefab != null && (character == null || !character.IsHostile))
                     Instantiate(meleeImpactEffectPrefab, contact, AimRotation);
             }
@@ -235,7 +240,7 @@ namespace Ferryman.Characters
 
             body.velocity = Vector2.zero;
             foreach (var point in repairTargets)
-                point.AddProgress(this, repairSpeed * deltaTime);
+                point.AddProgress(this, repairSpeed * deltaTime * ActionSpeed);
             repairTargets.RemoveAll(point => point == null || point.IsComplete);
             return true;
         }
@@ -262,9 +267,9 @@ namespace Ferryman.Characters
             }
         }
 
-        public override bool TryReceiveDamage(float damage)
+        public override bool TryReceiveDamage(float damage, float attackStunDuration = 0f)
         {
-            if (!base.TryReceiveDamage(damage))
+            if (!base.TryReceiveDamage(damage, attackStunDuration))
                 return false;
             StopRepairing();
             return true;

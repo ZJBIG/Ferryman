@@ -65,7 +65,7 @@ namespace Ferryman.Tests
                 actor.gameObject.SetActive(false);
             var profile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner");
             var fighter = (CombatCrewMember)Object.Instantiate(profile.prefab, Vector2.zero, Quaternion.identity);
-            fighter.InitializeCrew(boat, player.DamageSystem, player.ProjectilePrefab, profile);
+            fighter.InitializeCrew(boat, player.DamageSystem, profile);
             var mechanic = CreateMaintenance(new Vector2(2f, 0f), 2f, 10f, 1);
             Vector2 fighterStart = fighter.transform.position;
             Vector2 mechanicStart = mechanic.transform.position;
@@ -189,7 +189,8 @@ namespace Ferryman.Tests
             MaintenanceCrewMember crew = CreateMaintenance(new Vector2(3.5f, 0f), 4f, 10f, 1);
             Physics2D.SyncTransforms();
             yield return WaitFor(() => point.Progress > 0f, 4f, "Maintenance crew did not reach the bow repair point.");
-            Assert.That(crew.transform.position.x, Is.GreaterThan(6f));
+            Assert.That(BoatDeck.CellDistance(boat.Deck.WorldToCell(crew.transform.position), point.Cell),
+                Is.LessThanOrEqualTo(1), "Maintenance crew began repair outside its one-cell range.");
         }
 
         [UnityTest]
@@ -205,14 +206,12 @@ namespace Ferryman.Tests
             enemy.transform.position = new Vector2(0f, 3f);
             boat.ApplyDamage(100f, new Vector2(-1.5f, 0f));
             RepairPoint point = boat.RepairPoints.Single();
-            var fighterObject = new GameObject("Test Combat Crew");
-            fighterObject.transform.position = new Vector2(-1.5f, 0.85f);
-            var fighter = fighterObject.AddComponent<CombatCrewMember>();
-            fighter.GetComponent<BoxCollider2D>().size = new Vector2(0.45f, 0.7f);
+            var fighterPrefab = Resources.Load<CrewDefinition>("Voyage/Crew/gunner").prefab as CombatCrewMember;
+            var fighter = Object.Instantiate(fighterPrefab, new Vector2(-1.5f, 0.85f), Quaternion.identity);
             CrewDefinition fighterDefinition = Definition(CrewRole.Combat);
             fighterDefinition.attackPower = 30f;
             fighterDefinition.fireInterval = 0.2f;
-            fighter.InitializeCrew(boat, player.DamageSystem, player.ProjectilePrefab, fighterDefinition);
+            fighter.InitializeCrew(boat, player.DamageSystem, fighterDefinition);
             Physics2D.SyncTransforms();
             Assert.That(fighter.TryReceiveDamage(10f), Is.True);
             yield return new WaitForSeconds(0.3f);

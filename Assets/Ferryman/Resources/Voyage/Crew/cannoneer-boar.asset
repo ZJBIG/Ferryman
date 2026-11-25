@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e54b71bf547243b68082e9dd2e03cd03, type: 3}
+  m_Name: cannoneer-boar
+  m_EditorClassIdentifier: 
+  id: cannoneer-boar
+  displayName: "\u70AE\u624B\u91CE\u732A"
+  role: 0
+  prefab: {fileID: 7264658945044794949, guid: 6052c5357a583e148bfbafbfd29ec4a4, type: 3}
+  portrait: {fileID: 21300000, guid: b7f2dea60d694f7d8aa9f567b48a2438, type: 3}
+  deckSprite: {fileID: 21300000, guid: a048b10982cf429b98a2d7dd7543465c, type: 3}
+  walkFrames:
+  - {fileID: 3266445434995494743, guid: cd8a57d0f99a55cea005b2475879b1d2, type: 3}
+  - {fileID: 2980881429444840016, guid: cd8a57d0f99a55cea005b2475879b1d2, type: 3}
+  - {fileID: 1395202867283019036, guid: cd8a57d0f99a55cea005b2475879b1d2, type: 3}
+  - {fileID: -3651441566693667098, guid: cd8a57d0f99a55cea005b2475879b1d2, type: 3}
+  skillFrames:
+  - {fileID: -120545782141452544, guid: 25f71c0a08ce536ea57bd3023af4330b, type: 3}
+  - {fileID: 2329337687846382236, guid: 25f71c0a08ce536ea57bd3023af4330b, type: 3}
+  - {fileID: -696499292460138235, guid: 25f71c0a08ce536ea57bd3023af4330b, type: 3}
+  - {fileID: -3793325565035071920, guid: 25f71c0a08ce536ea57bd3023af4330b, type: 3}
+  moveSpeed: 2
+  repairSpeed: 0
+  repairRange: 0
+  simultaneousRepairs: 1
+  attackPower: 20
+  fireInterval: 0.8
+  coinsReward: 45
+  specialItemsReward: 1

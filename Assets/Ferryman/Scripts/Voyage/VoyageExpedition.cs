@@ -14,6 +14,7 @@ namespace Ferryman.Voyage
         private readonly List<int> routePath = new List<int>();
         private readonly List<EncounterDefinition> expeditionEncounters = new List<EncounterDefinition>();
         private int[] runUpgrades = new int[VoyageUpgrades.Count];
+        private bool permanentUpgradeChosen;
         private static readonly VoyageUpgradeKind[] MarketUpgrades =
         {
             VoyageUpgradeKind.Attack, VoyageUpgradeKind.AttackSpeed, VoyageUpgradeKind.RepairSpeed
@@ -29,10 +30,12 @@ namespace Ferryman.Voyage
         public VoyageUpgradeKind[] UpgradeChoices { get; private set; } = Array.Empty<VoyageUpgradeKind>();
         public int[] RunUpgrades => (int[])runUpgrades.Clone();
         public int[] PermanentUpgrades => VoyageUpgrades.ReadRanks(Progress?.upgrades);
+        public bool CanChoosePermanentUpgrade => !ActiveRun && Phase == VoyagePhase.Departure
+            && !HasCheckpoint && !permanentUpgradeChosen;
         public int AvailableCoins => pendingReward.coins;
         public int AvailableSpecialItems => pendingReward.specialItems;
         public bool AwaitingRouteChoice => IsExpedition && ActiveRun && Phase == VoyagePhase.Island
-            && BoardingProfile == null && StopIndex % 2 == 0 && IslandResolved && UpgradeChoices.Length == 0
+            && BoardingProfile == null && !HasStoryDialogue && StopIndex % 2 == 0 && IslandResolved && UpgradeChoices.Length == 0
             && RouteMap.Nodes[CurrentNodeId].depth < VoyageRouteMap.FinalDepth;
 
         private void InitializeExpedition(bool enabled, VoyageCheckpoint checkpoint)
@@ -43,13 +46,13 @@ namespace Ferryman.Voyage
                 eventPlan = VoyageEventPlanner.Build(definition, seed);
                 return;
             }
-            RouteMap = VoyageRouteMap.Generate(seed, checkpoint?.routePath);
+            RouteMap = VoyageRouteMap.Generate(ExpeditionSeed, checkpoint?.routePath);
             routePath.AddRange(checkpoint?.routePath ?? new[] { 0 });
             RouteMap.ValidatePath(routePath.ToArray());
             runUpgrades = VoyageUpgrades.ReadRanks(checkpoint?.runUpgrades);
             IslandResolved = checkpoint == null || checkpoint.islandResolved;
             UpgradeChoices = checkpoint?.upgradeChoices ?? Array.Empty<VoyageUpgradeKind>();
-            expeditionStops = new VoyageStop[VoyageRouteMap.FinalDepth * 2 + 1];
+            expeditionStops = new VoyageStop[DestinationStop + (StoryRound == FinalStoryRound ? 2 : 1)];
             eventPlan = new PlannedVoyageEvent[expeditionStops.Length];
             for (int i = 0; i < expeditionStops.Length; i++)
             {
@@ -57,8 +60,8 @@ namespace Ferryman.Voyage
                 expeditionStops[i] = new VoyageStop
                 {
                     kind = island ? VoyageStopKind.Island : VoyageStopKind.Sea,
-                    sceneName = i == 0 ? "Departure" : i == expeditionStops.Length - 1 ? "FinalIsland" : island ? "Island" : "Sea",
-                    displayName = i == 0 ? "出发岛" : i == expeditionStops.Length - 1 ? "最终岛" : island ? "第 " + (i / 2) + " 层岛屿" : "群岛航路",
+                    sceneName = i == 0 ? "Departure" : i == DestinationStop ? "FinalIsland" : island ? "Island" : "Sea",
+                    displayName = i == 0 ? "出发岛" : i == DestinationStop ? "终点港" : island ? "第 " + (i / 2) + " 层岛屿" : "群岛航路",
                     boardingChance = island && i > 0 ? 0.4f : 0f,
                     maxBoardingPassengers = island && i > 0 ? 1 : 0
                 };
@@ -66,6 +69,14 @@ namespace Ferryman.Voyage
             }
             for (int i = 1; i < routePath.Count; i++)
                 PrepareLeg(RouteMap.Nodes[routePath[i]]);
+            if (StoryRound == FinalStoryRound)
+            {
+                expeditionStops[BossStop].displayName = "终点港外海";
+                eventPlan[BossStop] = new PlannedVoyageEvent
+                {
+                    kind = VoyageEventKind.Combat, encounter = definition.finalBossEncounter, isFixed = true
+                };
+            }
         }
 
         private void PrepareLeg(VoyageRouteNode node)
@@ -73,11 +84,14 @@ namespace Ferryman.Voyage
             int seaIndex = node.depth * 2 - 1;
             expeditionStops[seaIndex + 1].displayName = node.Name;
             expeditionStops[seaIndex].displayName = "前往" + node.Name;
-            var random = new Random(seed ^ node.id * 7919);
+            var random = new Random(ExpeditionSeed ^ node.id * 7919);
+            int storyLeg = StoryRound > 0 ? (StoryRound - 1) * VoyageRouteMap.FinalDepth + node.depth : 0;
+            float combatChance = StoryRound > 0 ? Mathf.Min(0.8f, 0.3f + StoryRound * 0.12f + node.depth * 0.025f)
+                : node.depth <= 2 ? 0.2f : node.depth <= 4 ? 0.3f : 0.4f;
             bool combat = node.kind == VoyageIslandKind.Battle || node.kind == VoyageIslandKind.Elite
                 || node.kind == VoyageIslandKind.Destination
-                || random.NextDouble() < (node.depth <= 2 ? 0.2 : node.depth <= 4 ? 0.3 : 0.4);
-            if (combat)
+                || random.NextDouble() < combatChance;
+            if (combat || storyLeg == 1)
             {
                 EncounterDefinition[] sources = definition.randomEncounters
                     .Concat(definition.stops.Select(stop => stop.fixedEncounter)).Where(item => item != null).Distinct().ToArray();
@@ -94,16 +108,33 @@ namespace Ferryman.Voyage
                 int waves = node.depth <= 2 ? 1 : 2;
                 if (node.depth == VoyageRouteMap.FinalDepth || node.kind == VoyageIslandKind.Elite && node.depth >= 5)
                     waves = 3;
-                encounter.waves = Enumerable.Range(0, waves).Select(wave => new WaveDefinition
+                if (StoryRound >= 2)
+                    waves = Mathf.Min(4, waves + 1);
+                if (storyLeg > 0)
                 {
-                    enemies = source.waves[wave % source.waves.Length].enemies.Select((group, groupIndex) => new EnemySpawn
+                    EnemySpawn[] available = sources.SelectMany(item => item.waves).SelectMany(wave => wave.enemies)
+                        .Where(group => group.firstStoryLeg <= storyLeg)
+                        .GroupBy(group => group.prefab)
+                        .Select(groups => groups.OrderBy(group => group.firstStoryLeg).First()).ToArray();
+                    if (available.Length == 0)
+                        throw new InvalidDataException("剧情航路当前没有可用的海怪。");
+                    encounter.waves = Enumerable.Range(0, waves)
+                        .Select(wave => BuildStoryWave(available, storyLeg, wave, random)).ToArray();
+                }
+                else
+                {
+                    encounter.waves = Enumerable.Range(0, waves).Select(wave => new WaveDefinition
                     {
-                        prefab = group.prefab,
-                        spawnPosition = group.spawnPosition,
-                        count = Mathf.Min(4, group.count + (node.depth - 1 + wave + groupIndex
-                            + (node.kind == VoyageIslandKind.Elite ? 1 : 0)) / 4)
-                    }).ToArray()
-                }).ToArray();
+                        enemies = source.waves[wave % source.waves.Length].enemies.Select((group, groupIndex) => new EnemySpawn
+                        {
+                            prefab = group.prefab,
+                            spawnPosition = group.spawnPosition,
+                            count = group.prefab.AttackType == EnemyCharacter.AttackKind.BoardingMelee ? group.count
+                                : Mathf.Min(4, group.count + 1 + (node.depth - 1 + wave + groupIndex
+                                    + (node.kind == VoyageIslandKind.Elite ? 2 : 0)) / 3)
+                        }).ToArray()
+                    }).ToArray();
+                }
                 encounter.reward = new RewardData
                 {
                     coins = (30 + node.depth * 10) * (node.kind == VoyageIslandKind.Elite ? 2 : 1),
@@ -113,7 +144,8 @@ namespace Ferryman.Voyage
             }
             else
             {
-                SeaEventDefinition[] specials = definition.specialEvents.Select(entry => entry.definition)
+                SeaEventDefinition[] specials = definition.specialEvents.Where(entry => entry.maxAppearances > 0)
+                    .Select(entry => entry.definition)
                     .Where(item => item != null).ToArray();
                 if (specials.Length > 0 && random.NextDouble() < 0.65)
                     eventPlan[seaIndex] = new PlannedVoyageEvent
@@ -124,6 +156,20 @@ namespace Ferryman.Voyage
             }
         }
 
+        private static WaveDefinition BuildStoryWave(EnemySpawn[] available, int storyLeg, int wave, Random random)
+        {
+            int unitBudget = Mathf.Min(12, 3 + (storyLeg - 1) / 2 + wave);
+            int typeBudget = Mathf.Min(4, 2 + (storyLeg - 1) / 5);
+            var groups = available.OrderBy(group => wave == 0 && group.firstStoryLeg == storyLeg ? 0 : 1)
+                .ThenBy(_ => random.Next())
+                .Take(Mathf.Min(unitBudget, typeBudget))
+                .Select(group => new EnemySpawn { prefab = group.prefab, spawnPosition = group.spawnPosition }).ToArray();
+            EnemySpawn[] repeatable = groups.Where(group => group.prefab.AttackType != EnemyCharacter.AttackKind.BoardingMelee).ToArray();
+            for (int i = groups.Length; i < unitBudget && repeatable.Length > 0; i++)
+                repeatable[(i - groups.Length) % repeatable.Length].count++;
+            return new WaveDefinition { enemies = groups };
+        }
+
         public bool SelectDestination(int nodeId)
         {
             if (!AwaitingRouteChoice || !RouteMap.CanTravel(CurrentNodeId, nodeId))
@@ -131,18 +177,21 @@ namespace Ferryman.Voyage
             PrepareLeg(RouteMap.Nodes[nodeId]);
             routePath.Add(nodeId);
             IslandResolved = false;
+            StoryDockOfferResolved = false;
             UpgradeChoices = Array.Empty<VoyageUpgradeKind>();
             // Save the sea entrance now so a crash during departure keeps the chosen branch.
             StopIndex++;
             SaveCheckpoint();
+            VoyageAudio.Play(Sound.Confirm);
             return true;
         }
 
         public bool ResolveIslandOption(int option)
         {
             if (!IsExpedition || !ActiveRun || Phase != VoyagePhase.Island || BoardingProfile != null || StopIndex % 2 != 0
-                || IslandResolved || UpgradeChoices.Length > 0 || option < 0)
+                || HasStoryDialogue || IslandResolved || UpgradeChoices.Length > 0 || option < 0)
                 return false;
+            int coinsBefore = pendingReward.coins;
             switch (CurrentIsland)
             {
                 case VoyageIslandKind.Rest:
@@ -155,6 +204,7 @@ namespace Ferryman.Voyage
                     {
                         if (!BuyRunUpgrade(MarketUpgrades[option])) return false;
                         SaveCheckpoint();
+                        VoyageAudio.Play(Sound.Upgrade, 0.70f);
                         return true;
                     }
                     if (option == 3)
@@ -168,9 +218,12 @@ namespace Ferryman.Voyage
                     if (option != 4) return false;
                     break;
                 case VoyageIslandKind.Rescue:
+                    if (option == 2) break;
                     if (option > 1) return false;
                     CrewRole role = option == 0 ? CrewRole.Combat : CrewRole.Maintenance;
-                    CrewDefinition profile = definition.passengerPool.FirstOrDefault(item => item.role == role);
+                    if (StoryRound > 0)
+                        return OfferStoryRescue(role);
+                    CrewDefinition profile = definition.passengerPool.FirstOrDefault(item => item.role == role && !HasPassenger(item));
                     if (profile == null) return false;
                     int destination = Mathf.Min(ActiveStops.Length - 1, StopIndex + 4);
                     BoardPassenger(profile, destination);
@@ -204,12 +257,14 @@ namespace Ferryman.Voyage
             }
             IslandResolved = true;
             SaveCheckpoint();
+            if (pendingReward.coins > coinsBefore)
+                VoyageAudio.Play(Sound.Reward, 0.64f);
             return true;
         }
 
         private void OfferUpgrades()
         {
-            var random = new Random(seed ^ CurrentNodeId * 3571);
+            var random = new Random(ExpeditionSeed ^ CurrentNodeId * 3571);
             UpgradeChoices = Enumerable.Range(0, VoyageUpgrades.Count)
                 .Where(index => runUpgrades[index] < VoyageUpgrades.MaxRank)
                 .OrderBy(index => random.Next()).Take(3).Select(index => (VoyageUpgradeKind)index).ToArray();
@@ -223,6 +278,7 @@ namespace Ferryman.Voyage
             UpgradeChoices = Array.Empty<VoyageUpgradeKind>();
             ApplyUpgrades();
             SaveCheckpoint();
+            VoyageAudio.Play(Sound.Upgrade, 0.70f);
             return true;
         }
 
@@ -242,7 +298,11 @@ namespace Ferryman.Voyage
 
         public bool BuyPermanentUpgrade(VoyageUpgradeKind kind)
         {
-            return !ActiveRun && Phase == VoyagePhase.Departure && !HasCheckpoint && store.TryBuyUpgrade(kind);
+            if (!CanChoosePermanentUpgrade || !store.TryBuyUpgrade(kind))
+                return false;
+            permanentUpgradeChosen = true;
+            VoyageAudio.Play(Sound.Upgrade, 0.70f);
+            return true;
         }
 
         private void ApplyUpgrades()

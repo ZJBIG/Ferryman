@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Ferryman.Voyage;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -18,6 +19,7 @@ namespace Ferryman.World
 
         private readonly HashSet<Component> repairers = new HashSet<Component>();
         private BoatHealth boat;
+        private AudioSource workAudio;
 
         public Vector2Int Cell { get; private set; }
         public float Progress { get; private set; }
@@ -54,7 +56,13 @@ namespace Ferryman.World
             repairers.Add(repairer);
             UpdateProgressBar();
             if (wasIdle)
+            {
+                if (workAudio == null)
+                    workAudio = VoyageAudio.StartLoop(gameObject, Sound.Repair, 0.30f, true);
+                else
+                    workAudio.Play();
                 repairStarted.Invoke();
+            }
             return true;
         }
 
@@ -64,7 +72,7 @@ namespace Ferryman.World
                 return;
             UpdateProgressBar();
             if (repairers.Count == 0)
-                repairStopped.Invoke();
+                NotifyRepairStopped();
         }
 
         public bool AddProgress(Component repairer, float amount)
@@ -82,7 +90,8 @@ namespace Ferryman.World
                 repairers.Clear();
                 UpdateProgressBar();
                 boat.CompleteRepair(this);
-                repairStopped.Invoke();
+                NotifyRepairStopped();
+                VoyageAudio.Play(Sound.RepairDone, 0.69f, transform.position);
                 if (completedEffectPrefab != null)
                     Instantiate(completedEffectPrefab, transform.position, Quaternion.identity);
                 repairCompleted.Invoke();
@@ -97,7 +106,14 @@ namespace Ferryman.World
             repairers.Clear();
             UpdateProgressBar();
             if (wasActive)
-                repairStopped.Invoke();
+                NotifyRepairStopped();
+        }
+
+        private void NotifyRepairStopped()
+        {
+            if (workAudio != null)
+                workAudio.Stop();
+            repairStopped.Invoke();
         }
 
         private void UpdateProgressBar()

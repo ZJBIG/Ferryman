@@ -143,20 +143,33 @@ namespace Ferryman.World
             return true;
         }
 
-        public bool CanPlace(Vector2 position, Vector2 size, Collider2D ignored = null)
+        public bool CanPlace(Vector2 position, Vector2 size, Collider2D ignored = null,
+            DestructibleObstacle ignoredObstacle = null)
         {
             if (!HasClearFloor(position, size))
                 return false;
+            var footprint = new Rect(position - size * 0.5f, size);
+            // Flying items and landed bombs have no active collider, but still occupy their landing area.
+            foreach (var obstacle in FindObjectsOfType<DestructibleObstacle>())
+            {
+                if (obstacle == ignoredObstacle || obstacle.IsCleared
+                    || ignored != null && obstacle.GetComponent<Collider2D>() == ignored)
+                    continue;
+                Vector2 occupiedSize = obstacle.Footprint;
+                if (footprint.Overlaps(new Rect(obstacle.WorldLandingPosition - occupiedSize * 0.5f, occupiedSize)))
+                    return false;
+            }
             foreach (Collider2D hit in Physics2D.OverlapBoxAll(position, size, 0f))
                 if (!hit.isTrigger && hit != ignored && hit.gameObject != gameObject)
                     return false;
             return true;
         }
 
-        public bool TryFindPlacement(Vector2 preferred, Vector2 size, Collider2D ignored, out Vector2 position)
+        public bool TryFindPlacement(Vector2 preferred, Vector2 size, Collider2D ignored, out Vector2 position,
+            DestructibleObstacle ignoredObstacle = null)
         {
             position = preferred;
-            if (CanPlace(preferred, size, ignored))
+            if (CanPlace(preferred, size, ignored, ignoredObstacle))
                 return true;
 
             float best = float.PositiveInfinity;
@@ -167,7 +180,7 @@ namespace Ferryman.World
                 {
                     Vector2 candidate = CellToWorld(new Vector2Int(x, y));
                     float distance = (candidate - preferred).sqrMagnitude;
-                    if (distance >= best || !CanPlace(candidate, size, ignored))
+                    if (distance >= best || !CanPlace(candidate, size, ignored, ignoredObstacle))
                         continue;
                     position = candidate;
                     best = distance;

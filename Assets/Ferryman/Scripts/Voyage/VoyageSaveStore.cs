@@ -40,6 +40,9 @@ namespace Ferryman.Voyage
         public string runId;
         public int seed;
         public int stopIndex;
+        public int storyRound;
+        public string[] deliveredStoryProfiles;
+        public bool storyDockOfferResolved;
         public int pendingCoins;
         public int pendingSpecialItems;
         public int deliveredPassengers;
@@ -55,6 +58,9 @@ namespace Ferryman.Voyage
 
     public sealed class VoyageSaveStore
     {
+        internal static int RouteSeed(int seed, int storyRound) =>
+            storyRound <= 1 ? seed : unchecked(seed ^ (storyRound - 1) * 104729);
+
         private readonly string progressPath;
         private readonly string checkpointPath;
 
@@ -155,6 +161,9 @@ namespace Ferryman.Voyage
                 || checkpoint.passengers == null || checkpoint.ship == null)
                 throw new InvalidDataException("Voyage checkpoint is invalid or uses an unsupported version.");
             int[] ranks = VoyageUpgrades.ReadRanks(checkpoint.runUpgrades);
+            if (checkpoint.storyRound < 0 || checkpoint.storyRound > VoyageController.FinalStoryRound
+                || checkpoint.storyRound > 0 && (checkpoint.routePath == null || checkpoint.routePath.Length == 0))
+                throw new InvalidDataException("Voyage checkpoint has an invalid story round.");
             foreach (ObstacleState obstacle in checkpoint.obstacles ?? Array.Empty<ObstacleState>())
             {
                 if (obstacle == null || string.IsNullOrWhiteSpace(obstacle.eventId) || obstacle.appearanceIndex < -1
@@ -163,10 +172,13 @@ namespace Ferryman.Voyage
             }
             if (checkpoint.routePath != null && checkpoint.routePath.Length > 0)
             {
-                if (checkpoint.stopIndex >= VoyageRouteMap.FinalDepth * 2 + 1)
+                int lastStop = VoyageRouteMap.FinalDepth * 2
+                    + (checkpoint.storyRound == VoyageController.FinalStoryRound ? 1 : 0);
+                if (checkpoint.stopIndex > lastStop)
                     throw new InvalidDataException("Branching voyage checkpoint has an invalid stop index.");
-                VoyageRouteMap.Generate(checkpoint.seed, checkpoint.routePath).ValidatePath(checkpoint.routePath);
-                int expectedLength = (checkpoint.stopIndex + 1) / 2 + 1;
+                VoyageRouteMap.Generate(RouteSeed(checkpoint.seed, checkpoint.storyRound), checkpoint.routePath)
+                    .ValidatePath(checkpoint.routePath);
+                int expectedLength = Math.Min(VoyageRouteMap.FinalDepth, (checkpoint.stopIndex + 1) / 2) + 1;
                 if (checkpoint.routePath.Length != expectedLength)
                     throw new InvalidDataException("Branching voyage path does not match the checkpoint stop.");
             }

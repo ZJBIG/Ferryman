@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbc0ce7ab84048e9a7fd046fc0412750, type: 3}
+  m_Name: BoardingRaid
+  m_EditorClassIdentifier: 
+  id: boarding-raid
+  displayName: "\u7ffb\u8237\u7a81\u88ad"
+  waves:
+  - enemies:
+    - prefab: {fileID: 4237392762737264246, guid: eec48e9efcd058e3a208210b7003e632, type: 3}
+      count: 1
+      spawnPosition: {x: 2, y: 8.5}
+      firstStoryLeg: 18
+  reward:
+    coins: 35
+    specialItems: 1
+  cameraSize: 9.5
+  cameraHeight: 3.5

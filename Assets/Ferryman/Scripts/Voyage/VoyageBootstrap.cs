@@ -21,6 +21,7 @@ namespace Ferryman.Voyage
             {
                 controller.Initialize(definition,
                     new VoyageSaveStore(Path.Combine(Application.persistentDataPath, "Voyage")));
+                root.AddComponent<VoyageAudio>();
             }
             catch (Exception error)
             {

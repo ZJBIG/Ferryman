@@ -28,11 +28,14 @@ namespace Ferryman.Voyage
 
     public sealed partial class VoyageController : MonoBehaviour
     {
-        private const float ObstacleDropSeconds = 0.85f;
+        private const float ObstacleThrowSeconds = 0.65f;
+        private const float ObstacleThrowArc = 0.3f;
         private VoyageDefinition definition;
         private VoyageSaveStore store;
         private VoyageVessel vessel;
         private Coroutine routine;
+        private readonly List<GameObject> obstacleCarriers = new List<GameObject>();
+        private readonly List<WaveBubbles> waveBubbles = new List<WaveBubbles>();
         private readonly List<Passenger> passengers = new List<Passenger>();
         private readonly List<EnemyCharacter> enemies = new List<EnemyCharacter>();
         private readonly List<DestructibleObstacle> eventObstacles = new List<DestructibleObstacle>();
@@ -71,7 +74,7 @@ namespace Ferryman.Voyage
             store = saves;
             DontDestroyOnLoad(gameObject);
             ValidateDefinition();
-            Message = "选择第一位护送乘客；启航前船只已完成整备。";
+            Message = "空船启航，在途中岛屿接载乘客；启航前船只已完成整备。";
         }
 
         public void ReportError(Exception error)
@@ -88,22 +91,23 @@ namespace Ferryman.Voyage
             CleanupHazards();
         }
 
-        public bool StartVoyage(CrewDefinition initialPassenger, int voyageSeed)
+        public bool StartVoyage(int voyageSeed)
         {
-            if (ActiveRun || HasCheckpoint || initialPassenger == null || !definition.initialPassengers.Contains(initialPassenger))
+            if (ActiveRun || HasCheckpoint)
                 return false;
             seed = voyageSeed;
             runId = Guid.NewGuid().ToString("N");
             pendingReward = default;
             deliveredPassengers = 0;
             CanRetrySettlement = false;
+            LoadStory(definition.branchingRoutes && definition.storyCampaign ? 1 : 0);
             InitializeExpedition(definition.branchingRoutes, null);
             CreateVessel();
-            BoardPassenger(initialPassenger, ActiveStops.Length - 1);
             vessel.SetActionsAllowed(false, true);
             ActiveRun = true;
             StopIndex = 0;
             SaveCheckpoint();
+            permanentUpgradeChosen = false;
             routine = StartCoroutine(RunSafely(RunRoute(0, false)));
             return true;
         }
@@ -116,6 +120,7 @@ namespace Ferryman.Voyage
             if (checkpoint == null)
                 return false;
             seed = checkpoint.seed;
+            LoadStory(checkpoint.storyRound, checkpoint);
             InitializeExpedition(checkpoint.routePath != null && checkpoint.routePath.Length > 0, checkpoint);
             ValidatePassengers(checkpoint);
             runId = checkpoint.runId;
@@ -127,8 +132,10 @@ namespace Ferryman.Voyage
             {
                 SeaEventDefinition source = definition.specialEvents.Select(entry => entry.definition)
                     .Concat(definition.stops.Select(stop => stop.fixedSpecialEvent))
-                    .FirstOrDefault(item => item != null && item.id == saved.eventId);
-                if (source == null || source.obstaclePrefab.GetComponent<TimedBomb>() != null)
+                    .FirstOrDefault(item => item != null && item.id == saved.eventId)
+                    ?? Resources.Load<SeaEventDefinition>("Voyage/Events/" + saved.eventId);
+                if (source == null || source.id != saved.eventId || source.obstaclePrefab == null
+                    || source.obstaclePrefab.GetComponent<TimedBomb>() != null)
                     throw new InvalidDataException("Carried obstacle has an unknown sea event.");
                 var item = Instantiate(source.obstaclePrefab, vessel.transform);
                 item.transform.localPosition = saved.localPosition;
@@ -140,7 +147,9 @@ namespace Ferryman.Voyage
             RestoreActorPosition(vessel.Player, checkpoint.playerLocalPosition);
             foreach (PassengerState saved in checkpoint.passengers)
             {
-                Passenger passenger = BoardPassenger(FindProfile(saved.profileId), saved.destinationStopIndex);
+                if (HasPassenger(FindProfile(saved.profileId)))
+                    continue;
+                Passenger passenger = BoardPassenger(FindProfile(saved.profileId), saved.destinationStopIndex, false);
                 RestoreActorPosition(passenger.Actor, saved.localPosition);
             }
             vessel.SetActionsAllowed(false, true);
@@ -205,19 +214,56 @@ namespace Ferryman.Voyage
                 if (stop.kind == VoyageStopKind.Island)
                 {
                     Phase = VoyagePhase.Island;
+                    if (StoryRound > 0)
+                        vessel.Player.BlockMouseAttacks = true;
                     if (!alreadyArrived && index > 0)
                     {
-                        DeliverPassengers(index);
-                        yield return BoardAtIsland(stop, index);
+                        VoyageAudio.Play(Sound.Dock, 0.64f);
+                        var farewells = DeliverPassengers(index);
+                        if (StoryRound == 0)
+                            yield return BoardAtIsland(stop, index);
+                        else
+                        {
+                            SaveCheckpoint();
+                            foreach (var profile in farewells)
+                                yield return ShowStoryFarewell(profile);
+                        }
                     }
+                    if (StoryRound > 0)
+                        yield return ShowIslandStory(index);
+                    if (StoryRound > 0 && index > 0 && index < DestinationStop && !StoryDockOfferResolved)
+                        yield return OfferStoryPassengerAtIsland(stop, index);
+                    if (!ActiveRun)
+                        yield break;
                     Message = "抵达 " + stop.displayName;
                     SaveCheckpoint();
-                    if (index == ActiveStops.Length - 1)
+                    if (StoryRound > 0 && index == DestinationStop)
+                    {
+                        storyPortReady = true;
+                        while (ActiveRun && !advanceStoryPort)
+                            yield return null;
+                        storyPortReady = false;
+                        advanceStoryPort = false;
+                        if (!ActiveRun)
+                            yield break;
+                        if (StoryRound < FinalStoryRound)
+                        {
+                            AdvanceToNextRound();
+                            index = -1;
+                        }
+                        else
+                        {
+                            StopIndex = BossStop;
+                            SaveCheckpoint();
+                        }
+                        vessel.Player.BlockMouseAttacks = false;
+                    }
+                    else if (index == ActiveStops.Length - 1)
                     {
                         FinishRun(true);
                         yield break;
                     }
-                    if (IsExpedition)
+                    else if (IsExpedition)
                     {
                         vessel.Player.BlockMouseAttacks = true;
                         while (ActiveRun && StopIndex == index)
@@ -232,18 +278,31 @@ namespace Ferryman.Voyage
                     SaveCheckpoint();
                     Phase = VoyagePhase.Sailing;
                     Message = "自动航行中";
+                    if (StoryRound > 0 && !IsBossLeg)
+                        StartCoroutine(ShowSeaConversation());
                     yield return Sail(definition.sailingSeconds * 0.5f);
                     if (!ActiveRun)
                         yield break;
+                    if (IsBossLeg)
+                        BoardFinalAllies();
                     if (eventPlan[index].kind != VoyageEventKind.None)
                         yield return ExecuteEvent(eventPlan[index]);
+                    if (IsBossLeg && ActiveRun)
+                        yield return WaitActive(0.9f);
                     if (!ActiveRun)
                         yield break;
-                    while (ActiveRun && (enemies.Any(enemy => enemy != null && enemy.Health > 0f)
-                        || FindObjectsOfType<TimedBomb>().Any(bomb => !bomb.GetComponent<DestructibleObstacle>().IsCleared)))
+                    while (ActiveRun && FindObjectsOfType<TimedBomb>()
+                        .Any(bomb => !bomb.GetComponent<DestructibleObstacle>().IsCleared))
                         yield return null;
                     if (!ActiveRun)
                         yield break;
+                    if (eventPlan[index].kind == VoyageEventKind.Combat)
+                        VoyageAudio.Play(Sound.BattleClear, 0.72f);
+                    if (IsBossLeg)
+                    {
+                        FinishRun(true);
+                        yield break;
+                    }
                     Phase = VoyagePhase.Sailing;
                     Message = "继续航行";
                     yield return Sail(definition.sailingSeconds * 0.5f);
@@ -307,31 +366,33 @@ namespace Ferryman.Voyage
         private IEnumerator ExecuteEvent(PlannedVoyageEvent planned)
         {
             Phase = VoyagePhase.Event;
+            BeginPassengerAlarm();
             if (planned.kind == VoyageEventKind.Combat)
             {
                 EncounterDefinition encounter = planned.encounter;
                 Camera camera = Camera.main;
-                while (ActiveRun && camera != null && (camera.orthographicSize != encounter.cameraSize
+                while (ActiveRun && camera != null && (camera.orthographicSize != CombatCameraSize(camera, encounter)
                     || camera.transform.position.y != encounter.cameraHeight))
                     yield return null;
-                SeaEventDefinition falling = definition.specialEvents.Select(entry => entry.definition)
-                    .FirstOrDefault(item => item != null && item.obstaclePrefab != null
-                        && item.obstaclePrefab.GetComponent<TimedBomb>() == null);
+                SeaEventDefinition[] falling = IsBossLeg ? Array.Empty<SeaEventDefinition>() : definition.specialEvents.Select(entry => entry.definition)
+                    .Where(item => item != null && item.obstaclePrefab != null).ToArray();
                 int depth = IsExpedition ? RouteMap.Nodes[CurrentNodeId].depth : Mathf.Max(1, (StopIndex + 1) / 2);
-                float dropInterval = depth <= 2 ? 12f : depth <= 4 ? 9f : 7f;
-                int dropLimit = depth <= 2 ? 1 : depth <= 4 ? 2 : 3;
+                float dropInterval = Mathf.Max(3.5f, 7f - Mathf.Max(0, StoryRound - 1) - depth * 0.25f);
+                int dropLimit = Mathf.Clamp(2 + (depth >= 4 ? 1 : 0) + (StoryRound >= 2 ? 1 : 0), 2, 4);
                 int drops = 0;
-                float nextDropAt = Time.time + Mathf.Min(dropInterval, encounter.waveInterval * 0.5f);
                 for (waveIndex = 0; waveIndex < encounter.waves.Length && ActiveRun; waveIndex++)
                 {
                     Message = encounter.displayName + $"  第 {waveIndex + 1}/{encounter.waves.Length} 轮";
-                    SpawnWave(encounter.waves[waveIndex]);
-                    float nextWaveAt = Time.time + encounter.waveInterval;
-                    while (ActiveRun && Time.time < nextWaveAt)
+                    yield return SpawnWave(encounter.waves[waveIndex]);
+                    int waveDrops = 0;
+                    float nextDropAt = Time.time + Mathf.Min(1.2f, encounter.waveInterval * 0.5f);
+                    while (ActiveRun && enemies.Any(enemy => enemy != null && enemy.Health > 0f))
                     {
-                        if (falling != null && drops < dropLimit && Time.time >= nextDropAt)
+                        if (falling.Length > 0 && waveDrops < dropLimit && Time.time >= nextDropAt)
                         {
-                            SpawnObstacles(falling, drops++);
+                            var dropRandom = new Random(seed ^ StopIndex * 3571 ^ drops * 9973);
+                            yield return DispatchObstacles(falling[dropRandom.Next(falling.Length)], drops++);
+                            waveDrops++;
                             nextDropAt = Time.time + dropInterval;
                         }
                         yield return null;
@@ -344,68 +405,50 @@ namespace Ferryman.Voyage
             {
                 SeaEventDefinition special = planned.specialEvent;
                 Message = special.displayName;
-                SpawnObstacles(special);
-                yield return WaitActive(ObstacleDropSeconds);
+                yield return DispatchObstacles(special);
+                yield return WaitActive(ObstacleThrowSeconds);
                 if (ActiveRun)
                     AddReward(special.reward);
             }
         }
 
-        private void SpawnWave(WaveDefinition wave)
+        private IEnumerator SpawnWave(WaveDefinition wave)
         {
-            enemies.RemoveAll(enemy => enemy == null || enemy.Health <= 0f);
+            enemies.Clear();
             Camera camera = Camera.main;
             if (camera == null)
                 throw new InvalidOperationException("海怪生成需要主相机。");
             Physics2D.SyncTransforms();
             Bounds deck = vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
-            Vector2 half = Vector2.zero;
-            int count = 0;
-            foreach (EnemySpawn group in wave.enemies)
-            {
-                Bounds visual = group.prefab.VisualBounds;
-                Vector3 origin = group.prefab.transform.position;
-                half.x = Mathf.Max(half.x, Mathf.Abs(visual.min.x - origin.x), Mathf.Abs(visual.max.x - origin.x));
-                half.y = Mathf.Max(half.y, Mathf.Abs(visual.min.y - origin.y), Mathf.Abs(visual.max.y - origin.y));
-                count += group.count;
-            }
-            const float spacing = 0.6f;
-            Vector2 step = half * 2f + Vector2.one * (spacing + 0.1f);
+            Vector2 half = WaveFootprint(wave, out int count);
             Vector2 viewHalf = new Vector2(camera.orthographicSize * camera.aspect, camera.orthographicSize);
-            Vector2 viewCenter = camera.transform.position;
-            Vector2 min = Vector2.Max(viewCenter - viewHalf + half + Vector2.one * 0.3f,
-                (Vector2)deck.min + half);
-            Vector2 max = viewCenter + viewHalf - half - Vector2.one * 0.3f;
-            Bounds[] occupied = enemies.Select(enemy =>
-            {
-                Bounds bounds = enemy.VisualBounds;
-                bounds.Expand(new Vector3(half.x * 2f + spacing * 2f, half.y * 2f + spacing * 2f, 1f));
-                return bounds;
-            }).ToArray();
-            var positions = new List<Vector2>();
-            float top = Mathf.Max(min.y, deck.max.y + half.y + 0.8f);
-            for (int side = 0; side < 2; side++)
-            {
-                Vector2 regionMin = side == 0 ? new Vector2(min.x, top)
-                    : new Vector2(Mathf.Max(min.x, deck.max.x + half.x + 0.8f), min.y);
-                Vector2 regionMax = side == 0 ? max : new Vector2(max.x, Mathf.Min(max.y, top - step.y));
-                for (float y = regionMin.y; y <= regionMax.y; y += step.y)
-                {
-                    for (float x = regionMin.x; x <= regionMax.x; x += step.x)
-                    {
-                        if (occupied.All(bounds => !bounds.Contains(new Vector3(x, y, 0f))))
-                            positions.Add(new Vector2(x, y));
-                    }
-                }
-            }
+            var positions = FindWavePositions(deck, half, camera.transform.position, viewHalf);
             if (positions.Count < count)
                 throw new InvalidOperationException("船的上侧和右侧没有足够的海怪生成空间。");
-            var random = new Random(seed ^ StopIndex * 397 ^ waveIndex * 3571);
-            for (int i = positions.Count - 1; i > 0; i--)
+            if (IsBossLeg)
             {
-                int other = random.Next(i + 1);
-                (positions[i], positions[other]) = (positions[other], positions[i]);
+                positions.Sort((left, right) => (left - (Vector2)deck.center).sqrMagnitude
+                    .CompareTo((right - (Vector2)deck.center).sqrMagnitude));
             }
+            else
+            {
+                var random = new Random(seed ^ StopIndex * 397 ^ waveIndex * 3571);
+                for (int i = positions.Count - 1; i > 0; i--)
+                {
+                    int other = random.Next(i + 1);
+                    (positions[i], positions[other]) = (positions[other], positions[i]);
+                }
+            }
+            for (int i = 0; i < count; i++)
+                waveBubbles.Add(WaveBubbles.Create(positions[i], IsBossLeg ? 1.8f : 1f));
+            VoyageAudio.Play(Sound.WaterBubbles, waveIndex == 0 ? 0.71f : 0.62f, positions[0]);
+            if (IsBossLeg)
+                VoyageAudio.Play(Sound.TrashGather, 0.69f, positions[0]);
+            yield return WaitActive(WaveBubbles.Duration);
+            ClearWaveBubbles();
+            if (!ActiveRun)
+                yield break;
+
             int nextPosition = 0;
             foreach (EnemySpawn group in wave.enemies)
             {
@@ -419,11 +462,48 @@ namespace Ferryman.Voyage
             }
         }
 
-        private void SpawnObstacles(SeaEventDefinition special, int combatDrop = -1)
+        private static Vector2 WaveFootprint(WaveDefinition wave, out int count)
+        {
+            Vector2 half = Vector2.zero;
+            count = 0;
+            foreach (EnemySpawn group in wave.enemies)
+            {
+                Bounds visual = group.prefab.SpawnBounds;
+                Vector3 origin = group.prefab.transform.position;
+                half.x = Mathf.Max(half.x, Mathf.Abs(visual.min.x - origin.x), Mathf.Abs(visual.max.x - origin.x));
+                half.y = Mathf.Max(half.y, Mathf.Abs(visual.min.y - origin.y), Mathf.Abs(visual.max.y - origin.y));
+                count += group.count;
+            }
+            return half;
+        }
+
+        private static List<Vector2> FindWavePositions(Bounds deck, Vector2 half, Vector2 viewCenter, Vector2 viewHalf)
+        {
+            const float spacing = 0.6f;
+            const float shipClearance = 2f;
+            Vector2 step = half * 2f + Vector2.one * (spacing + 0.1f);
+            Vector2 min = Vector2.Max(viewCenter - viewHalf + half + Vector2.one * 0.3f,
+                (Vector2)deck.min + half);
+            Vector2 max = viewCenter + viewHalf - half - Vector2.one * 0.3f;
+            var positions = new List<Vector2>();
+            float top = Mathf.Max(min.y, deck.max.y + half.y + shipClearance);
+            for (int side = 0; side < 2; side++)
+            {
+                Vector2 regionMin = side == 0 ? new Vector2(min.x, top)
+                    : new Vector2(Mathf.Max(min.x, deck.max.x + half.x + shipClearance), min.y);
+                Vector2 regionMax = side == 0 ? max : new Vector2(max.x, Mathf.Min(max.y, top - step.y));
+                for (float y = regionMin.y; y <= regionMax.y; y += step.y)
+                    for (float x = regionMin.x; x <= regionMax.x; x += step.x)
+                        positions.Add(new Vector2(x, y));
+            }
+            return positions;
+        }
+
+        private IEnumerator DispatchObstacles(SeaEventDefinition special, int combatDrop = -1)
         {
             BoatDeck deck = vessel.Boat.Deck;
             int count = combatDrop < 0 ? special.obstacleCount
-                : IsExpedition && RouteMap.Nodes[CurrentNodeId].depth >= 5 ? 2 : 1;
+                : StoryRound >= 2 || IsExpedition && RouteMap.Nodes[CurrentNodeId].depth >= 5 ? 2 : 1;
             Vector2 footprint = special.obstaclePrefab.GetComponent<DestructibleObstacle>().Footprint;
             Vector2Int center = deck.WorldToCell(Vector2.zero);
             var cells = new List<Vector2Int>();
@@ -438,6 +518,8 @@ namespace Ferryman.Voyage
                 }
             }
             var random = new Random(seed ^ StopIndex * 397 ^ (combatDrop >= 0 ? combatDrop * 3571 : 0));
+            float heading = (float)random.NextDouble() * 2f * Mathf.PI;
+            Vector2 direction = new Vector2(Mathf.Cos(heading), Mathf.Sin(heading));
             var landings = new List<Rect>();
             Physics2D.SyncTransforms();
             while (landings.Count < count && cells.Count > 0)
@@ -450,40 +532,132 @@ namespace Ferryman.Voyage
                     continue;
                 landings.Add(landing);
             }
+            if (landings.Count == 0)
+                yield break;
+
             Camera view = Camera.main;
-            float top = view != null
-                ? view.ViewportToWorldPoint(new Vector3(0.5f, 1f, view.WorldToViewportPoint(deck.transform.position).z)).y
-                : deck.GetComponent<EdgeCollider2D>().bounds.max.y + 4f;
-            foreach (Rect landing in landings)
+            Sprite sprite = definition.obstacleCarrier;
+            Sprite[] frames = definition.obstacleCarrierFrames ?? Array.Empty<Sprite>();
+            if (view == null || sprite == null)
+                throw new InvalidOperationException("海鸥投放需要主相机和海鸥素材。");
+            landings.Sort((left, right) => Vector2.Dot(left.center, direction).CompareTo(Vector2.Dot(right.center, direction)));
+            Vector2 flybyCenter = landings.Aggregate(Vector2.zero, (sum, landing) => sum + landing.center) / landings.Count;
+            Vector2 viewCenter = view.transform.position;
+            Vector2 viewHalf = new Vector2(view.orthographicSize * view.aspect, view.orthographicSize);
+            var viewArea = new Rect(viewCenter - viewHalf, viewHalf * 2f);
+            float screenCenter = Vector2.Dot(viewCenter - flybyCenter, direction);
+            float screenRadius = Mathf.Abs(direction.x) * viewHalf.x + Mathf.Abs(direction.y) * viewHalf.y
+                + sprite.bounds.extents.magnitude * 1.3f;
+            const float throwLead = 2.2f;
+            const float carrierSpacing = 1.95f;
+            float firstRelease = Vector2.Dot(landings[0].center - flybyCenter, direction) - throwLead;
+            float lastRelease = Vector2.Dot(landings[landings.Count - 1].center - flybyCenter, direction) - throwLead
+                + (landings.Count - 1) * carrierSpacing;
+            float distance = Mathf.Min(screenCenter - screenRadius, firstRelease);
+            float finish = Mathf.Max(screenCenter + screenRadius + (landings.Count - 1) * carrierSpacing, lastRelease);
+
+            var carriers = new GameObject[landings.Count];
+            var visuals = new SpriteRenderer[landings.Count];
+            var offsets = new Vector2[landings.Count];
+            var called = new bool[landings.Count];
+            var released = new bool[landings.Count];
+            for (int i = 0; i < carriers.Length; i++)
             {
-                var origin = new Vector2(landing.center.x, top + 1.5f);
-                var item = Instantiate(special.obstaclePrefab, origin, Quaternion.identity, vessel.transform);
-                var obstacle = item.GetComponent<DestructibleObstacle>();
-                obstacle.VoyageEventId = special.id;
-                var bomb = item.GetComponent<TimedBomb>();
-                if (bomb != null)
-                    bomb.Launch(vessel.Boat, landing.center, ObstacleDropSeconds, 0f);
-                else
-                    obstacle.FlyTo(deck, landing.center, ObstacleDropSeconds, 0f);
-                eventObstacles.Add(obstacle);
+                var carrier = new GameObject("Obstacle Seagull");
+                carriers[i] = carrier;
+                obstacleCarriers.Add(carrier);
+                var visual = carrier.AddComponent<SpriteRenderer>();
+                visuals[i] = visual;
+                visual.sprite = sprite;
+                visual.sortingOrder = 16;
+                visual.flipX = direction.x < 0f;
+                carrier.transform.rotation = Quaternion.Euler(0f, 0f, heading * Mathf.Rad2Deg + (visual.flipX ? 180f : 0f));
+                carrier.transform.localScale = new Vector3(1.3f, 1.3f, 1f);
+                Vector2 offset = landings[i].center - flybyCenter;
+                offsets[i] = offset - direction * (Vector2.Dot(offset, direction) + i * carrierSpacing);
+            }
+            float flybyStartedAt = Time.time;
+            while (ActiveRun)
+            {
+                for (int i = 0; i < carriers.Length; i++)
+                {
+                    GameObject carrier = carriers[i];
+                    if (frames.Length > 0)
+                        visuals[i].sprite = frames[(Mathf.FloorToInt((Time.time - flybyStartedAt) * 8f) + i) % frames.Length];
+                    Vector2 carrierPosition = flybyCenter + direction * distance + offsets[i];
+                    carrier.transform.position = carrierPosition;
+                    if (!called[i] && viewArea.Contains(carrierPosition))
+                    {
+                        VoyageAudio.Play(Sound.Gull, volume: 0.84f, position: carrierPosition);
+                        called[i] = true;
+                    }
+                    Vector2 destination = landings[i].center;
+                    float releaseDistance = Vector2.Dot(destination - flybyCenter, direction) - throwLead + i * carrierSpacing;
+                    if (released[i] || distance < releaseDistance)
+                        continue;
+                    Vector2 origin = carrierPosition
+                        + (Vector2)carrier.transform.TransformVector(Vector2.down * sprite.bounds.extents.y * 0.66f);
+                    var item = Instantiate(special.obstaclePrefab, origin, Quaternion.identity, vessel.transform);
+                    var obstacle = item.GetComponent<DestructibleObstacle>();
+                    obstacle.VoyageEventId = special.id;
+                    var bomb = item.GetComponent<TimedBomb>();
+                    VoyageAudio.Play(bomb != null ? Sound.BombThrow : Sound.GullRelease, position: origin);
+                    if (bomb != null)
+                        bomb.Launch(vessel.Boat, destination, ObstacleThrowSeconds, ObstacleThrowArc);
+                    else
+                        obstacle.FlyTo(deck, destination, ObstacleThrowSeconds, ObstacleThrowArc);
+                    eventObstacles.Add(obstacle);
+                    released[i] = true;
+                }
+                if (distance >= finish)
+                    break;
+                yield return null;
+                distance = Mathf.MoveTowards(distance, finish, 12f * Time.deltaTime);
+            }
+            foreach (var carrier in carriers)
+            {
+                obstacleCarriers.Remove(carrier);
+                Destroy(carrier);
             }
         }
 
-        private Passenger BoardPassenger(CrewDefinition profile, int destination)
+        private Passenger BoardPassenger(CrewDefinition profile, int destination, bool playSound = true)
         {
-            Vector2 position = FindBoardingPosition();
-            Character actor = Instantiate(profile.prefab, position, Quaternion.identity, vessel.transform);
-            var passenger = actor.GetComponent<Passenger>() ?? actor.gameObject.AddComponent<Passenger>();
-            passenger.Initialize(profile, destination);
-            if (actor is CombatCrewMember combat)
-                combat.InitializeCrew(vessel.Boat, vessel.DamageSystem, vessel.Player.ProjectilePrefab, profile);
-            else if (actor is MaintenanceCrewMember maintenance)
-                maintenance.InitializeCrew(vessel.Boat, profile);
+            if (profile == null || HasPassenger(profile) || destination <= 0 || destination >= ActiveStops.Length
+                || ActiveStops[destination].kind != VoyageStopKind.Island)
+                return null;
+            var passenger = SpawnCrew(profile, destination);
             passengers.Add(passenger);
+            RefreshPassengerConflict();
+            if (playSound)
+                VoyageAudio.Play(Sound.Board, 0.56f, passenger.transform.position);
             return passenger;
         }
 
-        private Vector2 FindBoardingPosition()
+        private Passenger SpawnCrew(CrewDefinition profile, int destination)
+        {
+            var footprint = profile.prefab.GetComponent<BoxCollider2D>();
+            Character actor = Instantiate(profile.prefab, FindBoardingPosition(footprint), Quaternion.identity, vessel.transform);
+            actor.ApplyCrewAppearance(profile);
+            var passenger = actor.GetComponent<Passenger>() ?? actor.gameObject.AddComponent<Passenger>();
+            passenger.Initialize(profile, destination);
+            if (actor is CombatCrewMember combat)
+                combat.InitializeCrew(vessel.Boat, vessel.DamageSystem, profile);
+            else if (actor is MaintenanceCrewMember maintenance)
+                maintenance.InitializeCrew(vessel.Boat, profile);
+            return passenger;
+        }
+
+        private bool HasPassenger(CrewDefinition profile) => passengers.Any(passenger => passenger.Definition.id == profile.id);
+
+        public bool CanBoardRole(CrewRole role) => StoryRound > 0
+            ? StoryRescueProfiles.Any(profile => profile.role == role)
+            : definition.passengerPool.Any(profile => profile.role == role && !HasPassenger(profile));
+
+        public static bool CanDisembarkAt(VoyageIslandKind kind) => kind != VoyageIslandKind.Battle
+            && kind != VoyageIslandKind.Elite && kind != VoyageIslandKind.Departure;
+
+        private Vector2 FindBoardingPosition(BoxCollider2D footprint)
         {
             BoatDeck deck = vessel.Boat.Deck;
             Vector2Int grid = deck.GridSize;
@@ -493,8 +667,8 @@ namespace Ferryman.Voyage
                 for (int x = 0; x < grid.x; x++)
                 {
                     Vector2 position = deck.CellToWorld(new Vector2Int(x, y));
-                    if (deck.CanPlace(position, new Vector2(0.5f, 0.75f)))
-                        return position;
+                    if (deck.CanPlace(position, footprint.size + Vector2.one * 0.05f))
+                        return position - footprint.offset;
                 }
             }
             throw new InvalidOperationException("No boarding position is available on the deck.");
@@ -518,6 +692,8 @@ namespace Ferryman.Voyage
 
         private IEnumerator BoardAtIsland(VoyageStop stop, int index)
         {
+            if (index <= 0 || stop.kind != VoyageStopKind.Island)
+                yield break;
             var futureIslands = Enumerable.Range(index + 1, ActiveStops.Length - index - 1)
                 .Where(next => ActiveStops[next].kind == VoyageStopKind.Island).ToArray();
             if (futureIslands.Length == 0 || definition.passengerPool.Length == 0 || stop.maxBoardingPassengers <= 0)
@@ -528,11 +704,15 @@ namespace Ferryman.Voyage
             int count = random.Next(1, stop.maxBoardingPassengers + 1);
             for (int i = 0; i < count && ActiveRun; i++)
             {
-                CrewDefinition profile = definition.passengerPool[random.Next(definition.passengerPool.Length)];
+                CrewDefinition[] available = definition.passengerPool.Where(profile => !HasPassenger(profile)).ToArray();
+                if (available.Length == 0)
+                    yield break;
+                CrewDefinition profile = available[random.Next(available.Length)];
                 int destination = futureIslands[random.Next(futureIslands.Length)];
                 BoardingProfile = profile;
                 boardingDestination = ActiveStops[destination].displayName;
-                Message = profile.displayName + " 将上船 · " + DescribeRole(profile) + " · 目的地 " + boardingDestination;
+                Message = profile.displayName + " 将上船 · 目的地 " + boardingDestination + $" · 送达报酬 {profile.coinsReward} 金币";
+                VoyageAudio.Play(Sound.Dialogue, 0.51f);
                 yield return WaitActive(definition.boardingNoticeSeconds);
                 BoardingProfile = null;
                 if (ActiveRun)
@@ -540,24 +720,30 @@ namespace Ferryman.Voyage
             }
         }
 
-        public static string DescribeRole(CrewDefinition profile)
+        private IReadOnlyList<CrewDefinition> DeliverPassengers(int index)
         {
-            return profile.role == CrewRole.Combat ? $"战斗岗 · 攻击 {profile.attackPower:0} / 间隔 {profile.fireInterval:0.0}s"
-                : $"维护岗 · {profile.repairSpeed:0} HP/s · 范围 {profile.repairRange} · 同修 {profile.simultaneousRepairs}";
-        }
-
-        private void DeliverPassengers(int index)
-        {
+            if (ActiveStops[index].kind != VoyageStopKind.Island || IsExpedition && !CanDisembarkAt(CurrentIsland))
+                return Array.Empty<CrewDefinition>();
+            var farewells = new List<CrewDefinition>();
+            int before = deliveredPassengers;
             for (int i = passengers.Count - 1; i >= 0; i--)
             {
                 Passenger passenger = passengers[i];
-                if (passenger.DestinationStopIndex != index)
+                if (passenger.DestinationStopIndex > index)
                     continue;
                 AddReward(new RewardData { coins = passenger.Definition.coinsReward, specialItems = passenger.Definition.specialItemsReward });
                 deliveredPassengers++;
+                if (StoryRound > 0 && IsStoryProfile(passenger.Definition.id) && deliveredStoryProfiles.Add(passenger.Definition.id))
+                    farewells.Add(passenger.Definition);
                 passengers.RemoveAt(i);
                 passenger.Disembark();
             }
+            if (before != deliveredPassengers)
+            {
+                RefreshPassengerConflict();
+                VoyageAudio.Play(Sound.Reward, 0.65f);
+            }
+            return farewells;
         }
 
         private void AddReward(RewardData reward)
@@ -585,6 +771,10 @@ namespace Ferryman.Voyage
                 runId = runId,
                 seed = seed,
                 stopIndex = StopIndex,
+                storyRound = StoryRound,
+                deliveredStoryProfiles = StoryRound > 0
+                    ? deliveredStoryProfiles.OrderBy(id => id, StringComparer.Ordinal).ToArray() : null,
+                storyDockOfferResolved = StoryDockOfferResolved,
                 pendingCoins = pendingReward.coins,
                 pendingSpecialItems = pendingReward.specialItems,
                 deliveredPassengers = deliveredPassengers,
@@ -594,7 +784,7 @@ namespace Ferryman.Voyage
                 upgradeChoices = UpgradeChoices,
                 playerLocalPosition = vessel.Player.transform.localPosition,
                 ship = vessel.Boat.CaptureState(),
-                obstacles = eventObstacles.Where(obstacle => obstacle != null && !obstacle.IsCleared
+                obstacles = vessel.GetComponentsInChildren<DestructibleObstacle>().Where(obstacle => !obstacle.IsCleared
                     && obstacle.GetComponent<TimedBomb>() == null).Select(obstacle => new ObstacleState
                 {
                     eventId = obstacle.VoyageEventId,
@@ -614,6 +804,7 @@ namespace Ferryman.Voyage
         {
             if (!ActiveRun)
                 return;
+            VoyageAudio.Play(Sound.Failure, 0.78f);
             if (routine != null)
                 StopCoroutine(routine);
             FinishRun(false);
@@ -660,6 +851,7 @@ namespace Ferryman.Voyage
             CanRetrySettlement = false;
             pendingReward = default;
             deliveredPassengers = 0;
+            LoadStory(0);
             CleanupVessel();
             ClearExpedition();
             routine = StartCoroutine(RunSafely(ReturnToDeparture()));
@@ -669,6 +861,7 @@ namespace Ferryman.Voyage
         {
             if (ActiveRun)
                 return;
+            LoadStory(0);
             CleanupVessel();
             ClearExpedition();
             routine = StartCoroutine(RunSafely(ReturnToDeparture()));
@@ -692,7 +885,7 @@ namespace Ferryman.Voyage
             StopIndex = 0;
             Fade = 0f;
             Phase = VoyagePhase.Departure;
-            Message = "选择第一位护送乘客；启航前船只已完成整备。";
+            Message = "空船启航，在途中岛屿接载乘客；启航前船只已完成整备。";
         }
 
         private bool TryPresentStop(VoyageStop stop)
@@ -707,6 +900,15 @@ namespace Ferryman.Voyage
 
         private void CleanupHazards(bool keepObstacles = false)
         {
+            ClearWaveBubbles();
+            foreach (var carrier in obstacleCarriers)
+            {
+                if (carrier == null)
+                    continue;
+                carrier.SetActive(false);
+                Destroy(carrier);
+            }
+            obstacleCarriers.Clear();
             foreach (var enemy in enemies)
                 if (enemy != null)
                 {
@@ -724,7 +926,8 @@ namespace Ferryman.Voyage
                 bomb.gameObject.SetActive(false);
                 Destroy(bomb.gameObject);
             }
-            foreach (var obstacle in eventObstacles)
+            var carried = vessel != null ? vessel.GetComponentsInChildren<DestructibleObstacle>() : Array.Empty<DestructibleObstacle>();
+            foreach (var obstacle in eventObstacles.Concat(carried).Distinct())
                 if (obstacle != null && (!keepObstacles || obstacle.GetComponent<TimedBomb>() != null))
                 {
                     obstacle.gameObject.SetActive(false);
@@ -732,6 +935,18 @@ namespace Ferryman.Voyage
                 }
             eventObstacles.RemoveAll(obstacle => !keepObstacles || obstacle == null || obstacle.IsCleared
                 || obstacle.GetComponent<TimedBomb>() != null);
+        }
+
+        private void ClearWaveBubbles()
+        {
+            foreach (WaveBubbles bubbles in waveBubbles)
+            {
+                if (bubbles == null)
+                    continue;
+                bubbles.gameObject.SetActive(false);
+                Destroy(bubbles.gameObject);
+            }
+            waveBubbles.Clear();
         }
 
         private void CleanupVessel()
@@ -751,8 +966,7 @@ namespace Ferryman.Voyage
             if (store == null || definition == null || string.IsNullOrWhiteSpace(definition.id) || definition.vesselPrefab == null
                 || definition.vesselPrefab.GetComponent<VoyageVessel>() == null || definition.stops.Length < 3
                 || definition.stops[0].kind != VoyageStopKind.Island
-                || definition.stops[definition.stops.Length - 1].kind != VoyageStopKind.Island
-                || definition.initialPassengers.Length == 0)
+                || definition.stops[definition.stops.Length - 1].kind != VoyageStopKind.Island)
                 throw new InvalidDataException("Voyage configuration is incomplete.");
             var prefab = definition.vesselPrefab.GetComponent<VoyageVessel>();
             if (prefab.Boat == null || prefab.Player == null || prefab.DamageSystem == null || prefab.Boat.Deck == null
@@ -776,7 +990,8 @@ namespace Ferryman.Voyage
                     || profile.role == CrewRole.Maintenance && !(profile.prefab is MaintenanceCrewMember)
                     || profile.coinsReward < 0 || profile.specialItemsReward < 0)
                     throw new InvalidDataException("Passenger job or profile ID is invalid.");
-            foreach (var encounter in definition.randomEncounters.Concat(definition.stops.Select(stop => stop.fixedEncounter)).Where(item => item != null).Distinct())
+            foreach (var encounter in definition.randomEncounters.Concat(definition.stops.Select(stop => stop.fixedEncounter))
+                .Append(definition.finalBossEncounter).Where(item => item != null).Distinct())
             {
                 if (encounter.waves == null || encounter.waves.Length == 0 || encounter.reward.coins < 0 || encounter.reward.specialItems < 0
                     || encounter.waveInterval < 0.1f || !float.IsFinite(encounter.waveInterval)
@@ -792,7 +1007,7 @@ namespace Ferryman.Voyage
                             || group.prefab.AttackType == EnemyCharacter.AttackKind.Bomb
                                 && (group.prefab.PreferredTarget != EnemyCharacter.TargetPreference.ShipFirst || group.prefab.BombPrefab == null)
                             || group.prefab.AttackType == EnemyCharacter.AttackKind.Projectile
-                                && (group.prefab.PreferredTarget == EnemyCharacter.TargetPreference.ShipFirst || group.prefab.ProjectilePrefab == null))
+                                && group.prefab.ProjectilePrefab == null)
                             throw new InvalidDataException("Combat wave has an invalid enemy spawn.");
                 }
             }
@@ -806,7 +1021,8 @@ namespace Ferryman.Voyage
 
         private CrewDefinition FindProfile(string id)
         {
-            return definition.initialPassengers.Concat(definition.passengerPool).FirstOrDefault(profile => profile.id == id);
+            return definition.initialPassengers.Concat(definition.passengerPool).FirstOrDefault(profile => profile.id == id)
+                ?? FindStoryProfile(id);
         }
 
         private void ValidatePassengers(VoyageCheckpoint checkpoint)
@@ -821,7 +1037,7 @@ namespace Ferryman.Voyage
                 throw new InvalidDataException("Checkpoint player is outside the deck.");
             foreach (PassengerState passenger in checkpoint.passengers)
                 if (passenger == null || FindProfile(passenger.profileId) == null
-                    || passenger.destinationStopIndex <= checkpoint.stopIndex || passenger.destinationStopIndex >= ActiveStops.Length
+                    || passenger.destinationStopIndex <= 0 || passenger.destinationStopIndex >= ActiveStops.Length
                     || ActiveStops[passenger.destinationStopIndex].kind != VoyageStopKind.Island
                     || !float.IsFinite(passenger.localPosition.x) || !float.IsFinite(passenger.localPosition.y))
                     throw new InvalidDataException("Checkpoint passenger is invalid.");
@@ -831,6 +1047,23 @@ namespace Ferryman.Voyage
                     if (!deck.ContainsFloor(position))
                         throw new InvalidDataException("Checkpoint passenger is outside the deck.");
                 }
+        }
+
+        private float CombatCameraSize(Camera camera, EncounterDefinition encounter)
+        {
+            // Preserve the encounter's horizontal room when the viewport is narrower than 16:9.
+            float size = encounter.cameraSize * Mathf.Max(1f, (16f / 9f) / camera.aspect);
+            if (vessel == null)
+                return size;
+            Bounds deck = vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
+            Vector2 center = new Vector2(camera.transform.position.x, encounter.cameraHeight);
+            foreach (WaveDefinition wave in encounter.waves)
+            {
+                Vector2 half = WaveFootprint(wave, out int count);
+                while (size < 24f && FindWavePositions(deck, half, center, new Vector2(size * camera.aspect, size)).Count < count)
+                    size += 0.5f;
+            }
+            return size;
         }
 
         private void Update()
@@ -845,7 +1078,7 @@ namespace Ferryman.Voyage
             float height = presentation != null && presentation.IsUnifiedScene ? presentation.CameraHeight : position.y;
             if (Phase == VoyagePhase.Event && eventPlan[StopIndex].kind == VoyageEventKind.Combat)
             {
-                size = eventPlan[StopIndex].encounter.cameraSize;
+                size = CombatCameraSize(camera, eventPlan[StopIndex].encounter);
                 height = eventPlan[StopIndex].encounter.cameraHeight;
             }
             else if (Phase == VoyagePhase.Sailing)

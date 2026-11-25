@@ -125,7 +125,7 @@ namespace Ferryman.Tests
         {
             var profile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner");
             var crew = (CombatCrewMember)Object.Instantiate(profile.prefab, new Vector2(1.5f, 0f), Quaternion.identity);
-            crew.InitializeCrew(player.BoatHealth, damageSystem, player.ProjectilePrefab, profile);
+            crew.InitializeCrew(player.BoatHealth, damageSystem, profile);
             var bomb = Object.FindObjectsOfType<TimedBomb>(true).First();
             bomb.transform.position = new Vector2(0.75f, 0f);
             bomb.BindBoat(player.BoatHealth);
@@ -167,13 +167,126 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
+        public IEnumerator BomberLandingsReserveFlightAndLandedBombAreasUntilCleared()
+        {
+            var encounter = Resources.Load<EncounterDefinition>("Voyage/Events/Bombardment");
+            var firstBomber = Object.Instantiate(encounter.waves[0].enemies[0].prefab, new Vector3(0f, 8f), Quaternion.identity);
+            var secondBomber = Object.Instantiate(encounter.waves[0].enemies[0].prefab, new Vector3(4f, 8f), Quaternion.identity);
+            firstBomber.InitializeEnemy(player.BoatHealth, player, damageSystem);
+            secondBomber.InitializeEnemy(player.BoatHealth, player, damageSystem);
+            firstBomber.enabled = false;
+            secondBomber.enabled = false;
+            var chooseLanding = typeof(EnemyCharacter).GetMethod("TryChooseBombLanding", BindingFlags.Instance | BindingFlags.NonPublic);
+            var getLanding = typeof(DestructibleObstacle).GetProperty("WorldLandingPosition", BindingFlags.Instance | BindingFlags.NonPublic);
+            var getFootprint = typeof(DestructibleObstacle).GetProperty("Footprint", BindingFlags.Instance | BindingFlags.NonPublic);
+            TimedBomb firstBomb = null;
+            TimedBomb secondBomb = null;
+            UnityEngine.Random.State randomState = UnityEngine.Random.state;
+            Rect LandingArea(TimedBomb bomb)
+            {
+                var obstacle = bomb.GetComponent<DestructibleObstacle>();
+                Vector2 size = (Vector2)getFootprint.GetValue(obstacle);
+                return new Rect((Vector2)getLanding.GetValue(obstacle) - size * 0.5f, size);
+            }
+            try
+            {
+                var firstChoice = new object[] { Vector2.zero };
+                var secondChoice = new object[] { Vector2.zero };
+                UnityEngine.Random.InitState(42);
+                Assert.That(chooseLanding.Invoke(firstBomber, firstChoice), Is.True);
+                UnityEngine.Random.InitState(42);
+                Assert.That(chooseLanding.Invoke(secondBomber, secondChoice), Is.True);
+                Assert.That(secondChoice[0], Is.EqualTo(firstChoice[0]), "The fixture must select the same preferred cell.");
+                Vector2 preferred = (Vector2)firstChoice[0];
+
+                firstBomb = Object.Instantiate(firstBomber.BombPrefab, firstBomber.transform.position, Quaternion.identity);
+                firstBomb.Throw(player.BoatHealth, preferred);
+                secondBomb = Object.Instantiate(secondBomber.BombPrefab, secondBomber.transform.position, Quaternion.identity);
+                secondBomb.Throw(player.BoatHealth, preferred);
+                Assert.That(firstBomb.IsInFlight && secondBomb.IsInFlight, Is.True);
+                Rect firstReserved = LandingArea(firstBomb);
+                Rect secondReserved = LandingArea(secondBomb);
+                Assert.That(firstReserved.Overlaps(secondReserved), Is.False, "Two flying bombs reserved overlapping landing areas.");
+                BoatDeck deck = player.MovementDeck;
+                Assert.That(deck.CanPlace(firstReserved.center, firstReserved.size), Is.False,
+                    "A flying bomb's destination remained available to other items.");
+
+                yield return WaitFor(() => firstBomb != null && secondBomb != null && !firstBomb.IsInFlight && !secondBomb.IsInFlight,
+                    2f, "The two bombs did not land.");
+                Rect firstLanded = LandingArea(firstBomb);
+                Assert.That(firstLanded.Overlaps(LandingArea(secondBomb)), Is.False, "The bombs overlapped after landing.");
+                Assert.That(firstBomb.GetComponentsInChildren<Collider2D>(), Is.Empty);
+                Assert.That(deck.CanPlace(firstLanded.center, firstLanded.size), Is.False,
+                    "A landed bomb without a collider did not block item placement.");
+                Assert.That(deck.TryFindPlacement(firstLanded.center, firstLanded.size, null, out Vector2 alternative), Is.True);
+                Assert.That(alternative, Is.Not.EqualTo(firstLanded.center), "A new item reused an occupied bomb position.");
+
+                firstBomb.GetComponent<DestructibleObstacle>().Clear();
+                Assert.That(deck.CanPlace(firstLanded.center, firstLanded.size), Is.True,
+                    "Clearing a bomb did not release its landing area.");
+                Assert.That(deck.TryFindPlacement(firstLanded.center, firstLanded.size, null, out Vector2 reused), Is.True);
+                Assert.That(reused, Is.EqualTo(firstLanded.center));
+            }
+            finally
+            {
+                UnityEngine.Random.state = randomState;
+                Object.Destroy(firstBomber.gameObject);
+                Object.Destroy(secondBomber.gameObject);
+                if (firstBomb != null)
+                    Object.Destroy(firstBomb.gameObject);
+                if (secondBomb != null)
+                    Object.Destroy(secondBomb.gameObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CrewStunLiesDownWithoutTintingOrRotatingHitboxes()
+        {
+            var applySprite = typeof(Character).GetMethod("ApplyCrewSprite", BindingFlags.Instance | BindingFlags.NonPublic);
+            foreach (string id in new[] { "gunner-monkey", "carpenter-beaver" })
+            {
+                var profile = Resources.Load<CrewDefinition>("Voyage/Crew/" + id);
+                Character crew = Object.Instantiate(profile.prefab, Vector2.right * 3f, Quaternion.identity);
+                applySprite.Invoke(crew, new object[] { profile.deckSprite });
+                SpriteRenderer visual = crew.GetComponentsInChildren<SpriteRenderer>().Single(renderer => renderer.enabled);
+                Quaternion standing = visual.transform.localRotation;
+                Quaternion rootRotation = crew.transform.rotation;
+                Vector3 rootScale = crew.transform.localScale;
+                Vector2 footprint = ((BoxCollider2D)crew.Hitbox).size;
+                Color color = visual.color;
+                Assert.That(visual.transform.localScale, Is.EqualTo(new Vector3(2.028f, 2.028f, 1f)));
+
+                Assert.That(crew.TryReceiveDamage(1f), Is.True);
+                Assert.That(Quaternion.Angle(visual.transform.localRotation, standing), Is.EqualTo(90f).Within(0.01f));
+                Assert.That(visual.color, Is.EqualTo(color));
+                Assert.That(crew.transform.rotation, Is.EqualTo(rootRotation));
+                Assert.That(crew.transform.localScale, Is.EqualTo(rootScale));
+                Assert.That(((BoxCollider2D)crew.Hitbox).size, Is.EqualTo(footprint));
+                yield return new WaitForSeconds(0.75f);
+                Assert.That(crew.TryReceivePlayerKick(Vector2.up), Is.True);
+                Assert.That(Quaternion.Angle(visual.transform.localRotation, standing), Is.EqualTo(90f).Within(0.01f),
+                    "A repeated kick accumulated the lying rotation.");
+                Assert.That(visual.color, Is.EqualTo(color));
+                yield return new WaitForSeconds(0.36f);
+                Assert.That(crew.IsStunned, Is.False);
+                Assert.That(visual.transform.localRotation, Is.EqualTo(standing));
+                Assert.That(visual.color, Is.EqualTo(color));
+
+                Assert.That(crew.TryReceiveDamage(1f), Is.True);
+                crew.gameObject.SetActive(false);
+                Assert.That(visual.transform.localRotation, Is.EqualTo(standing), "Disabling crew left its display lying down.");
+                Object.Destroy(crew.gameObject);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator FlyingKickPushesCrewWithShortStunAndStopsAtDeckEdge()
         {
             var profile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner");
             player.GetComponent<Rigidbody2D>().position = new Vector2(0f, 1f);
             player.transform.position = player.GetComponent<Rigidbody2D>().position;
             var crew = (CombatCrewMember)Object.Instantiate(profile.prefab, new Vector2(0f, 2f), Quaternion.identity);
-            crew.InitializeCrew(player.BoatHealth, damageSystem, player.ProjectilePrefab, profile);
+            crew.InitializeCrew(player.BoatHealth, damageSystem, profile);
             crew.gameObject.AddComponent<CircleCollider2D>().isTrigger = true;
             Physics2D.SyncTransforms();
             Assert.That(player.TryMelee(Vector2.up), Is.True);
@@ -201,6 +314,100 @@ namespace Ferryman.Tests
             Assert.That(crew.StunRemainingRatio, Is.EqualTo(1f / 3f).Within(0.03f));
             yield return new WaitForSeconds(0.35f);
             Assert.That(crew.IsStunned, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator OwlMovesAwayFromRhinoBeforeResumingFire()
+        {
+            var rhinoProfile = Resources.Load<CrewDefinition>("Voyage/Crew/mechanic-rhino");
+            var owlProfile = Resources.Load<CrewDefinition>("Voyage/Crew/sharpshooter-owl");
+            Assert.That(rhinoProfile, Is.Not.Null);
+            Assert.That(owlProfile, Is.Not.Null);
+            Assert.That(owlProfile.portrait, Is.Not.Null);
+            Assert.That(owlProfile.deckSprite, Is.Not.Null);
+
+            var rhino = Object.Instantiate(rhinoProfile.prefab, new Vector2(3f, 0.4f), Quaternion.identity);
+            var owl = (CombatCrewMember)Object.Instantiate(owlProfile.prefab, new Vector2(4.2f, 0.4f), Quaternion.identity);
+            try
+            {
+                enemy.transform.position = new Vector2(4f, 7f);
+                owl.InitializeCrew(player.BoatHealth, damageSystem, owlProfile);
+                var setThreat = typeof(CombatCrewMember).GetMethod("SetAvoidedCrew", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(setThreat, Is.Not.Null);
+                setThreat.Invoke(owl, new object[] { rhino });
+                Physics2D.SyncTransforms();
+                Assert.That(owl.IsAvoidingCrew, Is.True);
+
+                bool HasFired() => Object.FindObjectsOfType<Projectile>().Any(shot => shot.Instigator == owl);
+                float deadline = Time.realtimeSinceStartup + 3f;
+                while (owl.IsAvoidingCrew && Time.realtimeSinceStartup < deadline)
+                {
+                    Assert.That(HasFired(), Is.False, "Owl fired while within the avoidance distance.");
+                    yield return null;
+                }
+
+                Assert.That(owl.IsAvoidingCrew, Is.False, "Owl did not reach a safer part of the deck.");
+                Assert.That(player.MovementDeck.ContainsFloor(owl.transform.position), Is.True);
+                yield return WaitFor(HasFired, 1f, "Owl did not resume firing after moving away.");
+            }
+            finally
+            {
+                Object.Destroy(owl.gameObject);
+                Object.Destroy(rhino.gameObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PassengersPlayFourWalkingAndSkillFramesAndKeepWanderingWithoutWork()
+        {
+            foreach (var actor in Object.FindObjectsOfType<EnemyCharacter>())
+                actor.gameObject.SetActive(false);
+            var appearance = typeof(Character).GetMethod("ApplyCrewAppearance", BindingFlags.Instance | BindingFlags.NonPublic);
+            var gunnerProfile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner-monkey");
+            var gunner = (CombatCrewMember)Object.Instantiate(gunnerProfile.prefab, new Vector2(4f, 0.6f), Quaternion.identity);
+            appearance.Invoke(gunner, new object[] { gunnerProfile });
+            gunner.InitializeCrew(player.BoatHealth, damageSystem, gunnerProfile);
+            var body = gunner.GetComponent<Rigidbody2D>();
+            var visual = gunner.GetComponentsInChildren<SpriteRenderer>().Single(renderer => renderer.enabled);
+            var seen = new HashSet<Sprite>();
+            float stopped = 0f;
+            for (float until = Time.time + 5f; Time.time < until;)
+            {
+                yield return new WaitForFixedUpdate();
+                if (gunnerProfile.walkFrames.Contains(visual.sprite))
+                    seen.Add(visual.sprite);
+                stopped = body.velocity.sqrMagnitude > 0.01f ? 0f : stopped + Time.fixedDeltaTime;
+                Assert.That(stopped, Is.LessThan(0.28f), "The gunner paused after reaching a waypoint on the open deck.");
+            }
+            Assert.That(seen, Is.EquivalentTo(gunnerProfile.walkFrames));
+
+            enemy.transform.position = new Vector2(4f, 8f);
+            enemy.gameObject.SetActive(true);
+            seen.Clear();
+            yield return WaitFor(() =>
+            {
+                if (gunnerProfile.skillFrames.Contains(visual.sprite))
+                    seen.Add(visual.sprite);
+                return seen.Count == 4;
+            }, 2f, "The gunner did not display all four shot frames.");
+            Object.Destroy(gunner.gameObject);
+
+            var mechanicProfile = Resources.Load<CrewDefinition>("Voyage/Crew/mechanic-rhino");
+            var boat = player.BoatHealth;
+            Vector2 position = boat.Deck.CellToWorld(new Vector2Int(9, 2));
+            var mechanic = (MaintenanceCrewMember)Object.Instantiate(mechanicProfile.prefab, position, Quaternion.identity);
+            appearance.Invoke(mechanic, new object[] { mechanicProfile });
+            mechanic.InitializeCrew(boat, mechanicProfile);
+            visual = mechanic.GetComponentsInChildren<SpriteRenderer>().Single(renderer => renderer.enabled);
+            Assert.That(boat.ApplyDamage(100f, position), Is.True);
+            seen.Clear();
+            yield return WaitFor(() =>
+            {
+                if (mechanic.IsRepairing && mechanicProfile.skillFrames.Contains(visual.sprite))
+                    seen.Add(visual.sprite);
+                return seen.Count == 4;
+            }, 5f, "The mechanic did not display all four repair frames.");
+            Object.Destroy(mechanic.gameObject);
         }
 
         [UnityTest]
@@ -239,8 +446,8 @@ namespace Ferryman.Tests
             Assert.That(sent, Is.EqualTo(2));
             // An already stunned NPC lets enemy fire reach the player behind it.
             Assert.That(crew.TryReceiveDamage(1f), Is.True);
-            var shooter = Object.Instantiate(Resources.Load<VoyageDefinition>("Voyage/DefaultVoyage")
-                .randomEncounters[0].waves[0].enemies[0].prefab, new Vector3(20f, 20f), Quaternion.identity);
+            var shooter = Object.Instantiate(Resources.Load<EncounterDefinition>("Voyage/Events/CoastalRaid")
+                .waves[0].enemies[0].prefab, new Vector3(20f, 20f), Quaternion.identity);
             shooter.enabled = false;
             var incoming = FireFrom(shooter, new Vector3(0f, 1.5f), Vector2.down, 1f);
             yield return WaitFor(() => player.IsStunned, 0.8f, "A stunned NPC blocked the enemy projectile.");
@@ -258,7 +465,7 @@ namespace Ferryman.Tests
             Physics2D.SyncTransforms();
 
             Assert.That(enemy.Hitbox, Is.TypeOf<PolygonCollider2D>());
-            Vector2 emptyCorner = position + new Vector2(0.55f, 0.9f);
+            Vector2 emptyCorner = position + new Vector2(0.55f, 0.9f) * 1.3f;
             Assert.That(enemy.Hitbox.bounds.Contains(emptyCorner), Is.True);
             var miss = FireFrom(player, emptyCorner, Vector2.right, player.AttackPower);
             yield return WaitFor(() => miss != null && miss.transform.position.x > enemy.Hitbox.bounds.max.x + 0.15f,
@@ -266,8 +473,8 @@ namespace Ferryman.Tests
             Assert.That(enemy.Health, Is.EqualTo(enemy.MaxHealth));
             Object.Destroy(miss.gameObject);
 
-            Vector2 clawLane = position + new Vector2(0.68f, -1.6f);
-            Assert.That(enemy.Hitbox.OverlapPoint(position + new Vector2(0.68f, -0.65f)), Is.True);
+            Vector2 clawLane = position + new Vector2(0.68f, -1.6f) * 1.3f;
+            Assert.That(enemy.Hitbox.OverlapPoint(position + new Vector2(0.68f, -0.65f) * 1.3f), Is.True);
             var graze = FireFrom(player, clawLane, Vector2.up, player.AttackPower);
             yield return WaitFor(() => graze == null, 0.5f, "The projectile should hit the claw outside the old box.");
             Assert.That(enemy.Health, Is.EqualTo(enemy.MaxHealth - player.AttackPower));
@@ -361,6 +568,218 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
+        public IEnumerator SnailShotsDamageTheHullAndCreateOneRepairPointPerHundred()
+        {
+            var sentries = Resources.Load<EncounterDefinition>("Voyage/Events/ReefSentries");
+            var boat = player.BoatHealth;
+            var snail = Object.Instantiate(sentries.waves[0].enemies[0].prefab,
+                boat.Deck.transform.position + new Vector3(1f, 6f), Quaternion.identity);
+            snail.InitializeEnemy(boat, player, damageSystem);
+            yield return WaitFor(() => boat.CurrentHealth == boat.MaxHealth - 75f, 6f, "Hull shots did not arrive.");
+            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name.StartsWith("ProjectileImpact")),
+                Is.EqualTo(1), "A hull shot must create exactly one impact at the ship.");
+            Assert.That(boat.RepairPoints, Is.Empty);
+            yield return WaitFor(() => boat.CurrentHealth == boat.MaxHealth - 100f, 3f, "The fourth hull shot did not arrive.");
+            Assert.That(boat.RepairPoints, Has.Count.EqualTo(1));
+            Assert.That(boat.Deck.ContainsCell(boat.RepairPoints.Single().Cell), Is.True);
+            Assert.That(player.IsStunned, Is.False);
+            Object.Destroy(snail.gameObject);
+        }
+
+        [UnityTest]
+        public IEnumerator JellyShotsSlowTheCaptainAndCrewWithoutStunning()
+        {
+            var sentries = Resources.Load<EncounterDefinition>("Voyage/Events/ReefSentries");
+            var boat = player.BoatHealth;
+            var jelly = Object.Instantiate(sentries.waves[0].enemies[1].prefab,
+                player.transform.position + Vector3.up * 5f, Quaternion.identity);
+            jelly.InitializeEnemy(boat, player, damageSystem);
+            yield return WaitFor(() => player.IsSlowed, 3f, "The captain was not slowed by a jelly shot.");
+            jelly.enabled = false;
+            Assert.That(player.IsStunned, Is.False);
+            Assert.That(player.ActionSpeed, Is.EqualTo(0.65f));
+            player.Move(Vector2.right);
+            var body = player.GetComponent<Rigidbody2D>();
+            Assert.That(body.velocity.x, Is.EqualTo(player.MoveSpeed * 0.65f).Within(0.001f));
+            player.Move(Vector2.zero);
+            Assert.That(boat.ApplyDamage(100f, player.transform.position), Is.True);
+            var point = boat.RepairPoints.Single();
+            body.position = point.transform.position;
+            Assert.That(player.TryRepair(0.2f), Is.True);
+            Assert.That(point.Progress, Is.EqualTo(player.RepairSpeed * 0.2f * 0.65f).Within(0.001f));
+            Assert.That(player.TryFire(Vector2.right), Is.True);
+            yield return new WaitForSeconds(player.FireInterval + 0.02f);
+            Assert.That(player.TryFire(Vector2.right), Is.False, "The chill should extend the firing cooldown.");
+
+            var profile = Resources.Load<CrewDefinition>("Voyage/Crew/mechanic-rhino");
+            var crew = Object.Instantiate(profile.prefab, new Vector2(4f, 1f), Quaternion.identity);
+            FireFrom(jelly, (Vector2)crew.transform.position + Vector2.up, Vector2.down, jelly.AttackPower);
+            yield return WaitFor(() => crew.IsSlowed, 2f, "The crew member was not slowed.");
+            Assert.That(crew.IsStunned, Is.False);
+            yield return WaitFor(() => !player.IsSlowed, 4f, "The captain's chill did not expire.");
+            Assert.That(player.ActionSpeed, Is.EqualTo(1f));
+            Object.Destroy(crew.gameObject);
+            Object.Destroy(jelly.gameObject);
+        }
+
+        [UnityTest]
+        public IEnumerator BoardingCrabClimbsAboardAndStunsCrewBeforeCaptain()
+        {
+            var raid = Resources.Load<EncounterDefinition>("Voyage/Events/BoardingRaid");
+            BoatHealth boat = player.BoatHealth;
+            BoatDeck deck = boat.Deck;
+            Vector2 crewPosition = deck.CellToWorld(new Vector2Int(9, 3));
+            var crewProfile = Resources.Load<CrewDefinition>("Voyage/Crew/mechanic-rhino");
+            Character crew = Object.Instantiate(crewProfile.prefab, crewPosition, Quaternion.identity);
+            crew.enabled = false;
+            var captainBody = player.GetComponent<Rigidbody2D>();
+            captainBody.position = deck.CellToWorld(new Vector2Int(10, 3));
+            Vector2 sea = new Vector2(crewPosition.x, deck.GetComponent<EdgeCollider2D>().bounds.max.y + 1.4f);
+            var crab = Object.Instantiate(raid.waves[0].enemies[0].prefab, sea, Quaternion.identity);
+            crab.InitializeEnemy(boat, player, damageSystem);
+            yield return WaitFor(() => crab.Hitbox.isTrigger, 1f, "The crab did not leap from the water.");
+            yield return WaitFor(() => !crab.Hitbox.isTrigger && deck.ContainsFloor(crab.transform.position), 2f,
+                "The crab did not land inside the rails.");
+            yield return WaitFor(() => crew.IsStunned, 4f, "The crab did not stun the crew member.");
+            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name.StartsWith("MeleeSwing")), Is.EqualTo(1));
+            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name.StartsWith("ProjectileImpact")), Is.EqualTo(1));
+            Assert.That(player.IsStunned, Is.False);
+            Assert.That(crew.Health, Is.EqualTo(crew.MaxHealth));
+            Object.Destroy(crew.gameObject);
+
+            var sprite = crab.GetComponentInChildren<SpriteRenderer>();
+            yield return WaitFor(() => sprite.sprite.name.EndsWith("_02"), 5f, "The crab did not raise its claw at the captain.");
+            Vector2 dodgePosition = deck.CellToWorld(new Vector2Int(12, 2));
+            captainBody.position = dodgePosition;
+            yield return new WaitForSeconds(0.6f);
+            Assert.That(player.IsStunned, Is.False, "Moving out of reach did not dodge the claw.");
+            var walking = new HashSet<Sprite>();
+            yield return WaitFor(() =>
+            {
+                if (sprite.sprite.name.Contains("-walk_"))
+                    walking.Add(sprite.sprite);
+                return player.IsStunned;
+            }, 6f, "The crab did not pursue the captain after missing.");
+            Assert.That(walking, Has.Count.EqualTo(4), "Pursuit did not play the four walk frames.");
+            Assert.That(player.Health, Is.EqualTo(player.MaxHealth));
+            Assert.That(boat.CurrentHealth, Is.EqualTo(boat.MaxHealth));
+            crab.enabled = false;
+            yield return WaitFor(() => !player.IsStunned, 2f, "The captain did not recover before kicking the crab.");
+            captainBody.position = deck.CellToWorld(new Vector2Int(9, 2));
+            crab.GetComponent<Rigidbody2D>().position = deck.CellToWorld(new Vector2Int(10, 2));
+            Physics2D.SyncTransforms();
+            float health = crab.Health;
+            Assert.That(player.TryMelee(Vector2.right), Is.True);
+            Assert.That(crab.Health, Is.EqualTo(health - player.AttackPower), "The captain's kick did not hurt the boarding crab.");
+            Bounds deckBounds = deck.GetComponent<EdgeCollider2D>().bounds;
+            var occupied = new GameObject("Occupied Deck For Death");
+            occupied.transform.position = deckBounds.center;
+            occupied.AddComponent<BoxCollider2D>().size = deckBounds.size;
+            crab.GetComponent<Rigidbody2D>().position = new Vector2(crab.GetComponent<Rigidbody2D>().position.x,
+                deckBounds.max.y - crab.Hitbox.bounds.extents.y - 0.05f);
+            Physics2D.SyncTransforms();
+            Assert.That(damageSystem.ApplyDamage(player, crab, crab.Health), Is.True);
+            var remains = Object.FindObjectsOfType<DestructibleObstacle>().Single(item => item.name.StartsWith("BoardingCrabRemains"));
+            Assert.That(remains.GetComponent<BoxCollider2D>().enabled, Is.True);
+            Assert.That(deck.HasClearFloor(remains.transform.position, remains.GetComponent<BoxCollider2D>().bounds.size),
+                Is.True, "A crowded deck pushed the corpse's hitbox through the rail or fixed cargo.");
+            Object.Destroy(occupied);
+            yield return new WaitForSeconds(0.55f);
+            captainBody.position = (Vector2)remains.transform.position + Vector2.left * 1.4f;
+            Physics2D.SyncTransforms();
+            Assert.That(player.TryMelee(Vector2.right), Is.True);
+            Assert.That(remains.IsCleared, Is.True, "A kick did not clear the fallen crab.");
+            Assert.That(remains.GetComponent<BoxCollider2D>().enabled, Is.False);
+            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name.StartsWith("BombCleared")), Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator TurtleShotsStunForLongerWithoutExtendingRepeatedHits()
+        {
+            var coastalRaid = Resources.Load<EncounterDefinition>("Voyage/Events/CoastalRaid");
+            var prefab = coastalRaid.waves.SelectMany(wave => wave.enemies).Select(group => group.prefab)
+                .First(actor => actor.name == "Large Gunner");
+            var turtle = Object.Instantiate(prefab, new Vector2(0f, 7f), Quaternion.identity);
+            turtle.InitializeEnemy(player.BoatHealth, player, damageSystem);
+            turtle.enabled = false;
+            Assert.That(turtle.FireInterval, Is.EqualTo(3f));
+            int received = 0;
+            damageSystem.DamageReceived.AddListener((source, target, damage) => received++);
+            Assert.That(player.BoatHealth.ApplyDamage(100f, player.transform.position), Is.True);
+            var point = player.BoatHealth.RepairPoints.Single();
+            player.GetComponent<Rigidbody2D>().position = point.transform.position;
+            Assert.That(player.TryRepair(0.1f), Is.True);
+            var shot = FireFrom(turtle, player.transform.position, Vector2.down, turtle.AttackPower);
+            Object.Destroy(turtle.gameObject);
+            yield return WaitFor(() => player.IsStunned, 0.5f, "The turtle projectile lost its stun after its shooter died.");
+            Assert.That(shot == null || !shot.Hitbox.enabled, Is.True);
+            Assert.That(player.IsRepairing, Is.False);
+            Assert.That(player.StunRemainingRatio, Is.InRange(0.95f, 1f));
+            Assert.That(player.Health, Is.EqualTo(player.MaxHealth));
+            Assert.That(player.TryFire(Vector2.right), Is.False);
+            yield return new WaitForSeconds(1.1f);
+            Assert.That(player.IsStunned, Is.True, "The heavy shot used the ordinary one-second stun.");
+            Assert.That(player.StunRemainingRatio, Is.InRange(0.45f, 0.6f));
+            FireFrom(enemy, player.transform.position, Vector2.down, enemy.AttackPower);
+            yield return new WaitForSeconds(1.5f);
+            Assert.That(player.IsStunned, Is.False, "A repeated hit extended the heavy stun.");
+            Assert.That(received, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator RightSideBomberMirrorsItsBodyAndReleasesFromTheNearClaw()
+        {
+            var encounter = Resources.Load<EncounterDefinition>("Voyage/Events/Bombardment");
+            Bounds deck = player.BoatHealth.Deck.GetComponent<EdgeCollider2D>().bounds;
+            var bomber = Object.Instantiate(encounter.waves[0].enemies[0].prefab,
+                new Vector2(deck.max.x + 4f, deck.center.y + 1f), Quaternion.identity);
+            var visual = bomber.GetComponentInChildren<SpriteRenderer>();
+            var outline = (PolygonCollider2D)bomber.Hitbox;
+            Vector2[] original = outline.GetPath(0);
+            Sprite resting = visual.sprite;
+            bomber.InitializeEnemy(player.BoatHealth, player, damageSystem);
+            Assert.That(visual.flipX, Is.True);
+            Assert.That(outline.GetPath(0), Is.EqualTo(original.Select(point => new Vector2(-point.x, point.y)).ToArray()));
+            yield return WaitFor(() => visual.sprite != resting, 1f, "The mirrored bomber did not raise its bomb.");
+            Vector2[] held = outline.GetPath(0);
+            Assert.That(held.Any(point => point.x < -1.3f), Is.True, "The raised claw collision stayed on the far side.");
+            FieldInfo pending = typeof(EnemyCharacter).GetField("pendingBomb", BindingFlags.Instance | BindingFlags.NonPublic);
+            object pose = pending.GetValue(bomber);
+            Vector2 offset = (Vector2)pose.GetType().GetField("launchOffset").GetValue(pose);
+            Vector2 nearClaw = visual.transform.TransformPoint(new Vector2(-offset.x, offset.y));
+            yield return WaitFor(() => Object.FindObjectsOfType<TimedBomb>().Any(bomb => bomb.IsInFlight), 1f,
+                "The mirrored bomber did not release a bomb.");
+            var bomb = Object.FindObjectsOfType<TimedBomb>().First(item => item.IsInFlight);
+            FieldInfo flightOrigin = typeof(DestructibleObstacle).GetField("flightOrigin", BindingFlags.Instance | BindingFlags.NonPublic);
+            Vector2 origin = player.BoatHealth.Deck.transform.TransformPoint(
+                (Vector2)flightOrigin.GetValue(bomb.GetComponent<DestructibleObstacle>()));
+            Assert.That(Vector2.Distance(origin, nearClaw), Is.LessThan(0.01f), "The bomb came from the unmirrored claw.");
+            Assert.That(outline.GetPath(0), Is.EqualTo(original.Select(point => new Vector2(-point.x, point.y)).ToArray()));
+            Object.Destroy(bomb.gameObject);
+            Object.Destroy(bomber.gameObject);
+        }
+
+        [UnityTest]
+        public IEnumerator SeaMonsterShowsFourAttackFramesAndReturnsToItsRestingSprite()
+        {
+            var renderer = enemy.GetComponentInChildren<SpriteRenderer>();
+            Sprite resting = renderer.sprite;
+            yield return new WaitForSeconds(0.2f);
+            Assert.That(renderer.sprite, Is.SameAs(resting));
+
+            enemy.enabled = true;
+            Assert.That(enemy.TryFire(Vector2.right), Is.True);
+            var seen = new HashSet<Sprite>();
+            yield return WaitFor(() =>
+            {
+                if (renderer.sprite != resting)
+                    seen.Add(renderer.sprite);
+                return renderer.sprite == resting;
+            }, 1f, "The attack animation did not return to the resting sprite.");
+            Assert.That(seen, Has.Count.EqualTo(4));
+        }
+
+        [UnityTest]
         public IEnumerator HitFeedbackStaysOnVisiblePixelsThroughBomberPoseChanges()
         {
             var encounter = Resources.Load<EncounterDefinition>("Voyage/Events/Bombardment");
@@ -370,8 +789,8 @@ namespace Ferryman.Tests
             var getAnchor = typeof(EnemyCharacter).GetProperty("HealthBarAnchor", BindingFlags.Instance | BindingFlags.NonPublic);
             var idleAnchor = (Vector3)getAnchor.GetValue(bomber);
             Vector2[] idleOutline = collider.GetPath(0);
-            Vector2 claw = bomber.transform.TransformPoint(new Vector2(1.28f, -0.3f));
-            Vector2 bomb = bomber.transform.TransformPoint(new Vector2(0.945f, -0.045f));
+            Vector2 claw = bomber.transform.TransformPoint(new Vector2(1.28f, -0.3f) * 1.3f);
+            Vector2 bomb = bomber.transform.TransformPoint(new Vector2(0.945f, -0.045f) * 1.3f);
             Physics2D.SyncTransforms();
             Assert.That(collider.OverlapPoint(claw), Is.False);
             Sprite idlePose = renderer.sprite;
@@ -420,9 +839,9 @@ namespace Ferryman.Tests
             Assert.That(sprite.texture.GetPixel(Mathf.FloorToInt(pixel.x), Mathf.FloorToInt(pixel.y)).a, Is.GreaterThanOrEqualTo(0.5f));
         }
 
-        private Projectile FireFrom(Character source, Vector3 origin, Vector2 direction, float damage)
+        private Projectile FireFrom(CombatCharacter source, Vector3 origin, Vector2 direction, float damage)
         {
-            var shot = Object.Instantiate(player.ProjectilePrefab, origin, Quaternion.identity);
+            var shot = Object.Instantiate(source.ProjectilePrefab, origin, Quaternion.identity);
             shot.Launch(direction, damage, source, damageSystem);
             return shot;
         }

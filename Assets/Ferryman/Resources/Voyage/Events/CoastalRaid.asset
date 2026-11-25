@@ -22,13 +22,16 @@ MonoBehaviour:
     - prefab: {fileID: 8054760092492189183, guid: c299ac059c46b6244b0d0a610aaea131, type: 3}
       count: 1
       spawnPosition: {x: 5.3, y: 8.5}
+      firstStoryLeg: 3
   - enemies:
     - prefab: {fileID: 402870840139730365, guid: 42b27aa8d72f59f47be8031f07cea9f2, type: 3}
       count: 1
       spawnPosition: {x: -0.7, y: 8.5}
+      firstStoryLeg: 6
     - prefab: {fileID: 4227477228960928629, guid: 6a325ee840d021e4098d175c4f7a9c82, type: 3}
       count: 1
       spawnPosition: {x: 5.3, y: 8.5}
+      firstStoryLeg: 15
   reward:
     coins: 50
     specialItems: 1

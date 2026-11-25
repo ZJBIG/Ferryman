@@ -12,7 +12,6 @@ namespace Ferryman.Voyage
             Title,
             ConfirmRestart,
             Route,
-            Passengers,
             Upgrades
         }
 
@@ -25,6 +24,7 @@ namespace Ferryman.Voyage
         private GUIStyle text;
         private GUIStyle title;
         private GUIStyle ink;
+        private GUIStyle storyInk;
         private GUIStyle inkTitle;
         private GUIStyle centeredInk;
         private GUIStyle button;
@@ -34,7 +34,6 @@ namespace Ferryman.Voyage
         private Color32[] ringColors;
         private Color32[] ringPixels;
         private float[] ringAngles;
-        private Vector2 passengerScroll;
         private static readonly Color InkColor = new Color(0.20f, 0.13f, 0.08f);
         private static readonly Color Shade = new Color(0.025f, 0.075f, 0.09f, 0.74f);
 
@@ -56,6 +55,8 @@ namespace Ferryman.Voyage
                 title = new GUIStyle(text) { fontSize = 32, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
                 ink = new GUIStyle(text);
                 ink.normal.textColor = InkColor;
+                storyInk = new GUIStyle(ink);
+                storyInk.hover.textColor = InkColor;
                 inkTitle = new GUIStyle(title);
                 inkTitle.normal.textColor = InkColor;
                 centeredInk = new GUIStyle(ink) { alignment = TextAnchor.MiddleCenter };
@@ -78,17 +79,29 @@ namespace Ferryman.Voyage
             else if (controller.Vessel != null)
             {
                 bool upgradeCards = controller.IsExpedition && controller.Phase == VoyagePhase.Island
-                    && controller.BoardingProfile == null && (controller.UpgradeChoices.Length > 0
+                    && controller.BoardingProfile == null && !controller.HasStoryDialogue && (controller.UpgradeChoices.Length > 0
                         || !controller.IslandResolved && (controller.CurrentIsland == VoyageIslandKind.Market
                             || controller.CurrentIsland == VoyageIslandKind.Shipyard
                             || controller.CurrentIsland == VoyageIslandKind.Battle
                             || controller.CurrentIsland == VoyageIslandKind.Elite));
                 if (!upgradeCards)
                     DrawCombat(screen, scale, offset);
-                if (controller.Phase == VoyagePhase.Island && controller.BoardingProfile != null)
+                if (controller.HasStoryDialogue)
+                    DrawStoryPort(controller.StoryFarewell, controller.AwaitingStoryDialogue ? "继续" : null);
+                else if (controller.AlarmProfile != null)
+                    DrawPassengerAlarm();
+                else if (controller.Phase == VoyagePhase.Island && controller.BoardingProfile != null)
                     DrawDialogue();
+                else if (controller.AwaitingStoryDeparture)
+                    DrawStoryPort(controller.StoryRound == VoyageController.FinalStoryRound
+                        ? "灯塔传来急讯。巨像正在终点港外的水面聚集。"
+                        : "已抵达终点港。整顿完毕后，回渡口开始下一回航程。",
+                        controller.StoryRound == VoyageController.FinalStoryRound ? "离港" : "开始下一回");
                 else if (controller.IsExpedition && controller.Phase == VoyagePhase.Island)
                     VoyageExpeditionUI.Draw(controller, art, 0, false, inkTitle, ink, button);
+                if (controller.ActiveRun && controller.StoryRound > 0)
+                    GUI.Label(new Rect(1018f, 17f, 232f, 29f),
+                        $"第{controller.StoryRound}/{VoyageController.FinalStoryRound}日", text);
             }
 
             if (controller.Fade > 0f)
@@ -111,9 +124,6 @@ namespace Ferryman.Voyage
                 case DeparturePage.Route:
                     DrawRoute(screen);
                     break;
-                case DeparturePage.Passengers:
-                    DrawPassengers(screen);
-                    break;
                 case DeparturePage.Upgrades:
                     if (VoyageExpeditionUI.DrawPermanent(controller, art, ink))
                         page = DeparturePage.Title;
@@ -129,9 +139,12 @@ namespace Ferryman.Voyage
             GUI.DrawTexture(new Rect(878f, 91f, 207f, 207f), art.titleDu, ScaleMode.ScaleToFit);
             GUI.DrawTexture(new Rect(1064f, 137f, 192f, 207f), art.titleRen, ScaleMode.ScaleToFit);
             bool enabled = GUI.enabled;
-            GUI.enabled = enabled && !controller.HasCheckpoint;
+            GUI.enabled = enabled && controller.CanChoosePermanentUpgrade;
             if (controller.Definition.branchingRoutes && GUI.Button(new Rect(931f, 329f, 264f, 43f), "港口永久整备", button))
+            {
+                VoyageAudio.Play(Sound.Paper, 0.49f);
                 page = DeparturePage.Upgrades;
+            }
             GUI.enabled = enabled;
             if (Oar(new Rect(725f, 378f, 516f, 99f), "新游戏", true))
             {
@@ -169,7 +182,10 @@ namespace Ferryman.Voyage
             GUI.DrawTexture(area, art.oar, ScaleMode.ScaleToFit);
             GUI.Label(new Rect(area.x + 38f, area.y + 1f, 218f, 52f), label, oarText);
             GUI.color = previous;
-            return enabled && GUI.Button(area, GUIContent.none, GUIStyle.none);
+            if (!enabled || !GUI.Button(area, GUIContent.none, GUIStyle.none))
+                return false;
+            VoyageAudio.Play(Sound.Confirm, 0.43f);
+            return true;
         }
 
         private void DrawRestartConfirmation(Rect screen)
@@ -195,6 +211,7 @@ namespace Ferryman.Voyage
             seed = Environment.TickCount;
             preview = VoyageEventPlanner.Build(controller.Definition, seed);
             page = DeparturePage.Route;
+            VoyageAudio.Play(Sound.Paper, 0.52f);
         }
 
         private void DrawRoute(Rect screen)
@@ -204,10 +221,13 @@ namespace Ferryman.Voyage
                 VoyageExpeditionUI.Draw(controller, art, seed, true, inkTitle, ink, button);
                 if (GUI.Button(new Rect(337f, 628f, 190f, 45f), "返回", button))
                     page = DeparturePage.Title;
-                if (GUI.Button(new Rect(753f, 628f, 190f, 45f), "选择乘客", button))
+                if (GUI.Button(new Rect(753f, 628f, 190f, 45f), "空船启航", button))
                 {
-                    passengerScroll = Vector2.zero;
-                    page = DeparturePage.Passengers;
+                    Act(() =>
+                    {
+                        if (controller.StartVoyage(seed))
+                            page = DeparturePage.Title;
+                    });
                 }
                 return;
             }
@@ -250,45 +270,14 @@ namespace Ferryman.Voyage
 
             if (GUI.Button(new Rect(337f, 496f, 190f, 45f), "返回", button))
                 page = DeparturePage.Title;
-            if (GUI.Button(new Rect(753f, 496f, 190f, 45f), "选择乘客", button))
+            if (GUI.Button(new Rect(753f, 496f, 190f, 45f), "空船启航", button))
             {
-                passengerScroll = Vector2.zero;
-                page = DeparturePage.Passengers;
-            }
-        }
-
-        private void DrawPassengers(Rect screen)
-        {
-            Fill(screen, Shade);
-            GUI.DrawTexture(new Rect(213f, 42f, 854f, 610f), art.parchment);
-            GUI.Label(new Rect(352f, 121f, 576f, 50f), "选择首位乘客", inkTitle);
-            GUI.Label(new Rect(350f, 171f, 580f, 40f),
-                "目的地 · " + controller.Definition.stops[controller.Definition.stops.Length - 1].displayName, centeredInk);
-
-            CrewDefinition[] profiles = controller.Definition.initialPassengers;
-            passengerScroll = GUI.BeginScrollView(new Rect(333f, 214f, 617f, 292f), passengerScroll,
-                new Rect(0f, 0f, 600f, profiles.Length * 72f));
-            for (int i = 0; i < profiles.Length; i++)
-            {
-                CrewDefinition profile = profiles[i];
-                float y = i * 72f;
-                Fill(new Rect(0f, y, 600f, 66f), new Color(1f, 0.92f, 0.73f, 0.41f));
-                DrawPortrait(profile, new Rect(8f, y + 4f, 49f, 58f));
-                GUI.Label(new Rect(70f, y + 2f, 385f, 31f), profile.displayName, ink);
-                GUI.Label(new Rect(70f, y + 32f, 385f, 30f), VoyageController.DescribeRole(profile), ink);
-                if (GUI.Button(new Rect(468f, y + 12f, 119f, 42f), "护送启航", button))
+                Act(() =>
                 {
-                    Act(() =>
-                    {
-                        if (controller.StartVoyage(profile, seed))
-                            page = DeparturePage.Title;
-                    });
-                }
+                    if (controller.StartVoyage(seed))
+                        page = DeparturePage.Title;
+                });
             }
-            GUI.EndScrollView();
-            if (GUI.Button(new Rect(550f, 523f, 180f, 44f), "返回航线", button))
-                page = DeparturePage.Route;
-            GUI.Label(new Rect(295f, 577f, 690f, 34f), "WASD 移动 · 左键射击 · 右键踢飞道具 · 按住 E 维修", centeredInk);
         }
 
         private void DrawCombat(Rect viewport, float scale, Vector2 offset)
@@ -414,11 +403,48 @@ namespace Ferryman.Voyage
         private void DrawDialogue()
         {
             CrewDefinition profile = controller.BoardingProfile;
+            if (controller.BoardingIsChoice)
+            {
+                GUI.DrawTexture(new Rect(90f, 426f, 1138f, 264f), art.dialogue);
+                DrawPortrait(profile, new Rect(143f, 415f, 179f, 230f));
+                GUI.Label(new Rect(345f, 454f, 799f, 30f),
+                    $"{profile.displayName}  ·  {controller.BoardingOrigin} → {controller.BoardingDestination}", storyInk);
+                GUI.Label(new Rect(345f, 500f, 799f, 65f), controller.BoardingDialogue, storyInk);
+                GUI.Label(new Rect(345f, 576f, 670f, 40f), controller.BoardingConflict, storyInk);
+                if (GUI.Button(new Rect(596f, 631f, 151f, 38f), "谢绝", button))
+                    Act(() => controller.ResolveBoardingOffer(false));
+                if (GUI.Button(new Rect(761f, 631f, 193f, 38f), "让他上船", button))
+                    Act(() => controller.ResolveBoardingOffer(true));
+                return;
+            }
             GUI.DrawTexture(new Rect(90f, 492f, 1138f, 191f), art.dialogue);
             DrawPortrait(profile, new Rect(162f, 422f, 166f, 226f));
             GUI.Label(new Rect(354f, 516f, 616f, 36f), profile.displayName + " · 将上船", ink);
             GUI.Label(new Rect(354f, 560f, 616f, 36f), "目的地 · " + controller.BoardingDestination, ink);
-            GUI.Label(new Rect(354f, 600f, 616f, 36f), VoyageController.DescribeRole(profile), ink);
+            GUI.Label(new Rect(354f, 600f, 616f, 36f), $"送达报酬 · {profile.coinsReward} 金币", ink);
+        }
+
+        private void DrawPassengerAlarm()
+        {
+            CrewDefinition profile = controller.AlarmProfile;
+            GUI.DrawTexture(new Rect(90f, 492f, 1138f, 191f), art.dialogue);
+            DrawPortrait(profile, new Rect(162f, 422f, 166f, 226f));
+            GUI.Label(new Rect(354f, 516f, 740f, 36f), profile.displayName, storyInk);
+            GUI.Label(new Rect(354f, 560f, 740f, 78f), controller.AlarmDialogue, storyInk);
+        }
+
+        private void DrawStoryPort(string line, string action = null)
+        {
+            GUI.DrawTexture(new Rect(90f, 492f, 1138f, 191f), art.dialogue);
+            GUI.Label(new Rect(262f, 525f, 756f, 72f), line, centeredInk);
+            if (action != null && GUI.Button(new Rect(540f, 609f, 200f, 42f), action, button))
+                Act(() =>
+                {
+                    if (controller.AwaitingStoryDialogue)
+                        controller.ContinueStoryDialogue();
+                    else
+                        controller.ContinueStoryVoyage();
+                });
         }
 
         private void DrawPortrait(CrewDefinition profile, Rect area)
@@ -429,10 +455,18 @@ namespace Ferryman.Voyage
                 GUI.Label(area, profile.role == CrewRole.Combat ? "战" : "修", centeredInk);
                 return;
             }
-            Sprite portrait = profile.portrait;
-            GUI.DrawTextureWithTexCoords(Within(area, 0.10f, 0.09f, 0.80f, 0.80f), portrait.texture,
-                new Rect(portrait.rect.x / portrait.texture.width, portrait.rect.y / portrait.texture.height,
-                    portrait.rect.width / portrait.texture.width, portrait.rect.height / portrait.texture.height));
+            DrawPortraitImage(profile.portrait, Within(area, 0.10f, 0.09f, 0.80f, 0.80f));
+        }
+
+        internal static void DrawPortraitImage(Sprite portrait, Rect area)
+        {
+            Rect sprite = portrait.rect;
+            float scale = Mathf.Min(area.width / sprite.width, area.height / sprite.height);
+            Vector2 size = sprite.size * scale;
+            Rect fitted = new Rect(area.center - size * 0.5f, size);
+            GUI.DrawTextureWithTexCoords(fitted, portrait.texture,
+                new Rect(sprite.x / portrait.texture.width, sprite.y / portrait.texture.height,
+                    sprite.width / portrait.texture.width, sprite.height / portrait.texture.height));
         }
 
         private void DrawSettlement(Rect screen)

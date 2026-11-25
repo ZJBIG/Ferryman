@@ -17,6 +17,7 @@ namespace Ferryman.Voyage
         public EnemyCharacter prefab;
         [Min(1)] public int count = 1;
         public Vector2 spawnPosition;
+        [Min(1)] public int firstStoryLeg = 1;
     }
 
     [Serializable]
@@ -31,7 +32,8 @@ namespace Ferryman.Voyage
         public string id;
         public string displayName;
         public WaveDefinition[] waves = Array.Empty<WaveDefinition>();
-        [Min(0.1f)] public float waveInterval = 8f;
+        [Min(0.1f), Tooltip("The first obstacle flyby starts after half this duration. Waves advance when cleared.")]
+        public float waveInterval = 8f;
         public RewardData reward;
         [Min(1f)] public float cameraSize = 6f;
         public float cameraHeight;

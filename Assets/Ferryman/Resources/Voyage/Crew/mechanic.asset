@@ -17,6 +17,17 @@ MonoBehaviour:
   role: 1
   prefab: {fileID: 7934793890512362643, guid: d37025f05612972419bc54d553dcfedd, type: 3}
   portrait: {fileID: 0}
+  deckSprite: {fileID: 21300000, guid: 94e04a4292e54c4fa979dad4828b7521, type: 3}
+  walkFrames:
+  - {fileID: -914052860483216376, guid: 70eeb6e5f9885f25b3271e95470f412a, type: 3}
+  - {fileID: 6942237729726565866, guid: 70eeb6e5f9885f25b3271e95470f412a, type: 3}
+  - {fileID: -6100536410315083346, guid: 70eeb6e5f9885f25b3271e95470f412a, type: 3}
+  - {fileID: 4708871382998131551, guid: 70eeb6e5f9885f25b3271e95470f412a, type: 3}
+  skillFrames:
+  - {fileID: -477667209097333665, guid: 1a820a0bf6385e6185f8b7f5aee52a5b, type: 3}
+  - {fileID: 2260384934084895220, guid: 1a820a0bf6385e6185f8b7f5aee52a5b, type: 3}
+  - {fileID: 1896352614087875235, guid: 1a820a0bf6385e6185f8b7f5aee52a5b, type: 3}
+  - {fileID: 1105640377394592236, guid: 1a820a0bf6385e6185f8b7f5aee52a5b, type: 3}
   moveSpeed: 2
   repairSpeed: 25
   repairRange: 1

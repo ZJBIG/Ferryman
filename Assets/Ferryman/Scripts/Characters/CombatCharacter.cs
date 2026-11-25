@@ -1,4 +1,5 @@
 using Ferryman.Combat;
+using Ferryman.Voyage;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -21,10 +22,10 @@ namespace Ferryman.Characters
         private float nextFireAt;
 
         public float MoveSpeed => moveSpeed;
-        public float AttackPower => attackPower;
+        public virtual float AttackPower => attackPower;
         public Projectile ProjectilePrefab => projectilePrefab;
         public DamageSystem DamageSystem => damageSystem;
-        public float FireInterval => fireInterval;
+        public virtual float FireInterval => fireInterval;
         protected Vector2 AimDirection { get; private set; } = Vector2.right;
         protected Quaternion AimRotation { get; private set; } = Quaternion.identity;
 
@@ -49,18 +50,20 @@ namespace Ferryman.Characters
 
         public virtual bool TryFire(Vector2 direction)
         {
-            if (!CanAct || Time.time < nextFireAt || direction.sqrMagnitude < 0.0001f
+            if (!CanAct || ActionTime < nextFireAt || direction.sqrMagnitude < 0.0001f
                 || projectilePrefab == null || damageSystem == null)
                 return false;
 
             Face(direction);
-            nextFireAt = Time.time + fireInterval;
+            nextFireAt = ActionTime + FireInterval;
             Vector2 origin = muzzle != null ? (Vector2)muzzle.position
                 : (Vector2)transform.position + AimDirection * muzzleDistance;
             var projectile = Instantiate(projectilePrefab, origin, Quaternion.identity);
             projectile.Launch(AimDirection, AttackPower, this, damageSystem);
             if (shotEffectPrefab != null)
                 Instantiate(shotEffectPrefab, origin, AimRotation);
+            VoyageAudio.Play(IsHostile ? Sound.EnemyShot : Sound.CornShot,
+                this is PlayerCharacter ? 0.58f : IsHostile ? 0.36f : 0.30f, origin);
             shotFired.Invoke();
             return true;
         }
