@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Ferryman.Characters;
 using UnityEngine;
 
@@ -44,7 +45,11 @@ namespace Ferryman.Voyage
         {
             controller = GetComponent<VoyageController>();
             if (font == null)
+#if UNITY_WEBGL && !UNITY_EDITOR
+                font = Resources.Load<Font>("Voyage/NotoSansSC");
+#else
                 font = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "SimHei", "Arial" }, 18);
+#endif
         }
 
         private void OnGUI()
@@ -83,7 +88,8 @@ namespace Ferryman.Voyage
             else if (controller.Vessel != null)
             {
                 bool upgradeCards = controller.IsExpedition && controller.Phase == VoyagePhase.Island
-                    && controller.BoardingProfile == null && !controller.AwaitingStoryDialogue && (controller.UpgradeChoices.Length > 0
+                    && controller.BoardingProfile == null && !controller.AwaitingStoryDialogue && (controller.CanUseFinalPortShop
+                        || controller.UpgradeChoices.Length > 0
                         || !controller.IslandResolved && (controller.CurrentIsland == VoyageIslandKind.Market
                             || controller.CurrentIsland == VoyageIslandKind.Shipyard
                             || controller.CurrentIsland == VoyageIslandKind.Battle
@@ -92,13 +98,14 @@ namespace Ferryman.Voyage
                     DrawCombat(screen, scale, offset);
                 if (controller.AwaitingStoryDialogue)
                     DrawStoryDialogue();
+                else if (controller.AwaitingFinalRecovery || controller.TowingFinalCargo)
+                    DrawFinalRecovery(scale, offset);
                 else if (controller.Phase == VoyagePhase.Island && controller.BoardingProfile != null)
                     DrawDialogue();
+                else if (controller.CanUseFinalPortShop)
+                    VoyageExpeditionUI.DrawMarket(controller, art, ink, finalPort: true);
                 else if (controller.AwaitingStoryDeparture)
-                    DrawStoryPort(controller.StoryRound == VoyageController.FinalStoryRound
-                        ? "灯塔传来急讯。巨像正在终点港外的水面聚集。"
-                        : "已抵达终点港。整顿完毕后，回渡口开始下一回航程。",
-                        controller.StoryRound == VoyageController.FinalStoryRound ? "离港" : "开始下一回");
+                    DrawStoryPort("已抵达终点港。整顿完毕后，回渡口开始下一日航程。", "出发");
                 else if (controller.IsExpedition && controller.Phase == VoyagePhase.Island)
                     VoyageExpeditionUI.Draw(controller, art, 0, false, inkTitle, ink, button);
                 if (controller.ActiveRun && controller.StoryRound > 0)
@@ -327,6 +334,68 @@ namespace Ferryman.Voyage
             DrawFill(shipFill, art.shipHealthy, 0f, health);
             DrawFill(shipFill, art.shipDamaged, health, 1f);
             GUI.DrawTexture(ship, art.shipFrame);
+            if (controller.IsBossLeg && controller.Phase == VoyagePhase.Event)
+                DrawColossusStatus();
+        }
+
+        private void DrawColossusStatus()
+        {
+            foreach (EnemyCharacter enemy in controller.Enemies)
+            {
+                if (enemy == null || !enemy.IsBoss || enemy.Health <= 0f)
+                    continue;
+                string phase = enemy.BossPhase > enemy.BossReinforcementsPhase ? "先击退召来的海怪" : enemy.BossPhase switch
+                {
+                    ColossusPhase.OuterShell => "外壳 · 守住甲板",
+                    ColossusPhase.Crossfire => "双弹 · 留意两处引信",
+                    _ => enemy.IsCoreExposed ? "核心暴露 · 集中射击" : "残壳 · 三连投后露出核心"
+                };
+                Color fill = enemy.IsCoreExposed ? new Color(0.40f, 0.82f, 0.77f) : new Color(0.80f, 0.46f, 0.29f);
+                Fill(new Rect(410f, 17f, 460f, 55f), Shade);
+                GUI.Label(new Rect(421f, 20f, 435f, 30f), enemy.DisplayName + "  ·  " + phase, text);
+                Rect bar = new Rect(422f, 53f, 436f, 8f);
+                Fill(bar, new Color(0.16f, 0.23f, 0.25f));
+                Fill(new Rect(bar.x, bar.y, bar.width * Mathf.Clamp01(enemy.Health / enemy.MaxHealth), bar.height), fill);
+                for (int step = 1; step <= 2; step++)
+                    Fill(new Rect(bar.x + bar.width * step / 3f, bar.y, 2f, bar.height), new Color(0.06f, 0.13f, 0.16f));
+                return;
+            }
+            if (controller.Enemies.Any(enemy => enemy != null && enemy.Health > 0f))
+            {
+                Fill(new Rect(487f, 17f, 306f, 42f), Shade);
+                GUI.Label(new Rect(502f, 23f, 280f, 30f), "击退剩余海怪", text);
+            }
+        }
+
+        private void DrawFinalRecovery(float scale, Vector2 offset)
+        {
+            if (controller.TowingFinalCargo)
+            {
+                Fill(new Rect(487f, 649f, 306f, 42f), Shade);
+                GUI.Label(new Rect(502f, 655f, 280f, 30f), "沿清出的水道拖回港口", text);
+                return;
+            }
+
+            Camera camera = Camera.main;
+            if (camera != null)
+            {
+                Vector2 point = WorldToGui(camera, controller.FinalRecoveryStation, scale, offset);
+                Fill(new Rect(point.x - 52f, point.y - 32f, 104f, 28f), Shade);
+                GUI.Label(new Rect(point.x - 43f, point.y - 33f, 94f, 31f), "收缆点", text);
+            }
+            bool collected = controller.FinalCargoCollected == VoyageController.FinalCargoCount;
+            Fill(new Rect(400f, 633f, 480f, 60f), Shade);
+            string status = !controller.NearFinalRecoveryStation ? "前往船尾收缆点"
+                : $"残骸  {controller.FinalCargoCollected}/{VoyageController.FinalCargoCount}";
+            GUI.Label(new Rect(414f, 648f, 229f, 31f), status, text);
+
+            bool previous = GUI.enabled;
+            GUI.enabled = previous && controller.CanRecoverFinalCargo;
+            bool pressed = GUI.Button(new Rect(648f, 646f, 217f, 34f),
+                collected ? "系缆返港  [F]" : "收拢残骸  [F]", button);
+            GUI.enabled = previous;
+            if (pressed)
+                Act(() => controller.TryRecoverFinalCargo());
         }
 
         private void DrawEnemyFeedback(Camera camera, float worldScale, float scale, Vector2 offset)
@@ -344,8 +413,11 @@ namespace Ferryman.Voyage
                     barWidth, barHeight);
                 Rect fill = Within(frame, opening.x, opening.y, opening.width, opening.height);
                 float health = enemy.MaxHealth > 0f ? Mathf.Clamp01(enemy.Health / enemy.MaxHealth) : 0f;
-                DrawFill(fill, art.enemyFill, 0f, health);
-                GUI.DrawTexture(frame, art.enemyFrame);
+                if (!controller.IsBossLeg || !enemy.IsBoss)
+                {
+                    DrawFill(fill, art.enemyFill, 0f, health);
+                    GUI.DrawTexture(frame, art.enemyFrame);
+                }
                 if (art.hitIcon != null && enemy.TryGetHitFeedbackPosition(out Vector3 position))
                 {
                     Vector2 hitPoint = WorldToGui(camera, position, scale, offset);

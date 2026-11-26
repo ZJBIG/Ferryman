@@ -113,32 +113,35 @@ namespace Ferryman.Voyage
             var aboard = vessel.GetComponentsInChildren<Passenger>().Where(passenger => passenger.Definition != null).ToArray();
             int leg = Mathf.Max(0, StopIndex / 2);
             int day = Mathf.Clamp(StoryRound, 1, FinalStoryRound);
+            bool firstBattle = StoryRound > 0
+                && !eventPlan.Take(StopIndex).Any(plan => plan.kind == VoyageEventKind.Combat);
+            string companionLine = firstBattle ? FirstCompanionCombatLine() : null;
+            if (StoryRound > 0 && !firstBattle)
+            {
+                CountPassengerEncounters(aboard);
+                yield break;
+            }
             var lines = CaptainEncounterLines[day - 1];
-            string captain = "兔子船长：" + (IsBossLeg
-                ? "两短一长，灯塔在给我们指路。等那堆废料浮起来，守住船，别让它再堵水道。"
-                : lines[leg % lines.Length]);
-            string companionLine = FirstCompanionCombatLine();
+            string captain = "兔子船长：" + (StoryRound switch
+            {
+                1 => "前面水色不对。站稳，等它露头再开枪。",
+                2 => "盯住朝船来的。礁口太窄，给鱼群留条路。",
+                3 => "先守住这一程，渡船还得准点到港。",
+                _ => lines[leg % lines.Length]
+            });
             if (aboard.Length == 0)
             {
                 yield return ShowStoryConversation(companionLine, captain);
                 yield break;
             }
 
-            // Give new passengers the first word. Later encounters rotate through the crew.
             Passenger speaker = aboard.FirstOrDefault(passenger => passenger.EncountersAboard == 0)
                 ?? aboard[leg % aboard.Length];
             int encounters = speaker.EncountersAboard;
             CrewDefinition profile = speaker.Definition;
             string id = RelationProfileId(profile.id);
             string reaction;
-            if (IsBossLeg)
-                reaction = id switch
-                {
-                    RhinoId => "闸门那边已经开好了。甲板有破口我先补，打完我去接拖缆。",
-                    OwlId => "右边是鱼群的退路。我盯着聚起来的废料，船长，你让开那道水线。",
-                    _ => "灯塔那头有我妹守着。船长，咱们把挡在水道上的那一堆清干净！"
-                };
-            else if (CrewEncounterLines.TryGetValue(id, out string[] reactions))
+            if (CrewEncounterLines.TryGetValue(id, out string[] reactions))
                 reaction = reactions[encounters == 0 ? 0 : 1 + (encounters - 1) % (reactions.Length - 1)];
             else if (profile.role == CrewRole.Combat)
                 reaction = encounters == 0 ? "我头一次在这条船上碰见海怪。船长，枪口交给我。"
@@ -147,9 +150,14 @@ namespace Ferryman.Voyage
                 reaction = encounters == 0 ? "船长，我刚上船就赶上这阵泡。甲板我来守。"
                     : "上回剩的补板还在，我就在工具箱旁边。";
 
+            CountPassengerEncounters(aboard);
+            yield return ShowStoryConversation(profile.displayName + "：" + reaction, companionLine, captain);
+        }
+
+        private static void CountPassengerEncounters(Passenger[] aboard)
+        {
             foreach (Passenger passenger in aboard)
                 passenger.EncountersAboard = Mathf.Min(passenger.EncountersAboard, 999) + 1;
-            yield return ShowStoryConversation(profile.displayName + "：" + reaction, companionLine, captain);
         }
 
         public bool BoardingIsChoice => StoryRound > 0 && BoardingProfile != null;
@@ -256,8 +264,6 @@ namespace Ferryman.Voyage
             storyBoardingStop = 0;
             if (accept)
                 BeginStoryConversation(BoardingExchange(profile));
-            else
-                BeginStoryConversation(profile.displayName + "：那我再等等下一条船。前面的水道不太平，船长保重。");
             SaveCheckpoint();
             VoyageAudio.Play(Sound.Confirm);
             return true;
@@ -265,41 +271,17 @@ namespace Ferryman.Voyage
 
         private IEnumerator ShowStoryFarewell(CrewDefinition profile)
         {
-            string[] lines = RelationProfileId(profile.id) switch
+            string line = RelationProfileId(profile.id) switch
             {
-                MonkeyId => new[]
-                {
-                    "枪手猴：谢啦，船长！我先去老灯塔接我妹的班，她已经一晚上没合眼了。",
-                    "兔子船长：让她好好歇着。你看见黑影往哪儿去，就帮我记下来，下回我们对对日志。"
-                },
-                RhinoId => new[]
-                {
-                    "维修师犀牛：工具没少一件，先去换闸轴。你们听到潮水重新流起来，就知道我修好了。",
-                    "兔子船长：甲板的木板多亏你撑住。港口要是缺拖缆，等我下一趟带来。"
-                },
-                OwlId => new[]
-                {
-                    "神枪手猫头鹰：潮线图没湿，我这就送上灯塔。还有，替我谢谢犀牛，他最后几段一直绕着我走。",
-                    "兔子船长：你们一个看前路，一个顾船板，都少不了。等灯塔有新消息，记得叫我。"
-                },
-                "cannoneer-boar" => new[]
-                {
-                    "炮手野猪：到了！我先去找木料。下回再碰见那群海怪，给我留个开炮的位置。",
-                    "兔子船长：位置会留，耳朵也得留。你下次先提醒水獭一声，再把炮打响。"
-                },
-                "carpenter-beaver" => new[]
-                {
-                    "木匠海狸：榫头还好好的，渔船今晚就能换上桅杆。你船上那几块补板也够结实。",
-                    "兔子船长：有你们轮着搭手，旧船才没散。等那边忙完，再来看看我的甲板。"
-                },
-                "caulker-otter" => new[]
-                {
-                    "捻缝师水獭：麻绳没沾盐水，这趟送得正好。船长，底舱的缝我也都封过了。",
-                    "兔子船长：知道啦。下次让海狸再检查一遍，你们俩搭档，我就放心多了。"
-                },
-                _ => new[] { profile.displayName + "：多谢船长，平安到站了。前面的岛要是有人等船，我会告诉他你的航线。" }
+                MonkeyId => "枪手猴：准点！我去替我妹守灯。船长，别忘了来灯塔找我。",
+                RhinoId => "维修师犀牛：箱子接一下。潮闸那边还等着工具，我先过去。",
+                OwlId => "神枪手猫头鹰：潮线图没湿。我送去灯塔，把观察的位置也标上。",
+                "cannoneer-boar" => "炮手野猪：船长，谢了！等我把码头支起来，你下趟有地方系船。",
+                "carpenter-beaver" => "木匠海狸：榫头没磕坏，渔船今晚就能换上桅杆。谢啦。",
+                "caulker-otter" => "捻缝师水獭：麻绳是干的，我能交货了。你舱门边那道缝，我也给你封严了。",
+                _ => profile.displayName + "：到站了。多谢船长。"
             };
-            yield return ShowStoryConversation(lines);
+            yield return ShowStoryConversation(line);
         }
 
         private string[] BoardingExchange(CrewDefinition profile)
@@ -315,31 +297,30 @@ namespace Ferryman.Voyage
                     "cannoneer-boar" => "炮手野猪：枪膛备好了！谁拦这条船，就让它先听听我的动静。",
                     "carpenter-beaver" => "木匠海狸：甲板的榫头松了两处，到了海上我顺手修。谁扶板子，谁帮我封缝？",
                     "caulker-otter" => "捻缝师水獭：我带了麻绳和填料。别拿重东西压住过道，漏水的时候我得能跑过去。",
-                    _ => profile.displayName + "：我上船啦。到了目的地之前，岗位上的事交给我。"
-                },
-                "兔子船长：站稳了。我们船上没有闲人，也没有谁能一个人顾住所有地方。"
+                    _ => profile.displayName + "：多谢船长。有活就叫我。"
+                }
             };
             if ((id == MonkeyId || id == "cannoneer-boar") && HasStoryCrew(MonkeyId) && HasStoryCrew("cannoneer-boar"))
             {
-                lines.Add("枪手猴：野猪，敢不敢比谁先打退下一只？我这边可要加快开火了！");
-                lines.Add("炮手野猪：比就比！你忙着连射，我把每发打得更重，谁也别偷懒。");
+                lines.Add("枪手猴：野猪，敢不敢比谁先打退下一只？我可要抢先开火了！");
+                lines.Add("炮手野猪：比就比！你管快，我管重。");
             }
             if ((id == "carpenter-beaver" || id == "caulker-otter")
                 && HasStoryCrew("carpenter-beaver") && HasStoryCrew("caulker-otter"))
             {
-                lines.Add("木匠海狸：我把榫头钉紧，你把缝封严。咱俩一起修，比各忙各的快三成。");
-                lines.Add("捻缝师水獭：这才是好搭档！你留下的板缝，我一眼就找得到。");
+                lines.Add("木匠海狸：我把榫头钉紧，你把缝封严。咱俩别分开，省得你来回跑。");
+                lines.Add("捻缝师水獭：行，你干到哪儿，我封到哪儿。");
             }
             if ((id == RhinoId || id == "carpenter-beaver") && HasStoryCrew(RhinoId) && HasStoryCrew("carpenter-beaver"))
             {
-                lines.Add("维修师犀牛：大板子我来扶，你只管敲榫。咱们搭手，维修能再快两成。");
-                lines.Add("木匠海狸：说定了！你别跟着我的锤子晃，船底这次一定补结实。");
+                lines.Add("维修师犀牛：大板子我来扶，你只管敲榫。省得你来回扶板。");
+                lines.Add("木匠海狸：扶稳就行。第一锤要落了。");
             }
             if ((id == "cannoneer-boar" || id == "caulker-otter")
                 && HasStoryCrew("cannoneer-boar") && HasStoryCrew("caulker-otter"))
             {
-                lines.Add("捻缝师水獭：你那炮声一响，我手里的绳结就打错。修船慢了两成，可别怪我！");
-                lines.Add("炮手野猪：……下次我先喊一声。船长，你得把别的补船搭档也安排好。");
+                lines.Add("捻缝师水獭：你那炮声一响，我手里的绳结就打错。你先喊一声行不行？");
+                lines.Add("炮手野猪：……行。下回我数三声。");
             }
             if ((id == OwlId || id == RhinoId) && HasStoryCrew(OwlId) && HasStoryCrew(RhinoId))
             {

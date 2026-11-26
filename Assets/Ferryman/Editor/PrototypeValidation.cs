@@ -69,9 +69,17 @@ namespace Ferryman.Editor
             Require(definition.storyCampaign && definition.finalBossEncounter != null,
                 "Default voyage is missing the three-round campaign or final battle.");
             var bossWaves = definition.finalBossEncounter.waves;
-            Require(bossWaves is { Length: 1 } && bossWaves[0].enemies is { Length: 1 }
+            Require(bossWaves is { Length: 4 } && bossWaves[0].enemies is { Length: 1 }
                 && bossWaves[0].enemies[0].count == 1 && bossWaves[0].enemies[0].prefab is { IsBoss: true },
-                "The final battle must spawn a single boss.");
+                "The final battle must open with a single boss and have three reinforcement waves.");
+            var regularEnemies = definition.randomEncounters.Concat(definition.stops.Select(stop => stop.fixedEncounter))
+                .Where(encounter => encounter != null).SelectMany(encounter => encounter.waves)
+                .SelectMany(wave => wave.enemies).Select(group => group.prefab).ToHashSet();
+            for (int phase = 1; phase < bossWaves.Length; phase++)
+                Require(bossWaves[phase].enemies.Sum(group => group.count) == phase * 2
+                    && bossWaves[phase].enemies.All(group => regularEnemies.Contains(group.prefab)),
+                    "Final reinforcements must grow each phase and reuse enemies from the voyage.");
+            Require(Resources.Load<Font>("Voyage/NotoSansSC") != null, "The WebGL Chinese font is missing.");
             foreach (string cue in new[] { "WaterBubbles", "WaterSplash", "AllyHorn", "SeaAlly", "TrashGather", "TrashBreak" })
                 Require(Resources.Load<AudioClip>("Audio/Sfx/" + cue) != null, "Missing voyage cue: " + cue);
             Require(Resources.Load<AudioClip>("Audio/Music/FinalBattle") != null, "Missing final battle music.");
@@ -115,8 +123,8 @@ namespace Ferryman.Editor
                 "Bow grid moved the original deck cells or omitted the new columns.");
             CheckFloat(vessel.Boat, "maxHealth", 1000f);
             CheckFloat(vessel.Player, "moveSpeed", 4f);
-            CheckFloat(vessel.Player, "attackPower", 10f);
-            CheckFloat(vessel.Player, "fireInterval", 0.2f);
+            CheckFloat(vessel.Player, "attackPower", 15f);
+            CheckFloat(vessel.Player, "fireInterval", 0.18f);
             CheckFloat(vessel.Player, "repairSpeed", 30f);
             Require(new SerializedObject(vessel.Boat).FindProperty("repairPointPrefab").objectReferenceValue != null, "Repair point reference is absent.");
             foreach (CrewDefinition crew in definition.initialPassengers.Concat(definition.passengerPool).Distinct())
@@ -279,27 +287,54 @@ namespace Ferryman.Editor
             EditorSceneManager.OpenScene(Root + "Scenes/main.unity");
             Directory.CreateDirectory(".local");
             File.WriteAllText(".local/prototype-resource-observations.txt",
-                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed hull outline, six cabin/cargo colliders, 15 x 5 repair grid including the bow.\nShip: 1000 HP. Player: move 4, attack 10, fire 0.2s, repair 50 HP/s.\nFour crew profiles: two combat, two maintenance; 0.585 x 0.91 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\nMain UI layout anchors are present and inactive.\n");
+                $"Unity {Application.unityVersion}\n{prefabs.Length} prefabs and 6 build scenes: no missing scripts or broken serialized references.\nAll Ferryman assets and directories have meta files.\nEntry: main; full voyage uses one scene with three island appearances and a shared sea.\nLegacy scenes and Prototype retained for demonstrations and regression.\nVessel/player/ship/deck/damage/projectile bindings verified. Deck: closed hull outline, six cabin/cargo colliders, 15 x 5 repair grid including the bow.\nShip: 1000 HP. Player: move 4, attack 15, fire 0.18s, repair 30 HP/s.\nFour crew profiles: two combat, two maintenance; 0.585 x 0.91 footprints.\nTwo-wave fixed combat and random sea event; enemy projectile/bomb target combinations verified.\nMain stop appearances, sea motion, ship/shore animations and bootstrap definitions are configured.\nNine item/repair images, static appearances and repair fill/frame alignment are configured.\nMain UI layout anchors are present and inactive.\n");
             Debug.Log("Ferryman full prototype resource verification passed.");
         }
 
         public static void VerifyAndBuild()
         {
             Verify();
-            string output = Path.GetFullPath(".local/build-prototype/Ferryman.exe");
+            BuildPlayer(BuildTarget.StandaloneWindows64, ".local/build-prototype/Ferryman.exe", "prototype");
+        }
+
+        public static void BuildWeb()
+        {
+            const string output = ".local/build-web";
+            WebGLCompressionFormat compression = PlayerSettings.WebGL.compressionFormat;
+            try
+            {
+                // Make the ZIP deployable to a static host with standard MIME types.
+                PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+                BuildPlayer(BuildTarget.WebGL, output, "web");
+                string index = Path.Combine(output, "index.html");
+                const string syncSetting = "config.autoSyncPersistentDataPath = true;";
+                string html = File.ReadAllText(index).Replace("// " + syncSetting, syncSetting);
+                Require(html.Split('\n').Any(line => line.Trim() == syncSetting),
+                    "The WebGL template is missing its save synchronization setting.");
+                File.WriteAllText(index, html);
+            }
+            finally
+            {
+                PlayerSettings.WebGL.compressionFormat = compression;
+            }
+        }
+
+        private static void BuildPlayer(BuildTarget target, string location, string summaryName)
+        {
+            string output = Path.GetFullPath(location);
             Directory.CreateDirectory(Path.GetDirectoryName(output));
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray(),
-                target = BuildTarget.StandaloneWindows64,
+                target = target,
                 locationPathName = output,
                 options = BuildOptions.None
             });
             string summary = $"Unity {Application.unityVersion}\nResult: {report.summary.result}\nErrors: {report.summary.totalErrors}\nWarnings: {report.summary.totalWarnings}\nOutput: {output}\n";
-            File.WriteAllText(".local/prototype-build-summary.txt", summary);
+            File.WriteAllText($".local/{summaryName}-build-summary.txt", summary);
             RecordBuildMessages(report);
-            Require(report.summary.result == BuildResult.Succeeded && report.summary.totalErrors == 0, "Windows prototype build failed.");
-            Debug.Log("Ferryman prototype build: " + summary);
+            Require(report.summary.result == BuildResult.Succeeded && report.summary.totalErrors == 0, target + " build failed.");
+            Debug.Log("Ferryman build: " + summary);
         }
 
         public static void RecordLastBuildMessages()

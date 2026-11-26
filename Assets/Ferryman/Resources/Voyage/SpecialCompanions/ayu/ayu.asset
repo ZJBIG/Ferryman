@@ -33,7 +33,7 @@ MonoBehaviour:
   repairSpeed: 0
   repairRange: 0
   simultaneousRepairs: 1
-  attackPower: 8
-  fireInterval: 0.95
+  attackPower: 12
+  fireInterval: 0.85
   coinsReward: 0
   specialItemsReward: 0

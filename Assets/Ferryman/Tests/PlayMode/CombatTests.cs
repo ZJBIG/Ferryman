@@ -133,6 +133,54 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
+        public IEnumerator ColossusThrowsThreeDistinctVolleysAndCoreExposureDoublesDamage()
+        {
+            EncounterDefinition encounter = Resources.Load<EncounterDefinition>("Voyage/Events/GarbageTideColossus");
+            Assert.That(encounter, Is.Not.Null);
+            EnemyCharacter boss = Object.Instantiate(encounter.waves[0].enemies[0].prefab,
+                Vector2.up * 9f, Quaternion.identity);
+            boss.InitializeEnemy(player.BoatHealth, player, damageSystem);
+            Assert.That(boss.MaxHealth, Is.EqualTo(38000f / 3f).Within(0.001f));
+            Assert.That(boss.BossPhase, Is.EqualTo(ColossusPhase.OuterShell));
+
+            TimedBomb[] CurrentVolley() => Object.FindObjectsOfType<TimedBomb>()
+                .Where(bomb => bomb.TargetBoat == player.BoatHealth && !bomb.GetComponent<DestructibleObstacle>().IsCleared)
+                .ToArray();
+            var windup = typeof(EnemyCharacter).GetProperty("IsPreparingThrow", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(windup, Is.Not.Null);
+            yield return WaitFor(() => (bool)windup.GetValue(boss), 1.2f, "The classic opening volley did not start.");
+            Assert.That(boss.TryReceiveDamage(Mathf.Ceil(boss.Health - boss.MaxHealth * 2f / 3f)), Is.True);
+            Assert.That(boss.BossPhase, Is.EqualTo(ColossusPhase.Crossfire));
+            yield return WaitFor(() => CurrentVolley().Length > 0, 1f, "The classic opening volley did not release.");
+            Assert.That(CurrentVolley(), Has.Length.EqualTo(1), "The phase change altered a volley already in windup.");
+            foreach (TimedBomb bomb in CurrentVolley())
+                Object.Destroy(bomb.gameObject);
+            yield return null;
+
+            yield return WaitFor(() => CurrentVolley().Length > 0, 3.5f, "The crossfire did not release.");
+            Assert.That(CurrentVolley(), Has.Length.EqualTo(2));
+            Assert.That(boss.TryReceiveDamage(Mathf.Ceil(boss.Health - boss.MaxHealth / 3f)), Is.True);
+            Assert.That(boss.BossPhase, Is.EqualTo(ColossusPhase.LooseCore));
+            Assert.That(boss.IsCoreExposed, Is.False);
+            float health = boss.Health;
+            Assert.That(boss.TryReceiveDamage(100f), Is.True);
+            Assert.That(boss.Health, Is.EqualTo(health - 100f));
+            foreach (TimedBomb bomb in CurrentVolley())
+                Object.Destroy(bomb.gameObject);
+            yield return null;
+
+            yield return WaitFor(() => boss.IsCoreExposed, 4.5f, "The loose core was not exposed after release.");
+            Assert.That(CurrentVolley(), Has.Length.EqualTo(3));
+            health = boss.Health;
+            Assert.That(boss.TryReceiveDamage(100f), Is.True);
+            Assert.That(boss.Health, Is.EqualTo(health - 200f));
+            yield return WaitFor(() => !boss.IsCoreExposed, 3.2f, "The core did not recover.");
+            health = boss.Health;
+            Assert.That(boss.TryReceiveDamage(100f), Is.True);
+            Assert.That(boss.Health, Is.EqualTo(health - 100f));
+        }
+
+        [UnityTest]
         public IEnumerator BombPushesPlayerAndCrewWithoutStunOrCharacterDamage()
         {
             var profile = Resources.Load<CrewDefinition>("Voyage/Crew/gunner");
@@ -452,7 +500,7 @@ namespace Ferryman.Tests
             Assert.That(crew.IsStunned, Is.False);
             Assert.That(player.Health, Is.EqualTo(100f));
             Assert.That(crew.Health, Is.EqualTo(100f));
-            Assert.That(enemy.Health, Is.EqualTo(90f));
+            Assert.That(enemy.Health, Is.EqualTo(enemy.MaxHealth - player.AttackPower));
             Assert.That(received, Is.EqualTo(1));
             Assert.That(sent, Is.EqualTo(1));
 
@@ -582,7 +630,7 @@ namespace Ferryman.Tests
             yield return null;
             Assert.That(edgeStone == null, Is.True,
                 "The stone overlaps the sector even though its nearest point is outside the angle.");
-            Assert.That(enemy.Health, Is.EqualTo(90f));
+            Assert.That(enemy.Health, Is.EqualTo(enemy.MaxHealth - player.AttackPower));
             Assert.That(received, Is.EqualTo(1), "Multiple colliders should cause only one melee hit.");
             Assert.That(behindStone != null, Is.True, "Melee hit a stone behind the player.");
             Assert.That(distantStone != null, Is.True, "Melee hit a stone beyond its radius.");

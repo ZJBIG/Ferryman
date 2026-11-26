@@ -68,9 +68,9 @@ namespace Ferryman.Tests
             yield return Hit(target, captain, 0f);
             Assert.That(target.Health, Is.EqualTo(96f));
             yield return Hit(target, captain, 2f);
-            Assert.That(target.Health, Is.EqualTo(82f));
+            Assert.That(target.Health, Is.EqualTo(70f));
             yield return Hit(target, captain, 2f);
-            Assert.That(target.Health, Is.EqualTo(80f));
+            Assert.That(target.Health, Is.EqualTo(68f));
         }
 
         [UnityTest]
@@ -116,11 +116,11 @@ namespace Ferryman.Tests
             CreateTarget(new Vector2(10f, 5f));
             yield return null;
             Assert.That(cover.FireInterval, Is.EqualTo(profile.fireInterval));
-            Assert.That(captain.TryReceiveDamage(1f, 2.5f), Is.True);
+            Assert.That(captain.TryReceiveDamage(1f, 3.2f), Is.True);
             yield return WaitFor(() => cover.FireInterval < profile.fireInterval, 0.5f, "Cover burst did not begin.");
-            yield return WaitFor(() => cover.FireInterval == profile.fireInterval, 2.2f, "Cover burst never ended.");
+            yield return WaitFor(() => cover.FireInterval == profile.fireInterval, 2.7f, "Cover burst never ended.");
             Assert.That(captain.IsStunned, Is.True);
-            yield return WaitFor(() => !captain.IsStunned, 0.7f, "Captain did not recover.");
+            yield return WaitFor(() => !captain.IsStunned, 1f, "Captain did not recover.");
             yield return null;
             Assert.That(captain.TryReceiveDamage(1f, 1f), Is.True);
             yield return new WaitForSeconds(0.2f);

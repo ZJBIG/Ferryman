@@ -132,9 +132,9 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   moveSpeed: 4
-  attackPower: 10
+  attackPower: 15
   projectilePrefab: {fileID: 2760880200174586360, guid: ab2a39474a47c1641ad962c5f5b369b6, type: 3}
-  fireInterval: 0.2
+  fireInterval: 0.18
   muzzleDistance: 0.75
   aimVisual: {fileID: 8065217634921011601}
   damageSystem: {fileID: 0}
@@ -162,7 +162,7 @@ MonoBehaviour:
   movementDeck: {fileID: 0}
   meleeRange: 1.5
   meleeAngle: 90
-  meleeCooldown: 0.5
+  meleeCooldown: 0.42
   meleeEffectPrefab: {fileID: 4182560539180930044, guid: 3a751be38e31cea4e83df0f05de51693, type: 3}
   meleeImpactEffectPrefab: {fileID: 5667738953813447188, guid: 9bbd514332db866448f4ae38565bec3a, type: 3}
   meleePerformed:

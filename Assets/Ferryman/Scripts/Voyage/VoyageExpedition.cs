@@ -15,9 +15,13 @@ namespace Ferryman.Voyage
         private readonly List<EncounterDefinition> expeditionEncounters = new List<EncounterDefinition>();
         private int[] runUpgrades = new int[VoyageUpgrades.Count];
         private bool permanentUpgradeChosen;
-        private static readonly VoyageUpgradeKind[] MarketUpgrades =
+        internal static readonly VoyageUpgradeKind[] MarketUpgrades =
         {
             VoyageUpgradeKind.Attack, VoyageUpgradeKind.AttackSpeed, VoyageUpgradeKind.RepairSpeed
+        };
+        internal static readonly VoyageUpgradeKind[] FinalPortUpgrades =
+        {
+            VoyageUpgradeKind.Attack, VoyageUpgradeKind.AttackSpeed, VoyageUpgradeKind.Durability, VoyageUpgradeKind.RepairSpeed
         };
 
         public VoyageRouteMap RouteMap { get; private set; }
@@ -34,6 +38,7 @@ namespace Ferryman.Voyage
             && !HasCheckpoint && !permanentUpgradeChosen;
         public int AvailableCoins => pendingReward.coins;
         public int AvailableSpecialItems => pendingReward.specialItems;
+        public bool CanUseFinalPortShop => AwaitingStoryDeparture && StoryRound == FinalStoryRound && Time.timeScale > 0f;
         public bool AwaitingRouteChoice => IsExpedition && ActiveRun && Phase == VoyagePhase.Island
             && BoardingProfile == null && !AwaitingStoryDialogue && StopIndex % 2 == 0 && IslandResolved && UpgradeChoices.Length == 0
             && RouteMap.Nodes[CurrentNodeId].depth < VoyageRouteMap.FinalDepth;
@@ -49,7 +54,7 @@ namespace Ferryman.Voyage
             RouteMap = VoyageRouteMap.Generate(ExpeditionSeed, checkpoint?.routePath);
             routePath.AddRange(checkpoint?.routePath ?? new[] { 0 });
             RouteMap.ValidatePath(routePath.ToArray());
-            runUpgrades = VoyageUpgrades.ReadRanks(checkpoint?.runUpgrades);
+            runUpgrades = VoyageUpgrades.ReadRanks(checkpoint?.runUpgrades, checkpoint?.CanHaveFinalPortUpgrades == true);
             IslandResolved = checkpoint == null || checkpoint.islandResolved;
             UpgradeChoices = checkpoint?.upgradeChoices ?? Array.Empty<VoyageUpgradeKind>();
             expeditionStops = new VoyageStop[DestinationStop + (StoryRound == FinalStoryRound ? 2 : 1)];
@@ -282,15 +287,24 @@ namespace Ferryman.Voyage
             return true;
         }
 
-        private bool BuyRunUpgrade(VoyageUpgradeKind kind)
+        public bool BuyFinalPortUpgrade(VoyageUpgradeKind kind)
+        {
+            if (!CanUseFinalPortShop || !FinalPortUpgrades.Contains(kind) || !BuyRunUpgrade(kind, finalPort: true))
+                return false;
+            SaveCheckpoint();
+            VoyageAudio.Play(Sound.Upgrade, 0.70f);
+            return true;
+        }
+
+        private bool BuyRunUpgrade(VoyageUpgradeKind kind, bool finalPort = false)
         {
             int rank = runUpgrades[(int)kind];
-            int price = VoyageUpgrades.Price(kind, rank);
+            long price = VoyageUpgrades.Price(kind, rank);
             bool special = VoyageUpgrades.UsesSpecialItems(kind);
-            if (rank >= VoyageUpgrades.MaxRank || (special ? pendingReward.specialItems : pendingReward.coins) < price)
+            if ((!finalPort && rank >= VoyageUpgrades.MaxRank) || (special ? pendingReward.specialItems : pendingReward.coins) < price)
                 return false;
-            if (special) pendingReward.specialItems -= price;
-            else pendingReward.coins -= price;
+            if (special) pendingReward.specialItems -= (int)price;
+            else pendingReward.coins -= (int)price;
             runUpgrades[(int)kind]++;
             ApplyUpgrades();
             return true;

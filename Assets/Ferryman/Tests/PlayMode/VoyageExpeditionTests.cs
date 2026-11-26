@@ -471,6 +471,16 @@ namespace Ferryman.Tests
             string[] companions = departure.specialCompanionOrder;
             Assert.That(companions, Has.Length.EqualTo(3));
             Assert.That(companions, Is.Unique);
+            var tutorial = new List<string>();
+            yield return WaitFor(() =>
+            {
+                if (controller.AwaitingStoryDialogue)
+                    tutorial.Add(controller.StoryDialogueLine);
+                return controller.AwaitingRouteChoice;
+            }, "first departure and tutorial");
+            Assert.That(tutorial.Any(line => line.Contains("WASD") && line.Contains("右键")), Is.True);
+            Assert.That(tutorial.Any(line => line.Contains("按住 E")), Is.True);
+            Assert.That(tutorial.Any(line => line.Contains("海图")), Is.True);
             string monkeyId = "gunner-monkey";
             string rhinoId = "mechanic-rhino";
             string owlId = "sharpshooter-owl";
@@ -537,6 +547,7 @@ namespace Ferryman.Tests
                 Assert.That(controller.Vessel.GetComponentsInChildren<SpecialCompanion>(), Has.Length.EqualTo(round));
                 if (round < VoyageController.FinalStoryRound)
                 {
+                    Assert.That(controller.BuyFinalPortUpgrade(VoyageUpgradeKind.Durability), Is.False);
                     controller.Vessel.Boat.ApplyDamage(23f, Vector2.zero);
                     float health = controller.Vessel.Boat.CurrentHealth;
                     Assert.That(controller.ContinueStoryVoyage(), Is.True);
@@ -560,26 +571,68 @@ namespace Ferryman.Tests
             Assert.That(finalPort.deliveredStoryProfiles, Is.EquivalentTo(storyOffers));
             finalPort.deliveredStoryProfiles = finalPort.deliveredStoryProfiles
                 .Select(id => id == owlId ? "lookout-rabbit" : id).ToArray();
+            finalPort.pendingCoins = 650;
+            finalPort.runUpgrades[(int)VoyageUpgradeKind.Durability] = VoyageUpgrades.MaxRank;
             store.SaveCheckpoint(finalPort);
             yield return DestroyForCrash();
             CreateController();
             Assert.That(controller.ResumeVoyage(), Is.True);
             yield return WaitFor(() => controller.AwaitingStoryDeparture, "restored final port");
+            float prePurchaseMaximum = controller.Vessel.Boat.MaxHealth;
+            Assert.That(controller.BuyFinalPortUpgrade(VoyageUpgradeKind.Durability), Is.True);
+            Assert.That(controller.AvailableCoins, Is.EqualTo(350));
+            Assert.That(controller.BuyFinalPortUpgrade(VoyageUpgradeKind.Durability), Is.True);
+            Assert.That(controller.AvailableCoins, Is.Zero);
+            Assert.That(controller.Vessel.Boat.MaxHealth, Is.EqualTo(prePurchaseMaximum + 300f));
+            Assert.That(controller.BuyFinalPortUpgrade(VoyageUpgradeKind.Durability), Is.False);
+            Assert.That(store.LoadCheckpoint(definition.id).runUpgrades[(int)VoyageUpgradeKind.Durability], Is.EqualTo(7));
             Assert.That(controller.ContinueStoryVoyage(), Is.True);
+            Assert.That(controller.BuyFinalPortUpgrade(VoyageUpgradeKind.Durability), Is.False);
             yield return WaitFor(() => controller.StopIndex == 15, "saved Boss entrance");
             yield return DestroyForCrash();
             CreateController();
             Assert.That(controller.ResumeVoyage(), Is.True);
-            yield return WaitFor(() => controller.Enemies.Any(enemy => enemy != null), "restored Boss");
+            Assert.That(controller.Vessel.Boat.MaxHealth, Is.EqualTo(prePurchaseMaximum + 300f));
+            int briefingLines = 0;
+            yield return WaitFor(() =>
+            {
+                if (controller.AwaitingStoryDialogue)
+                    briefingLines++;
+                return controller.Enemies.Any(enemy => enemy != null);
+            }, "restored Boss");
+            Assert.That(briefingLines, Is.EqualTo(5), "The captain and four special companions speak once before the boss.");
             string[] allies = controller.Vessel.GetComponentsInChildren<Passenger>().Select(crew => crew.Definition.id).ToArray();
             Assert.That(allies, Is.EquivalentTo(storyOffers));
-            Assert.That(controller.Vessel.GetComponentsInChildren<SpecialCompanion>(), Has.Length.EqualTo(3));
+            Assert.That(controller.Vessel.GetComponentsInChildren<SpecialCompanion>().Select(ally => ally.Skill),
+                Is.EquivalentTo(Enum.GetValues(typeof(SpecialCompanionSkill))));
             EnemyCharacter boss = controller.Enemies.Single();
-            Assert.That(controller.Vessel.DamageSystem.ApplyDamage(controller.Vessel.Player, boss, boss.Health), Is.True);
+            var damage = controller.Vessel.DamageSystem;
+            PlayerCharacter captain = controller.Vessel.Player;
+            EnemyCharacter[] LivingSummons() => controller.Enemies.Where(enemy => enemy != null && !enemy.IsBoss && enemy.Health > 0f).ToArray();
+            for (int phase = 0; phase < 3; phase++)
+            {
+                int count = (phase + 1) * 2;
+                yield return WaitFor(() => LivingSummons().Length == count, $"boss brings in {count} sea monsters");
+                Assert.That(damage.ApplyDamage(captain, boss, boss.Health), Is.True);
+                if (phase < 2)
+                {
+                    Assert.That(boss.Health, Is.EqualTo(boss.MaxHealth * (2 - phase) / 3f));
+                    Assert.That(damage.ApplyDamage(captain, boss, boss.Health), Is.False);
+                }
+                else
+                {
+                    Assert.That(boss.Health, Is.Zero);
+                    Assert.That(controller.Phase, Is.EqualTo(VoyagePhase.Event));
+                    Assert.That(LivingSummons().Any(enemy => enemy.AttackType == EnemyCharacter.AttackKind.BoardingMelee), Is.True);
+                }
+                foreach (EnemyCharacter summoned in LivingSummons())
+                    Assert.That(damage.ApplyDamage(captain, summoned, summoned.Health), Is.True);
+            }
             yield return WaitFor(() => controller.AwaitingStoryDialogue && controller.Phase == VoyagePhase.Sailing,
                 "recovery dialogue at sea");
             Assert.That(controller.StopIndex, Is.EqualTo(15));
             Assert.That(store.LoadCheckpoint(definition.id).stopIndex, Is.EqualTo(15));
+            yield return CompleteFinalRecovery();
             yield return WaitFor(() => controller.AwaitingStoryDialogue && controller.Phase == VoyagePhase.Island,
                 "the captain returned to port");
             Assert.That(controller.StopIndex, Is.EqualTo(14));
@@ -592,7 +645,7 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
-        public IEnumerator DeclinedRescueStaysResolvedAndTheCaptainCanBeatTheBossWithoutAllies()
+        public IEnumerator DeclinedRescueStaysResolvedAndTheCaptainCanBeatTheBossWithoutDeliveredPassengers()
         {
             definition.storyCampaign = true;
             Assert.That(controller.StartVoyage(7), Is.True);
@@ -626,36 +679,80 @@ namespace Ferryman.Tests
             checkpoint.storyRound = VoyageController.FinalStoryRound;
             checkpoint.stopIndex = 14;
             checkpoint.routePath = new[] { 0, 1, 4, 7, 10, 13, 16, 19 };
+            checkpoint.pendingCoins = 500;
             store.SaveCheckpoint(checkpoint);
             yield return DestroyForCrash();
             CreateController();
             Assert.That(controller.ResumeVoyage(), Is.True);
             yield return WaitFor(() => controller.AwaitingStoryDeparture, "final port with no passengers");
+            for (int purchase = 0; purchase < 4; purchase++)
+                Assert.That(controller.BuyFinalPortUpgrade(VoyageUpgradeKind.Durability), Is.True);
             Assert.That(controller.ContinueStoryVoyage(), Is.True);
-            yield return WaitFor(() => controller.Enemies.Any(enemy => enemy != null), "solo final battle");
+            yield return WaitFor(() => controller.Enemies.Any(enemy => enemy != null), "final battle without passengers");
             Assert.That(controller.Vessel.GetComponentsInChildren<Passenger>(), Is.Empty);
 
             PlayerCharacter captain = controller.Vessel.Player;
             EnemyCharacter boss = controller.Enemies.Single();
             captain.ConfigureCombat(captain.DamageSystem, captain.ProjectilePrefab, boss.Health / 8f, captain.FireInterval);
             boss.enabled = true;
+            foreach (var ally in controller.Vessel.GetComponentsInChildren<SpecialCompanion>())
+                ally.enabled = true;
+            bool captainHitBoss = false;
+            captain.DamageSystem.DamageSent.AddListener((source, target, _) =>
+            {
+                if (source == captain && target == boss)
+                    captainHitBoss = true;
+            });
             bool sawBomb = false;
             float until = Time.realtimeSinceStartup + 24f;
             while (controller.Phase != VoyagePhase.Success)
             {
                 Assert.That(controller.Phase, Is.Not.EqualTo(VoyagePhase.Error), controller.Message);
-                Assert.That(controller.Phase, Is.Not.EqualTo(VoyagePhase.Failure));
+                Assert.That(controller.Phase, Is.Not.EqualTo(VoyagePhase.Failure), $"Ferry sank during wave {controller.WaveIndex}.");
                 Assert.That(Time.realtimeSinceStartup, Is.LessThan(until), "The captain could not defeat the boss with normal projectiles.");
                 sawBomb |= Object.FindObjectsOfType<TimedBomb>().Length > 0;
                 if (controller.AwaitingStoryDialogue)
                     controller.ContinueStoryDialogue();
-                else if (sawBomb && boss != null && boss.Health > 0f)
-                    captain.TryFire(boss.Hitbox.bounds.center - captain.transform.position);
+                else if (controller.AwaitingFinalRecovery)
+                    yield return CompleteFinalRecovery();
+                else if (sawBomb)
+                {
+                    var target = controller.Enemies.FirstOrDefault(enemy => enemy != null && !enemy.IsBoss && enemy.Health > 0f)
+                        ?? (boss != null && boss.Health > 0f ? boss : null);
+                    if (target != null)
+                        captain.TryFire(target.Hitbox.bounds.center - captain.transform.position);
+                }
                 yield return null;
             }
             Assert.That(sawBomb, Is.True);
+            Assert.That(captainHitBoss, Is.True);
             Assert.That(controller.Vessel.Boat.CurrentHealth, Is.GreaterThan(0f));
             Assert.That(Object.FindObjectsOfType<TimedBomb>(), Is.Empty);
+        }
+
+        private IEnumerator CompleteFinalRecovery()
+        {
+            yield return WaitFor(() => controller.AwaitingFinalRecovery, "gull delivered the recovery bag");
+            Assert.That(store.HasCheckpoint, Is.True);
+            Assert.That(store.Progress.lastSettledRunId, Is.Null.Or.Empty);
+            Assert.That(controller.FinalCargoCollected, Is.Zero);
+            Rigidbody2D captain = controller.Vessel.Player.GetComponent<Rigidbody2D>();
+            Vector2 station = controller.FinalRecoveryStation;
+            captain.position = station + Vector2.right * 5f;
+            captain.transform.position = captain.position;
+            Assert.That(controller.TryRecoverFinalCargo(), Is.False, "The bag could be used away from its station.");
+            captain.position = station;
+            captain.transform.position = station;
+            Physics2D.SyncTransforms();
+            for (int i = 1; i <= VoyageController.FinalCargoCount; i++)
+            {
+                Assert.That(controller.TryRecoverFinalCargo(), Is.True);
+                Assert.That(controller.TryRecoverFinalCargo(), Is.False, "A single piece accepted duplicate requests.");
+                yield return WaitFor(() => controller.FinalCargoCollected == i, "wreckage reached the recovery bag");
+                Assert.That(store.LoadCheckpoint(definition.id).stopIndex, Is.EqualTo(15));
+            }
+            Assert.That(controller.TryRecoverFinalCargo(), Is.True, "The filled bag could not be tied to the ferry.");
+            yield return WaitFor(() => controller.TowingFinalCargo, "secured bag under tow");
         }
 
         [UnityTest]

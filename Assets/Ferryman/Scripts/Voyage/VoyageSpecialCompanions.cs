@@ -195,12 +195,15 @@ namespace Ferryman.Voyage
             visual.sprite = profile.deckSprite;
             Destroy(ripple.gameObject);
             VoyageAudio.Play(Sound.Board, 0.58f, end);
-            string reply = StoryRound == 1 ? "兔子船长：上船可以。到了有人要搭船的地方，我还是照样停。"
-                : StoryRound == 2 ? "兔子船长：记住你看到的位置。靠岸后，我们去问问管潮闸的人。"
-                : "兔子船长：先把乘客送到港。请你留下，今晚我们还要出一趟船。";
-            string standby = hasLanding ? null : "兔子船长：先扶住外梯，等甲板空出来我再接你上来。";
+            string reply = StoryRound switch
+            {
+                1 => "兔子船长：上来吧。我们靠岛接人，你顺路指给我看。",
+                2 => "兔子船长：先抓稳栏杆。你指方向，我来记。",
+                _ => "兔子船长：跟我到终点港。渡船到站以后，还有一趟外港要跑。"
+            };
+            string standby = hasLanding ? null : "兔子船长：甲板挤，先扶住外梯。有位置我就接你上来。";
             yield return ShowStoryConversation(profile.displayName + "：" + CompanionArrivalLine(id, StoryRound),
-                reply, standby, StoryRound == 2 ? CompanionResponse() : null);
+                hasLanding ? reply : standby);
             Destroy(visual.gameObject);
             if (!ActiveRun)
                 yield break;
@@ -218,25 +221,9 @@ namespace Ferryman.Voyage
             SaveCheckpoint();
         }
 
-        private string CompanionResponse()
-        {
-            SpecialCompanionState first = specialCompanions.FirstOrDefault(state => companionActors.ContainsKey(state.profileId));
-            if (first == null)
-                return null;
-            string response = first.profileId switch
-            {
-                "alo" => "刀在箱子旁边。我去拿，你指地方。",
-                "ayuan" => "你看到鱼群从哪里退走？指给我看，我记下来。",
-                "wenjia" => "把位置说准些，离上一个浮标有多远？",
-                _ => "我先把湿绳收起来。你站这边，离栏杆远点。"
-            };
-            return FindSpecialCompanion(first.profileId).displayName + "：" + response;
-        }
-
         private string FirstCompanionCombatLine()
         {
-            if (IsBossLeg || specialCompanionOrder.Length == 0
-                || eventPlan.Take(StopIndex).Any(plan => plan.kind == VoyageEventKind.Combat))
+            if (specialCompanionOrder.Length == 0)
                 return null;
             string id = specialCompanionOrder[StoryRound - 1];
             if (!companionActors.ContainsKey(id))
@@ -253,35 +240,36 @@ namespace Ferryman.Voyage
 
         private static string CompanionArrivalLine(string id, int day) => (id, day) switch
         {
-            ("alo", 1) => "我把那批桶推上过栈桥。刚才有只桶自己往上游滚。捎我一段，我认得桶上的号。",
-            ("alo", 2) => "刚才那条鱼绕过我，回去扯同伴身上的网。刀借我一下？先让我上来，我指给你看。",
-            ("alo", 3) => "那堆东西在吞空桶，桶一贴上去底下就响一声。我能清甲板，带我到外港去看看。",
-            ("ayuan", 1) => "等一下。水都在往外走，破网却在往礁里收。我想跟船看看它被什么拽住了。",
-            ("ayuan", 2) => "再看一眼，灯笼鱼每次折回去都照着同一条缝。我昨天把这段记成了袭船，让我搭一程，我得把它改过来。",
-            ("ayuan", 3) => "闸开以后，碎片都往同一个黑影流。只有近礁那道缝还能走鱼。出港得给它们留着那条路。",
-            ("wenjia", 1) => "港口丢了一只回收浮标，我在这里找到了它的底座。准我搭船追一段，我想核对漂来的东西。",
-            ("wenjia", 2) => "潮闸底下有网，网结卡在闸轴上。水从别处挤进礁口了，我要看清它冲向哪里。",
-            ("wenjia", 3) => "各处的货号能对上了。黑影堵着旧出口，只剩一条窄水道。我带了水深记录，借你的船核一下。",
-            ("ayu", 1) => "我守的浮标刚掉进水里，绳子还在往外抽。让我跟船吧，真找着了我来收缆。",
-            ("ayu", 2) => "我拉过那根旧缆。拉紧一寸，礁边的鱼就挤得更紧。我跟船去找个能松绳的地方。",
-            _ => "我把回收袋的结重打了。外头那团东西要是散开，顺流就能兜住。带我到外港，我替你守后甲板。"
+            ("alo", 1) => "礁那边有只桶逆着水走！捎我一程，我带你去看。",
+            ("alo", 2) => "有条鱼游得好好的，突然掉头去扯破网。借个位置，我指给你看。",
+            ("alo", 3) => "那黑影撞完堤还往回卷东西。我帮你清甲板，带我去外港。",
+            ("ayuan", 1) => "等一下。水在往外走，网却往礁口收。我能搭船再看一眼吗？",
+            ("ayuan", 2) => "灯笼鱼折回了三次，都往同一道礁缝照。我想跟船看清它在等什么。",
+            ("ayuan", 3) => "近礁有条窄缝，还能走鱼。捎上我吧，过礁时我替你盯着。",
+            ("wenjia", 1) => "一只废桶，两次经过同一个浮标。潮没转，我想上船核对漂向。",
+            ("wenjia", 2) => "潮标降了半格，礁口的水位却没动。借个位置，我想从船上再量一次。",
+            ("wenjia", 3) => "外港中线堵死了，外缘还有水深。借我一程，我带了记录。",
+            ("ayu", 1) => "我拉着这根缆，那头却越漂越远。让我跟船找找，回来两个人一起收。",
+            ("ayu", 2) => "礁边一整片废网，光靠我捞不动。让我跟船吧，我帮你把还能收的拢起来。",
+            _ => "岸上在备回收袋。我会打拖缆结，带我一程，船尾那边交给我。"
         };
 
-        private IEnumerator ShowSpecialCompanionBriefing()
+        private IEnumerator ShowFinalBriefing()
         {
-            if (specialCompanions.Count == 0)
-                yield break;
-            var lines = new List<string> { "兔子船长：先把水道给鱼留出来。散开的东西，我们自己拖回去。" };
+            var lines = new List<string>
+            {
+                "兔子船长：巨像会招来海怪。先打退援兵，留意落弹，等它露出核心就集中开火。"
+            };
             foreach (SpecialCompanionState state in specialCompanions)
             {
                 if (!companionActors.ContainsKey(state.profileId))
                     continue;
                 string instruction = state.profileId switch
                 {
-                    "alo" => "飞上来的东西归我。你看外面。",
-                    "ayuan" => "等一下。看见我标的那一处，再开枪。",
-                    "wenjia" => "它一抬手，废壳就松。我会在它投东西时先开枪。",
-                    _ => "你有空就开枪。要是得补船，我接一会儿。"
+                    "alo" => "落到脚边的炸弹归我。",
+                    "ayuan" => "看见我标的位置，再补一枪。",
+                    "wenjia" => "它抬手投东西，我就瞄准。",
+                    _ => "你去补船的时候，我来接火。"
                 };
                 lines.Add(FindSpecialCompanion(state.profileId).displayName + "：" + instruction);
             }
@@ -290,16 +278,19 @@ namespace Ferryman.Voyage
             vessel.Player.BlockMouseAttacks = false;
         }
 
-        private string[] SpecialCompanionFarewells() => specialCompanions.Take(2).Select(state =>
+        private string FinalTowLine()
         {
-            string line = state.profileId switch
+            SpecialCompanionState speaker = specialCompanions.LastOrDefault(state => companionActors.ContainsKey(state.profileId));
+            if (speaker == null)
+                return "兔子船长：缆绳吃上力了。贴着灯塔的光走，礁口留给鱼。";
+            string line = speaker.profileId switch
             {
-                "alo" => "桶上的号还看得见。我到了岸上去对单。",
-                "ayuan" => "再看一眼，那条缝里有鱼出来了。",
-                "wenjia" => "这次登记到的是已经收回来的废料。岸上的清单我来签。",
-                _ => "这头系好了。靠岸时，让港务接另一头。"
+                "alo" => "这只桶总算往岸上走了。我去守缆，你开船。",
+                "ayuan" => "慢一点。看那道缝，小鱼已经往回游了。",
+                "wenjia" => "缆绳绷直了，袋底也没碰礁。就走这条线。",
+                _ => "我守船上这一头。靠岸之后，港务接另一头。"
             };
-            return FindSpecialCompanion(state.profileId).displayName + "：" + line;
-        }).ToArray();
+            return FindSpecialCompanion(speaker.profileId).displayName + "：" + line;
+        }
     }
 }

@@ -29,11 +29,11 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 06a8ea4eaf254999b289ffc75f1f8004, type: 3}
   - {fileID: 21300000, guid: 5be9d162a877464996a216ba80281780, type: 3}
   deckSpriteScale: 0.49309665
-  moveSpeed: 2.8
+  moveSpeed: 3.3
   repairSpeed: 0
   repairRange: 0
   simultaneousRepairs: 1
-  attackPower: 8
-  fireInterval: 1.0
+  attackPower: 12
+  fireInterval: 0.8
   coinsReward: 0
   specialItemsReward: 0

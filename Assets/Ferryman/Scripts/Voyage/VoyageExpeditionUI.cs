@@ -368,11 +368,12 @@ namespace Ferryman.Voyage
             }
         }
 
-        private static void DrawMarket(VoyageController c, VoyageUIArt art, GUIStyle text)
+        internal static void DrawMarket(VoyageController c, VoyageUIArt art, GUIStyle text, bool finalPort = false)
         {
-            var kinds = new[] { VoyageUpgradeKind.Attack, VoyageUpgradeKind.AttackSpeed, VoyageUpgradeKind.RepairSpeed };
+            var kinds = finalPort ? VoyageController.FinalPortUpgrades : VoyageController.MarketUpgrades;
             int[] runRanks = c.RunUpgrades;
-            VoyageUpgradeKind[] available = Array.FindAll(kinds, kind => runRanks[(int)kind] < VoyageUpgrades.MaxRank);
+            VoyageUpgradeKind[] available = finalPort ? kinds
+                : Array.FindAll(kinds, kind => runRanks[(int)kind] < VoyageUpgrades.MaxRank);
             if (available.Length == 0)
             {
                 Act(c, () => c.ResolveIslandOption(4));
@@ -386,23 +387,34 @@ namespace Ferryman.Voyage
             };
             var balance = new Rect(430f, 96f, 420f, 42f);
             Fill(balance, LabelBackground);
-            GUI.Label(balance, $"海上集市 · 本轮金币 {c.AvailableCoins}", marketLabel);
+            string market = finalPort ? "终点港整备" : "海上集市";
+            GUI.Label(balance, $"{market} · 本轮金币 {c.AvailableCoins}", marketLabel);
             var leave = new Rect(528f, 586f, 224f, 35f);
             Fill(leave, LabelBackground);
-            if (GUI.Button(leave, "离开集市", marketLabel))
-                Act(c, () => c.ResolveIslandOption(4));
+            if (GUI.Button(leave, finalPort ? "离港迎战" : "离开集市", marketLabel))
+            {
+                if (finalPort)
+                    c.ContinueStoryVoyage();
+                else
+                    Act(c, () => c.ResolveIslandOption(4));
+            }
             for (int i = 0; i < available.Length; i++)
             {
                 VoyageUpgradeKind kind = available[i];
                 int option = Array.IndexOf(kinds, kind);
                 int rank = runRanks[(int)kind];
-                int price = VoyageUpgrades.Price(kind, rank);
+                long price = VoyageUpgrades.Price(kind, rank);
                 bool previous = GUI.enabled;
                 bool affordable = c.AvailableCoins >= price;
                 GUI.enabled = previous && affordable;
                 string purchase = affordable ? $"{price} 金币购买" : $"需 {price} 金币 · 不足";
                 if (DrawCard(CardArea(i, available.Length, art.upgradeCard), art, kind, text, purchase))
-                    Act(c, () => c.ResolveIslandOption(option));
+                {
+                    if (finalPort)
+                        Act(c, () => c.BuyFinalPortUpgrade(kind));
+                    else
+                        Act(c, () => c.ResolveIslandOption(option));
+                }
                 GUI.enabled = previous;
             }
         }

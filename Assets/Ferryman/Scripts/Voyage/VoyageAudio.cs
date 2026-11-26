@@ -10,7 +10,8 @@ namespace Ferryman.Voyage
         Ocean, HarborWater, Footstep1, Footstep2, Footstep3, CornShot, EnemyShot, EnemyHit, Stun, WaterSplash,
         KickSwing, KickFlesh, KickStone, KickWood, BombThrow, BombLand, Fuse, Explosion, BombClear,
         Gull, GullRelease, StoneLand, HullHit, HullBreak, Repair, RepairDone, WaterBubbles, BattleClear, Board,
-        Dialogue, Confirm, Paper, Reward, Upgrade, Dock, Failure, TrashGather, TrashBreak, AllyHorn, SeaAlly
+        Dialogue, Confirm, Paper, Reward, Upgrade, Dock, Failure, TrashGather, TrashBreak, AllyHorn, SeaAlly,
+        BagOpen, BagFill, BagTie, TowWater
     }
 
     [RequireComponent(typeof(VoyageController))]

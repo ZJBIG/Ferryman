@@ -63,6 +63,8 @@ namespace Ferryman.Voyage
         public BoatHealth.State ship;
         public int[] routePath;
         public int[] runUpgrades;
+        internal bool CanHaveFinalPortUpgrades => storyRound == VoyageController.FinalStoryRound
+            && stopIndex >= VoyageController.DestinationStop;
         public bool islandResolved;
         public VoyageUpgradeKind[] upgradeChoices;
     }
@@ -171,7 +173,7 @@ namespace Ferryman.Voyage
                 || checkpoint.pendingCoins < 0 || checkpoint.pendingSpecialItems < 0 || checkpoint.deliveredPassengers < 0
                 || checkpoint.passengers == null || checkpoint.ship == null)
                 throw new InvalidDataException("Voyage checkpoint is invalid or uses an unsupported version.");
-            int[] ranks = VoyageUpgrades.ReadRanks(checkpoint.runUpgrades);
+            int[] ranks = VoyageUpgrades.ReadRanks(checkpoint.runUpgrades, checkpoint.CanHaveFinalPortUpgrades);
             if (checkpoint.storyRound < 0 || checkpoint.storyRound > VoyageController.FinalStoryRound
                 || checkpoint.storyRound > 0 && (checkpoint.routePath == null || checkpoint.routePath.Length == 0))
                 throw new InvalidDataException("Voyage checkpoint has an invalid story round.");

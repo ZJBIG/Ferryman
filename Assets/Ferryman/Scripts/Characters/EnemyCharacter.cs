@@ -6,8 +6,19 @@ using UnityEngine;
 
 namespace Ferryman.Characters
 {
+    public enum ColossusPhase
+    {
+        OuterShell,
+        Crossfire,
+        LooseCore
+    }
+
     public sealed partial class EnemyCharacter : CombatCharacter
     {
+        private const float CrossfireInterval = 3.8f;
+        private const float LooseCoreInterval = 5f;
+        private const float CoreExposureSeconds = 2.8f;
+
         public enum AttackKind
         {
             Projectile,
@@ -51,6 +62,8 @@ namespace Ferryman.Characters
         private float nextBombAt;
         private BombPose pendingBomb;
         private bool bossWindingUp;
+        private ColossusPhase bossThrowPhase;
+        private float coreExposedUntil;
         private Sprite idleSprite;
         private Vector2[] idleBodyOutline;
         private Vector3 idleBodyAnchor;
@@ -62,6 +75,11 @@ namespace Ferryman.Characters
 
         public override bool IsHostile => true;
         public bool IsBoss => isBoss;
+        public ColossusPhase BossPhase => !IsBoss || Health > MaxHealth * 2f / 3f
+            ? ColossusPhase.OuterShell
+            : Health > MaxHealth / 3f ? ColossusPhase.Crossfire : ColossusPhase.LooseCore;
+        public bool IsCoreExposed => IsBoss && Health > 0f && Time.time < coreExposedUntil;
+        internal ColossusPhase? BossReinforcementsPhase { get; set; }
         public AttackKind AttackType => attackKind;
         public TargetPreference PreferredTarget => targetPreference;
         public TimedBomb BombPrefab => bombPrefab;
@@ -205,10 +223,10 @@ namespace Ferryman.Characters
         {
             if (boat == null || bombPrefab == null)
                 return;
-            if (IsBoss && !bossWindingUp && Time.time >= nextBombAt - BombWindup)
+            if (IsBoss)
             {
-                bossWindingUp = true;
-                PlayVisualFrames(attackFrames, BombWindup * 2f);
+                UpdateBossThrow();
+                return;
             }
             if (pendingBomb == null && bombPoses != null && bombPoses.Length > 0
                 && Time.time >= nextBombAt - BombWindup)
@@ -236,22 +254,7 @@ namespace Ferryman.Characters
                 return;
 
             nextBombAt = Time.time + bombInterval;
-            bossWindingUp = false;
-            if (TryChooseBombLanding(out Vector2 landing))
-            {
-                Face(landing - (Vector2)transform.position);
-                Vector2 launchOffset = pendingBomb != null ? pendingBomb.launchOffset : Vector2.zero;
-                if (Visual.flipX)
-                    launchOffset.x = -launchOffset.x;
-                Vector3 origin = pendingBomb != null ? Visual.transform.TransformPoint(launchOffset) : transform.position;
-                var bomb = Instantiate(bombPrefab, origin, Quaternion.identity);
-                if (pendingBomb != null)
-                {
-                    // The released artwork includes the edge hidden by the claw in the held pose.
-                    bomb.GetComponent<DestructibleObstacle>().SetAppearance(pendingBomb.projectile);
-                }
-                bomb.Throw(boat, landing);
-            }
+            TryThrowBomb(pendingBomb);
             if (pendingBomb != null)
             {
                 StopVisualFrames();
@@ -260,6 +263,63 @@ namespace Ferryman.Characters
                     outline.SetPath(0, idleBodyOutline);
                 pendingBomb = null;
             }
+        }
+
+        private void UpdateBossThrow()
+        {
+            // A hit may change phase during the windup. Keep the volley already shown to the player.
+            ColossusPhase phase = bossWindingUp ? bossThrowPhase : BossPhase;
+            float windup = phase switch
+            {
+                ColossusPhase.Crossfire => 0.75f,
+                ColossusPhase.LooseCore => 1f,
+                _ => BombWindup
+            };
+            if (!bossWindingUp && Time.time >= nextBombAt - windup)
+            {
+                bossWindingUp = true;
+                bossThrowPhase = phase;
+                PlayVisualFrames(attackFrames, windup * 2f);
+                if (phase != ColossusPhase.OuterShell)
+                    VoyageAudio.Play(Sound.TrashGather, 0.55f, transform.position);
+            }
+            if (Time.time < nextBombAt)
+                return;
+
+            var (count, interval) = phase switch
+            {
+                ColossusPhase.Crossfire => (2, CrossfireInterval),
+                ColossusPhase.LooseCore => (3, LooseCoreInterval),
+                _ => (1, bombInterval)
+            };
+            nextBombAt = Time.time + interval;
+            bossWindingUp = false;
+            for (int i = 0; i < count; i++)
+            {
+                if (!TryThrowBomb(null))
+                    break;
+            }
+            if (phase == ColossusPhase.LooseCore)
+                coreExposedUntil = Time.time + CoreExposureSeconds;
+        }
+
+        private bool TryThrowBomb(BombPose pose)
+        {
+            if (!TryChooseBombLanding(out Vector2 landing))
+                return false;
+            Face(landing - (Vector2)transform.position);
+            Vector2 launchOffset = pose != null ? pose.launchOffset : Vector2.zero;
+            if (Visual != null && Visual.flipX)
+                launchOffset.x = -launchOffset.x;
+            Vector3 origin = pose != null ? Visual.transform.TransformPoint(launchOffset) : transform.position;
+            var bomb = Instantiate(bombPrefab, origin, Quaternion.identity);
+            if (pose != null)
+            {
+                // The released artwork includes the edge hidden by the claw in the held pose.
+                bomb.GetComponent<DestructibleObstacle>().SetAppearance(pose.projectile);
+            }
+            bomb.Throw(boat, landing);
+            return true;
         }
 
         private bool TryChooseBombLanding(out Vector2 landing)
@@ -368,8 +428,18 @@ namespace Ferryman.Characters
             if (damage <= 0f || Health <= 0f)
                 return false;
 
-            float actualDamage = Mathf.Min(damage, Health);
-            Health -= actualDamage;
+            // Hold each phase boundary until its reinforcements have arrived.
+            float healthFloor = BossReinforcementsPhase switch
+            {
+                ColossusPhase.OuterShell => MaxHealth * 2f / 3f,
+                ColossusPhase.Crossfire => MaxHealth / 3f,
+                _ => 0f
+            };
+            float nextHealth = Mathf.Max(healthFloor, Health - (IsCoreExposed ? damage * 2f : damage));
+            float actualDamage = Health - nextHealth;
+            if (actualDamage <= 0f)
+                return false;
+            Health = nextHealth;
             hitFeedbackUntil = Time.time + 0.18f;
             SetHitFeedbackPoint();
             Bounds bounds = VisualBounds;

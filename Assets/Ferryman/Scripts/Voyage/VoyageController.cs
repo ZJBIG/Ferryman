@@ -299,7 +299,7 @@ namespace Ferryman.Voyage
                     if (IsBossLeg)
                     {
                         BoardFinalAllies();
-                        yield return ShowSpecialCompanionBriefing();
+                        yield return ShowFinalBriefing();
                     }
                     if (eventPlan[index].kind != VoyageEventKind.None)
                         yield return ExecuteEvent(eventPlan[index]);
@@ -383,7 +383,7 @@ namespace Ferryman.Voyage
 
         private IEnumerator ExecuteEvent(PlannedVoyageEvent planned)
         {
-            if (planned.kind == VoyageEventKind.Combat)
+            if (planned.kind == VoyageEventKind.Combat && !IsBossLeg)
             {
                 vessel.Player.BlockMouseAttacks = true;
                 yield return ShowEncounterConversation();
@@ -399,7 +399,14 @@ namespace Ferryman.Voyage
                 while (ActiveRun && camera != null && (camera.orthographicSize != CombatCameraSize(camera, encounter)
                     || camera.transform.position.y != encounter.cameraHeight))
                     yield return null;
-                SeaEventDefinition[] falling = IsBossLeg ? Array.Empty<SeaEventDefinition>() : definition.specialEvents.Select(entry => entry.definition)
+                if (IsBossLeg)
+                {
+                    yield return FightFinalBoss(encounter);
+                    if (ActiveRun)
+                        AddReward(encounter.reward);
+                    yield break;
+                }
+                SeaEventDefinition[] falling = definition.specialEvents.Select(entry => entry.definition)
                     .Where(item => item != null && item.obstaclePrefab != null).ToArray();
                 int depth = IsExpedition ? RouteMap.Nodes[CurrentNodeId].depth : Mathf.Max(1, (StopIndex + 1) / 2);
                 float dropInterval = Mathf.Max(3.5f, 7f - Mathf.Max(0, StoryRound - 1) - depth * 0.25f);
@@ -412,7 +419,7 @@ namespace Ferryman.Voyage
                     int waveDrops = 0;
                     float nextDropAt = Time.time + Mathf.Min(1.2f, encounter.waveInterval * 0.5f);
                     var movementRandom = new Random(seed ^ StopIndex * 733 ^ waveIndex * 6271);
-                    float diveAt = StoryRound >= 2 && !IsBossLeg
+                    float diveAt = StoryRound >= 2
                         ? Time.time + Mathf.Lerp(7f, 10f, (float)movementRandom.NextDouble())
                         : float.PositiveInfinity;
                     while (ActiveRun && enemies.Any(enemy => enemy != null && enemy.Health > 0f))
@@ -446,9 +453,10 @@ namespace Ferryman.Voyage
             }
         }
 
-        private IEnumerator SpawnWave(WaveDefinition wave)
+        private IEnumerator SpawnWave(WaveDefinition wave, Bounds? reserved = null)
         {
-            enemies.Clear();
+            if (!reserved.HasValue)
+                enemies.Clear();
             Camera camera = Camera.main;
             if (camera == null)
                 throw new InvalidOperationException("海怪生成需要主相机。");
@@ -457,13 +465,12 @@ namespace Ferryman.Voyage
             Vector2 half = WaveFootprint(wave, out int count);
             Vector2 viewHalf = new Vector2(camera.orthographicSize * camera.aspect, camera.orthographicSize);
             var random = IsBossLeg ? null : new Random(seed ^ StopIndex * 397 ^ waveIndex * 3571);
-            var positions = FindWavePositions(deck, half, camera.transform.position, viewHalf, random);
+            var positions = FindWavePositions(deck, half, camera.transform.position, viewHalf, random, reserved);
             if (positions.Count < count)
                 throw new InvalidOperationException("船的上侧和右侧没有足够的海怪生成空间。");
             if (IsBossLeg)
             {
-                positions.Sort((left, right) => (left - (Vector2)deck.center).sqrMagnitude
-                    .CompareTo((right - (Vector2)deck.center).sqrMagnitude));
+                positions = positions.OrderBy(position => (position - (Vector2)deck.center).sqrMagnitude).ToList();
             }
             else
             {
@@ -474,7 +481,7 @@ namespace Ferryman.Voyage
                 }
             }
             for (int i = 0; i < count; i++)
-                waveBubbles.Add(WaveBubbles.Create(positions[i], IsBossLeg ? 1.8f : 1f));
+                waveBubbles.Add(WaveBubbles.Create(positions[i], IsBossLeg && waveIndex == 0 ? 1.8f : 1f));
             VoyageAudio.Play(Sound.WaterBubbles, waveIndex == 0 ? 0.71f : 0.62f, positions[0]);
             if (IsBossLeg)
                 VoyageAudio.Play(Sound.TrashGather, 0.69f, positions[0]);
@@ -537,7 +544,7 @@ namespace Ferryman.Voyage
         }
 
         private static List<Vector2> FindWavePositions(Bounds deck, Vector2 half, Vector2 viewCenter, Vector2 viewHalf,
-            Random random = null)
+            Random random = null, Bounds? reserved = null)
         {
             const float spacing = 0.6f;
             const float jitter = 0.62f;
@@ -560,7 +567,9 @@ namespace Ferryman.Voyage
                         // A slot has at least the reserved spacing even when adjacent offsets differ.
                         float shiftX = random == null ? 0f : (float)random.NextDouble() * Mathf.Min(jitter, regionMax.x - x);
                         float shiftY = random == null ? 0f : (float)random.NextDouble() * Mathf.Min(jitter, regionMax.y - y);
-                        positions.Add(new Vector2(x + shiftX, y + shiftY));
+                        var position = new Vector2(x + shiftX, y + shiftY);
+                        if (!reserved.HasValue || !reserved.Value.Intersects(new Bounds(position, half * 2f)))
+                            positions.Add(position);
                     }
                 }
             }
@@ -1029,6 +1038,7 @@ namespace Ferryman.Voyage
             specialCompanions.Clear();
             companionActors.Clear();
             waitingFinalAllies.Clear();
+            ResetFinalRecovery();
             if (vessel == null)
                 return;
             vessel.Boat.Destroyed.RemoveListener(OnBoatDestroyed);
@@ -1133,6 +1143,25 @@ namespace Ferryman.Voyage
                 return size;
             Bounds deck = vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
             Vector2 center = new Vector2(camera.transform.position.x, encounter.cameraHeight);
+            if (IsBossLeg)
+            {
+                Vector2 bossHalf = WaveFootprint(encounter.waves[0], out _);
+                while (size < 24f)
+                {
+                    Vector2 view = new Vector2(size * camera.aspect, size);
+                    var positions = FindWavePositions(deck, bossHalf, center, view);
+                    if (positions.Count > 0)
+                    {
+                        Vector2 bossPosition = positions.OrderBy(position => (position - (Vector2)deck.center).sqrMagnitude).First();
+                        Bounds reserved = BossSummonClearance(bossPosition, bossHalf);
+                        if (encounter.waves.Skip(1).All(wave =>
+                            FindWavePositions(deck, WaveFootprint(wave, out int count), center, view, reserved: reserved).Count >= count))
+                            break;
+                    }
+                    size += 0.5f;
+                }
+                return size;
+            }
             foreach (WaveDefinition wave in encounter.waves)
             {
                 Vector2 half = WaveFootprint(wave, out int count);
@@ -1144,6 +1173,8 @@ namespace Ferryman.Voyage
 
         private void Update()
         {
+            if (AwaitingFinalRecovery && Input.GetKeyDown(KeyCode.F))
+                TryRecoverFinalCargo();
             PlaceWaitingCompanions();
             Camera camera = Camera.main;
             if (camera == null || definition == null)

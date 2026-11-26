@@ -31,14 +31,15 @@ namespace Ferryman.Voyage
             _ => "每级增加一格维修范围"
         };
         public static bool UsesSpecialItems(VoyageUpgradeKind kind) => kind == VoyageUpgradeKind.RepairCount || kind == VoyageUpgradeKind.RepairRange;
-        public static int Price(VoyageUpgradeKind kind, int rank) => (UsesSpecialItems(kind) ? 1 : 50) * (rank + 1);
+        public static long Price(VoyageUpgradeKind kind, int rank) => (UsesSpecialItems(kind) ? 1L : 50L) * (rank + 1L);
         public static bool IsValid(VoyageUpgradeKind kind) => (int)kind >= 0 && (int)kind < Count;
-        public static int[] ReadRanks(int[] saved)
+        public static int[] ReadRanks(int[] saved, bool finalPort = false)
         {
             // Unity serializes null arrays as []; both represent a pre-upgrade save.
             if (saved == null || saved.Length == 0)
                 return new int[Count];
-            if (saved.Length != Count || Array.Exists(saved, rank => rank < 0 || rank > MaxRank))
+            int limit = finalPort ? int.MaxValue / 50 : MaxRank;
+            if (saved.Length != Count || Array.Exists(saved, rank => rank < 0 || rank > limit))
                 throw new System.IO.InvalidDataException("升级等级数据无效。");
             return (int[])saved.Clone();
         }

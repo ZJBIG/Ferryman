@@ -19,6 +19,25 @@ MonoBehaviour:
     - prefab: {fileID: 4237392762737264246, guid: d843ec6cfce84a22a96b809dfd4982a7, type: 3}
       count: 1
       spawnPosition: {x: 0, y: 9}
+  - enemies:
+    - prefab: {fileID: 3037722644913490056, guid: cc081335811fca745aae208f127184b1, type: 3}
+      count: 2
+  - enemies:
+    - prefab: {fileID: 8054760092492189183, guid: c299ac059c46b6244b0d0a610aaea131, type: 3}
+      count: 2
+    - prefab: {fileID: 402870840139730365, guid: 42b27aa8d72f59f47be8031f07cea9f2, type: 3}
+      count: 1
+    - prefab: {fileID: 4237392762737264246, guid: 55647bbb48485c98832b0fbd598d9b48, type: 3}
+      count: 1
+  - enemies:
+    - prefab: {fileID: 4237392762737264246, guid: eec48e9efcd058e3a208210b7003e632, type: 3}
+      count: 1
+    - prefab: {fileID: 4227477228960928629, guid: 6a325ee840d021e4098d175c4f7a9c82, type: 3}
+      count: 2
+    - prefab: {fileID: 4237392762737264246, guid: 06b0e4ed4d24572087e9f8dbf7d81edc, type: 3}
+      count: 2
+    - prefab: {fileID: 402870840139730365, guid: 42b27aa8d72f59f47be8031f07cea9f2, type: 3}
+      count: 1
   waveInterval: 8
   reward:
     coins: 250

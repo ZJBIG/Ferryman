@@ -18,17 +18,17 @@ namespace Ferryman.Characters
     [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
     public sealed class SpecialCompanion : CombatCharacter
     {
-        private const float KickRange = 1.45f;
-        private const float KickApproachRange = 3.4f;
+        private const float KickRange = 1.7f;
+        private const float KickApproachRange = 4.5f;
         private const float KickSeconds = 0.44f;
         private const float KickImpactSeconds = 0.22f;
-        private const float KickCooldown = 4f;
-        private const float MarkSeconds = 2f;
-        private const float MarkCooldown = 4f;
-        private const float MarkBonus = 12f;
-        private const float HeavyAimSeconds = 0.26f;
-        private const float BurstSeconds = 2f;
-        private const float BurstCooldown = 8f;
+        private const float KickCooldown = 2.6f;
+        private const float MarkSeconds = 3f;
+        private const float MarkCooldown = 3.2f;
+        private const float MarkBonus = 24f;
+        private const float HeavyAimSeconds = 0.18f;
+        private const float BurstSeconds = 2.5f;
+        private const float BurstCooldown = 5f;
 
         [SerializeField] private GameObject kickEffectPrefab;
         [SerializeField] private GameObject kickImpactEffectPrefab;

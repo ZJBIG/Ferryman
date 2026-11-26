@@ -223,7 +223,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90f7a64d1ae52264da8e12b2b469e934, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  health: 38000
+  health: 12666.667
   hitbox: {fileID: 8344003705530662006}
   stunDuration: 1
   visual: {fileID: 6736160314134693394}
