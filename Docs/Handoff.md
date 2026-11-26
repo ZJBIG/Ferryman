@@ -1,10 +1,10 @@
 # Ferryman 开发交接
 
-更新日期：2026-11-24。仓库：<https://github.com/ZJBIG/Ferryman>。
+更新日期为 2026-11-26。仓库见 [GitHub](https://github.com/ZJBIG/Ferryman)。
 
 使用 Unity **2022.3.62f3c1** 打开项目，运行 [main 场景](../Assets/Ferryman/Scenes/main.unity)。默认分支图包含 20 个节点，一轮经过 8 座岛、7 段海路；出发、停靠、海路、结算和返家复用 main，不重载场景。旧线性配置与旧检查点继续兼容。
 
-本轮未重新发布 Windows exe；README 的 `v0.1-playtest.1` 发布包仍是旧线性版本。当前分支玩法从 Unity main 运行。历史验证日期与结果见 PrototypeAudit，本文件不重复保存测试通过数。
+三日航程可从 Unity main 运行，当前 Windows 和 WebGL 下载入口见 [README](../README.md)。历史验证记录见 [PrototypeAudit](PrototypeAudit.md)。
 
 ## 权威入口
 
@@ -18,7 +18,7 @@
 | 航程、图、活动、升级、存档与界面 | [Scripts/Voyage](../Assets/Ferryman/Scripts/Voyage) |
 | PlayMode 回归 | [Tests/PlayMode](../Assets/Ferryman/Tests/PlayMode) |
 | 资源校验和 Windows 构建 | [PrototypeValidation.cs](../Assets/Ferryman/Editor/PrototypeValidation.cs) |
-| 玩家入口与旧版下载 | [README.md](../README.md) |
+| 玩家入口与下载 | [README.md](../README.md) |
 
 ## 接续约束
 

@@ -132,6 +132,28 @@ namespace Ferryman.Tests
             return Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name == "ProjectileImpact(Clone)");
         }
 
+        [Test]
+        public void CaptainMeleeCannotDamageColossusInsideItsReach()
+        {
+            var encounter = Resources.Load<EncounterDefinition>("Voyage/Events/GarbageTideColossus");
+            Vector2 origin = player.transform.position;
+            var boss = Object.Instantiate(encounter.waves[0].enemies[0].prefab, origin + Vector2.right, Quaternion.identity);
+            try
+            {
+                boss.enabled = false;
+                Physics2D.SyncTransforms();
+                Assert.That(Physics2D.OverlapCircleAll(origin, 1.5f), Does.Contain(boss.Hitbox));
+                Vector2 aim = boss.Hitbox.ClosestPoint(origin) - origin;
+                float health = boss.Health;
+                Assert.That(player.TryMelee(aim.sqrMagnitude > 0.0001f ? aim : Vector2.right), Is.True);
+                Assert.That(boss.Health, Is.EqualTo(health));
+            }
+            finally
+            {
+                Object.Destroy(boss.gameObject);
+            }
+        }
+
         [UnityTest]
         public IEnumerator ColossusThrowsThreeDistinctVolleysAndCoreExposureDoublesDamage()
         {

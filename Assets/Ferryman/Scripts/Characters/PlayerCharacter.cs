@@ -219,8 +219,10 @@ namespace Ferryman.Characters
             foreach (var hit in hits)
             {
                 var character = hit.GetComponentInParent<Character>();
+                if (character == this || character is EnemyCharacter { IsBoss: true })
+                    continue;
                 var obstacle = hit.GetComponentInParent<DestructibleObstacle>();
-                if (character == this || hit.isTrigger && character == null && obstacle == null)
+                if (hit.isTrigger && character == null && obstacle == null)
                     continue;
                 Object entity = obstacle != null ? (Object)obstacle : character != null ? character : hit.gameObject;
                 if (!struck.Add(entity))

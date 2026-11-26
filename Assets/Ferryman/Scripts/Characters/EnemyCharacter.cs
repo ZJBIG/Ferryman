@@ -79,7 +79,6 @@ namespace Ferryman.Characters
             ? ColossusPhase.OuterShell
             : Health > MaxHealth / 3f ? ColossusPhase.Crossfire : ColossusPhase.LooseCore;
         public bool IsCoreExposed => IsBoss && Health > 0f && Time.time < coreExposedUntil;
-        internal ColossusPhase? BossReinforcementsPhase { get; set; }
         public AttackKind AttackType => attackKind;
         public TargetPreference PreferredTarget => targetPreference;
         public TimedBomb BombPrefab => bombPrefab;
@@ -428,18 +427,8 @@ namespace Ferryman.Characters
             if (damage <= 0f || Health <= 0f)
                 return false;
 
-            // Hold each phase boundary until its reinforcements have arrived.
-            float healthFloor = BossReinforcementsPhase switch
-            {
-                ColossusPhase.OuterShell => MaxHealth * 2f / 3f,
-                ColossusPhase.Crossfire => MaxHealth / 3f,
-                _ => 0f
-            };
-            float nextHealth = Mathf.Max(healthFloor, Health - (IsCoreExposed ? damage * 2f : damage));
-            float actualDamage = Health - nextHealth;
-            if (actualDamage <= 0f)
-                return false;
-            Health = nextHealth;
+            float actualDamage = Mathf.Min(IsCoreExposed ? damage * 2f : damage, Health);
+            Health -= actualDamage;
             hitFeedbackUntil = Time.time + 0.18f;
             SetHitFeedbackPoint();
             Bounds bounds = VisualBounds;

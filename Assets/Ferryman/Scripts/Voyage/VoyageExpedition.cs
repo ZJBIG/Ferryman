@@ -91,12 +91,11 @@ namespace Ferryman.Voyage
             expeditionStops[seaIndex].displayName = "前往" + node.Name;
             var random = new Random(ExpeditionSeed ^ node.id * 7919);
             int storyLeg = StoryRound > 0 ? (StoryRound - 1) * VoyageRouteMap.FinalDepth + node.depth : 0;
-            float combatChance = StoryRound > 0 ? Mathf.Min(0.8f, 0.3f + StoryRound * 0.12f + node.depth * 0.025f)
+            double combatChance = StoryRound > 0 ? (StoryRound + 1) / 5d
                 : node.depth <= 2 ? 0.2f : node.depth <= 4 ? 0.3f : 0.4f;
-            bool combat = node.kind == VoyageIslandKind.Battle || node.kind == VoyageIslandKind.Elite
-                || node.kind == VoyageIslandKind.Destination
-                || random.NextDouble() < combatChance;
-            if (combat || storyLeg == 1)
+            bool fixedCombat = node.kind == VoyageIslandKind.Battle || node.kind == VoyageIslandKind.Elite
+                || node.kind == VoyageIslandKind.Destination;
+            if (fixedCombat || random.NextDouble() < combatChance)
             {
                 EncounterDefinition[] sources = definition.randomEncounters
                     .Concat(definition.stops.Select(stop => stop.fixedEncounter)).Where(item => item != null).Distinct().ToArray();
@@ -106,7 +105,8 @@ namespace Ferryman.Voyage
                 var encounter = ScriptableObject.CreateInstance<EncounterDefinition>();
                 expeditionEncounters.Add(encounter);
                 encounter.displayName = node.kind == VoyageIslandKind.Destination ? "最后的封锁线"
-                    : node.kind == VoyageIslandKind.Elite ? "精英海域" : "群岛海战";
+                    : node.kind == VoyageIslandKind.Elite ? "精英海域"
+                    : StoryRound > 0 && !fixedCombat ? "海怪来袭" : "群岛海战";
                 encounter.cameraSize = source.cameraSize;
                 encounter.cameraHeight = source.cameraHeight;
                 encounter.waveInterval = source.waveInterval;
@@ -145,7 +145,12 @@ namespace Ferryman.Voyage
                     coins = (30 + node.depth * 10) * (node.kind == VoyageIslandKind.Elite ? 2 : 1),
                     specialItems = node.kind == VoyageIslandKind.Elite || node.kind == VoyageIslandKind.Destination ? 2 : 1
                 };
-                eventPlan[seaIndex] = new PlannedVoyageEvent { kind = VoyageEventKind.Combat, encounter = encounter, isFixed = true };
+                eventPlan[seaIndex] = new PlannedVoyageEvent
+                {
+                    kind = VoyageEventKind.Combat,
+                    encounter = encounter,
+                    isFixed = StoryRound == 0 || fixedCombat
+                };
             }
             else
             {

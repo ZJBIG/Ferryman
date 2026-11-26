@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Linq;
 using Ferryman.Characters;
@@ -9,8 +10,10 @@ namespace Ferryman.Voyage
     public sealed partial class VoyageController
     {
         public const int FinalCargoCount = 3;
+        private const float FinalSummonInterval = 10f;
         private const float RecoveryReach = 2.15f;
         private FinalRecoveryPresentation finalRecoveryArt;
+        private float finalSummonCameraSize;
         private AudioSource towAudio;
         private Vector2 recoveryStationLocal;
         private bool recoveryActionRequested;
@@ -44,29 +47,91 @@ namespace Ferryman.Voyage
                 yield break;
 
             EnemyCharacter boss = enemies.Single();
-            boss.BossReinforcementsPhase = ColossusPhase.OuterShell;
-            Vector2 half = WaveFootprint(encounter.waves[0], out _);
-            Bounds clearance = BossSummonClearance(boss.transform.position, half);
-            for (int wave = 1; wave < encounter.waves.Length; wave++)
+            float nextSummonAt = Time.time + FinalSummonInterval;
+            while (ActiveRun && IsLivingEnemy(boss))
             {
-                var phase = (ColossusPhase)(wave - 1);
-                while (ActiveRun && (boss.BossPhase < phase || enemies.Any(enemy => enemy != null && !enemy.IsBoss && enemy.Health > 0f)))
+                if (Time.time < nextSummonAt)
+                {
                     yield return null;
-                if (!ActiveRun)
-                    yield break;
+                    continue;
+                }
 
-                waveIndex = wave;
-                yield return SpawnWave(encounter.waves[wave], clearance);
-                if (!ActiveRun)
-                    yield break;
-                boss.BossReinforcementsPhase = phase;
+                waveIndex = (int)boss.BossPhase + 1;
+                nextSummonAt += FinalSummonInterval;
+                yield return SummonFinalWave(encounter.waves[waveIndex], boss);
             }
 
-            while (ActiveRun && enemies.Any(enemy => enemy != null && enemy.Health > 0f))
+            while (ActiveRun && enemies.Any(IsLivingEnemy))
                 yield return null;
         }
 
-        private static Bounds BossSummonClearance(Vector2 center, Vector2 half) =>
+        private IEnumerator SummonFinalWave(WaveDefinition wave, EnemyCharacter boss)
+        {
+            Camera camera = Camera.main;
+            if (camera == null)
+                throw new InvalidOperationException("海怪生成需要主相机。");
+
+            enemies.RemoveAll(enemy => enemy == null);
+            Bounds deck = vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
+            Vector2 half = WaveFootprint(wave, out int count);
+            while (ActiveRun && IsLivingEnemy(boss))
+            {
+                Bounds[] occupied = LivingEnemyBounds();
+                Vector2 viewCenter = camera.transform.position;
+                float size = camera.orthographicSize;
+                Vector2[] positions;
+                while (true)
+                {
+                    positions = FindWavePositions(deck, half, viewCenter, new Vector2(size * camera.aspect, size))
+                        .Where(position => HasSummonClearance(position, half, occupied))
+                        .OrderBy(position => (position - (Vector2)deck.center).sqrMagnitude)
+                        .Take(count).ToArray();
+                    if (positions.Length == count)
+                        break;
+                    size += 0.5f;
+                }
+
+                if (size > camera.orthographicSize)
+                {
+                    finalSummonCameraSize = size;
+                    while (ActiveRun && IsLivingEnemy(boss) && camera.orthographicSize < size)
+                        yield return null;
+                    continue;
+                }
+
+                yield return WarnWave(positions, count, boss);
+                if (!ActiveRun || !IsLivingEnemy(boss))
+                    yield break;
+                occupied = LivingEnemyBounds();
+                // A boarding crab can move into a warned spot before the wave surfaces.
+                if (!positions.All(position => HasSummonClearance(position, half, occupied)))
+                    continue;
+                SpawnWaveAt(wave, positions);
+                yield break;
+            }
+        }
+
+        private Bounds[] LivingEnemyBounds()
+        {
+            Physics2D.SyncTransforms();
+            return enemies.Where(IsLivingEnemy).Select(enemy =>
+            {
+                Vector2 origin = enemy.transform.position;
+                Bounds bounds = enemy.SpawnBounds;
+                Vector2 half = Vector2.Max(origin - (Vector2)bounds.min, (Vector2)bounds.max - origin);
+                return SummonClearance(origin, half);
+            }).ToArray();
+        }
+
+        private static bool HasSummonClearance(Vector2 position, Vector2 half, Bounds[] occupied)
+        {
+            var bounds = new Bounds(position, half * 2f);
+            return !occupied.Any(other => other.Intersects(bounds));
+        }
+
+        private static bool IsLivingEnemy(EnemyCharacter enemy) => enemy != null && enemy.Health > 0f;
+
+        private static Bounds SummonClearance(Vector2 center, Vector2 half) =>
             new Bounds(center, half * 2f + Vector2.one * 1.2f);
 
         private IEnumerator RecoverFinalWreckage()
@@ -153,6 +218,7 @@ namespace Ferryman.Voyage
         private void ResetFinalRecovery()
         {
             finalRecoveryArt = null;
+            finalSummonCameraSize = 0f;
             towAudio = null;
             AwaitingFinalRecovery = false;
             TowingFinalCargo = false;

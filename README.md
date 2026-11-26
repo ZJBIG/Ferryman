@@ -4,8 +4,8 @@
 
 ## 打开试玩
 
-- **Windows 64 位**　[下载 Windows 试玩包](https://github.com/ZJBIG/Ferryman/releases/download/v0.3-playtest.1/Ferryman-Windows-x64.zip)，解压整个 ZIP 后双击 `Ferryman.exe`。
-- **Web / HTML5**　[下载 WebGL 试玩包](https://github.com/ZJBIG/Ferryman/releases/download/v0.3-playtest.1/Ferryman-WebGL.zip)，将解压内容部署到静态网站，或在解压目录运行 `python -m http.server 8000` 后打开 `http://localhost:8000`。
+- **Windows 64 位**　解压整个 ZIP 后双击 `Ferryman.exe`。[下载 Windows 包](https://github.com/ZJBIG/Ferryman/releases/download/v0.3-playtest.2/Ferryman-Windows-x64.zip)
+- **Web / HTML5**　将解压内容部署到静态网站，或在解压目录运行 `python -m http.server 8000` 后访问 `localhost:8000`。[下载 WebGL 包](https://github.com/ZJBIG/Ferryman/releases/download/v0.3-playtest.2/Ferryman-WebGL.zip)
 - **开发项目（Unity）**　克隆仓库或从 GitHub 的 `Code → Download ZIP` 下载源码。在 Unity Hub 中添加项目根目录，使用 **Unity 2022.3.62f3c1** 打开，双击 [main 场景](Assets/Ferryman/Scenes/main.unity)，点击顶部 ▶ Play。
 
 ![甲板上的物品与维修](Docs/Images/Gameplay.png)
@@ -14,7 +14,9 @@
 
 从出发岛点击「空船启航」，跟随开局教程熟悉操作，再在海图选择下一座岛。每回经过八座岛、七段海路。靠港时可以听乘客讲述出行缘由，再决定接载或谢绝。战斗船员自动射击，维护船员绕障维修。船况、局内升级和报酬延续至第三日。第三日抵达终点港后可以消费金币整备，准备好就点击「离港迎战」。
 
-海战从每波三只逐步增加到十二只，每场最多四波。海鸥会带来石块或炸弹。垃圾潮巨像约有 12,667 点生命，三个阶段分别召来 2、4、6 只旧敌。击退全部敌人并清理余弹后，在船尾收回残骸、拖回港口结算。每天首战有对白，其余普通海战直接预警。
+前往战斗岛、精英岛或终点港时有固定海战。其他航段在三日内按 40%、60%、80% 的概率遭遇海怪，靠港后照常处理岛上活动。普通海战最多四波，海鸥会带来石块或炸弹。每天首战有对白，其余普通海战直接预警。
+
+垃圾潮巨像约有 12,667 点生命，每 10 秒按当时的血量阶段召来 2、4 或 6 只旧敌，其中有会登船的翻舷蟹。用玉米枪攻击巨像，击退全部敌人并清理余弹后，在船尾收回残骸、拖回港口结算。
 
 火力、连射、船体强化、快速维修、并行维修、维修范围共有六类成长。岛屿奖励提供最多三选一，集市消费本轮报酬。普通局内与永久升级各最多五级，第三日终点港的四项金币整备可以超过五级，价格随等级上涨。
 

@@ -344,7 +344,7 @@ namespace Ferryman.Voyage
             {
                 if (enemy == null || !enemy.IsBoss || enemy.Health <= 0f)
                     continue;
-                string phase = enemy.BossPhase > enemy.BossReinforcementsPhase ? "先击退召来的海怪" : enemy.BossPhase switch
+                string phase = enemy.BossPhase switch
                 {
                     ColossusPhase.OuterShell => "外壳 · 守住甲板",
                     ColossusPhase.Crossfire => "双弹 · 留意两处引信",

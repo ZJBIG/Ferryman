@@ -453,10 +453,9 @@ namespace Ferryman.Voyage
             }
         }
 
-        private IEnumerator SpawnWave(WaveDefinition wave, Bounds? reserved = null)
+        private IEnumerator SpawnWave(WaveDefinition wave)
         {
-            if (!reserved.HasValue)
-                enemies.Clear();
+            enemies.Clear();
             Camera camera = Camera.main;
             if (camera == null)
                 throw new InvalidOperationException("海怪生成需要主相机。");
@@ -465,7 +464,7 @@ namespace Ferryman.Voyage
             Vector2 half = WaveFootprint(wave, out int count);
             Vector2 viewHalf = new Vector2(camera.orthographicSize * camera.aspect, camera.orthographicSize);
             var random = IsBossLeg ? null : new Random(seed ^ StopIndex * 397 ^ waveIndex * 3571);
-            var positions = FindWavePositions(deck, half, camera.transform.position, viewHalf, random, reserved);
+            var positions = FindWavePositions(deck, half, camera.transform.position, viewHalf, random);
             if (positions.Count < count)
                 throw new InvalidOperationException("船的上侧和右侧没有足够的海怪生成空间。");
             if (IsBossLeg)
@@ -480,16 +479,27 @@ namespace Ferryman.Voyage
                     (positions[i], positions[other]) = (positions[other], positions[i]);
                 }
             }
+            yield return WarnWave(positions, count);
+            if (ActiveRun)
+                SpawnWaveAt(wave, positions);
+        }
+
+        private IEnumerator WarnWave(IReadOnlyList<Vector2> positions, int count, EnemyCharacter summoner = null)
+        {
             for (int i = 0; i < count; i++)
                 waveBubbles.Add(WaveBubbles.Create(positions[i], IsBossLeg && waveIndex == 0 ? 1.8f : 1f));
             VoyageAudio.Play(Sound.WaterBubbles, waveIndex == 0 ? 0.71f : 0.62f, positions[0]);
             if (IsBossLeg)
                 VoyageAudio.Play(Sound.TrashGather, 0.69f, positions[0]);
-            yield return WaitActive(WaveBubbles.Duration);
+            bool summoned = summoner != null;
+            float until = Time.time + WaveBubbles.Duration;
+            while (ActiveRun && Time.time < until && (!summoned || IsLivingEnemy(summoner)))
+                yield return null;
             ClearWaveBubbles();
-            if (!ActiveRun)
-                yield break;
+        }
 
+        private void SpawnWaveAt(WaveDefinition wave, IReadOnlyList<Vector2> positions)
+        {
             int nextPosition = 0;
             foreach (EnemySpawn group in wave.enemies)
             {
@@ -1153,14 +1163,14 @@ namespace Ferryman.Voyage
                     if (positions.Count > 0)
                     {
                         Vector2 bossPosition = positions.OrderBy(position => (position - (Vector2)deck.center).sqrMagnitude).First();
-                        Bounds reserved = BossSummonClearance(bossPosition, bossHalf);
+                        Bounds reserved = SummonClearance(bossPosition, bossHalf);
                         if (encounter.waves.Skip(1).All(wave =>
                             FindWavePositions(deck, WaveFootprint(wave, out int count), center, view, reserved: reserved).Count >= count))
                             break;
                     }
                     size += 0.5f;
                 }
-                return size;
+                return Mathf.Max(size, finalSummonCameraSize);
             }
             foreach (WaveDefinition wave in encounter.waves)
             {

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Ferryman.Characters;
+using Ferryman.Combat;
 using Ferryman.Voyage;
 using Ferryman.World;
 using NUnit.Framework;
@@ -608,26 +609,62 @@ namespace Ferryman.Tests
             EnemyCharacter boss = controller.Enemies.Single();
             var damage = controller.Vessel.DamageSystem;
             PlayerCharacter captain = controller.Vessel.Player;
+            Bounds deck = controller.Vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
+            Bounds bossBody = boss.Hitbox.bounds;
+            bossBody.Encapsulate(boss.GetComponentInChildren<SpriteRenderer>().bounds);
+            Assert.That(Mathf.Max(bossBody.min.x - deck.max.x, bossBody.min.y - deck.max.y),
+                Is.GreaterThanOrEqualTo(1.999f), "The boss can be reached from the deck.");
+
             EnemyCharacter[] LivingSummons() => controller.Enemies.Where(enemy => enemy != null && !enemy.IsBoss && enemy.Health > 0f).ToArray();
-            for (int phase = 0; phase < 3; phase++)
+            WaveBubbles[] Warnings() => Object.FindObjectsOfType<WaveBubbles>();
+            int summonedCount = 0;
+            float battleStarted = Time.time;
+            Time.timeScale = 3f;
+            yield return new WaitForSeconds(9.4f);
+            Time.timeScale = 0f;
+            yield return new WaitForSecondsRealtime(0.8f);
+            Assert.That(Warnings(), Is.Empty, "Pausing advanced the first summon.");
+            Time.timeScale = 3f;
+            int[] groups = { 2, 2, 4, 6 };
+            for (int batch = 0; batch < groups.Length; batch++)
             {
-                int count = (phase + 1) * 2;
-                yield return WaitFor(() => LivingSummons().Length == count, $"boss brings in {count} sea monsters");
-                Assert.That(damage.ApplyDamage(captain, boss, boss.Health), Is.True);
-                if (phase < 2)
+                int count = groups[batch];
+                yield return WaitFor(() => Warnings().Length == count, $"warning for {count} periodic summons");
+                Vector2[] warningSpots = Warnings().Select(warning => (Vector2)warning.transform.position).ToArray();
+                Assert.That(Time.time - battleStarted, Is.InRange(10f * (batch + 1) - 0.2f, 10f * (batch + 1) + 2f));
+                Assert.That(LivingSummons(), Has.Length.EqualTo(summonedCount), "Warnings should appear before the new summons.");
+                if (batch == 1 || batch == 2)
                 {
-                    Assert.That(boss.Health, Is.EqualTo(boss.MaxHealth * (2 - phase) / 3f));
-                    Assert.That(damage.ApplyDamage(captain, boss, boss.Health), Is.False);
+                    float nextHealth = boss.MaxHealth * (3 - batch) / 3f - 1f;
+                    Assert.That(damage.ApplyDamage(captain, boss, boss.Health - nextHealth), Is.True);
+                    Assert.That(boss.BossPhase, Is.EqualTo((ColossusPhase)batch));
                 }
-                else
+
+                yield return WaitFor(() => LivingSummons().Length == summonedCount + count, $"boss brings in {count} more sea monsters");
+                var living = LivingSummons();
+                Physics2D.SyncTransforms();
+                for (int index = summonedCount; index < living.Length; index++)
                 {
-                    Assert.That(boss.Health, Is.Zero);
-                    Assert.That(controller.Phase, Is.EqualTo(VoyagePhase.Event));
-                    Assert.That(LivingSummons().Any(enemy => enemy.AttackType == EnemyCharacter.AttackKind.BoardingMelee), Is.True);
+                    EnemyCharacter enemy = living[index];
+                    Assert.That(warningSpots.Any(spot => (spot - (Vector2)enemy.transform.position).sqrMagnitude < 0.25f), Is.True);
+                    Assert.That(enemy.Hitbox.bounds.Intersects(boss.Hitbox.bounds), Is.False);
+                    Assert.That(living.Take(index).Any(other => enemy.Hitbox.bounds.Intersects(other.Hitbox.bounds)), Is.False);
                 }
-                foreach (EnemyCharacter summoned in LivingSummons())
-                    Assert.That(damage.ApplyDamage(captain, summoned, summoned.Health), Is.True);
+                summonedCount += count;
             }
+            Assert.That(LivingSummons().Any(enemy => enemy.AttackType == EnemyCharacter.AttackKind.BoardingMelee), Is.True);
+
+            yield return WaitFor(() => Warnings().Length == 6, "last summon starts before the boss takes fatal damage");
+            Assert.That(damage.ApplyDamage(captain, boss, boss.Health), Is.True);
+            yield return WaitFor(() => Warnings().Length == 0, "boss death cancels the pending summon");
+            yield return new WaitForSeconds(10.5f);
+            Assert.That(Warnings(), Is.Empty);
+            Assert.That(LivingSummons(), Has.Length.EqualTo(summonedCount));
+            Assert.That(controller.Phase, Is.EqualTo(VoyagePhase.Event));
+            Time.timeScale = 1f;
+            foreach (EnemyCharacter summoned in LivingSummons())
+                Assert.That(damage.ApplyDamage(captain, summoned, summoned.Health), Is.True);
+
             yield return WaitFor(() => controller.AwaitingStoryDialogue && controller.Phase == VoyagePhase.Sailing,
                 "recovery dialogue at sea");
             Assert.That(controller.StopIndex, Is.EqualTo(15));
@@ -756,6 +793,52 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
+        public IEnumerator StorySeaAmbushesUseDailyOddsAndRestoreTheChosenIsland()
+        {
+            definition.storyCampaign = true;
+            // First-leg rolls of 0.418, 0.584 and 0.687 distinguish the new daily odds.
+            int[] seeds = { 66, 11, 4 };
+            Assert.That(controller.StartVoyage(seeds[0]), Is.True);
+            VoyageCheckpoint checkpoint = store.LoadCheckpoint(definition.id);
+            for (int day = 1; day <= VoyageController.FinalStoryRound; day++)
+            {
+                checkpoint.seed = seeds[day - 1];
+                checkpoint.storyRound = day;
+                store.SaveCheckpoint(checkpoint);
+                yield return DestroyForCrash();
+                CreateController();
+                Assert.That(controller.ResumeVoyage(), Is.True);
+                yield return WaitFor(() => controller.AwaitingRouteChoice, "departure for the rest island");
+
+                int rest = controller.RouteMap.Nodes.Single(node => node.depth == 1 && node.kind == VoyageIslandKind.Rest).id;
+                Assert.That(controller.SelectDestination(rest), Is.True);
+                PlannedVoyageEvent planned = controller.EventPlan[1];
+                VoyageEventKind expected = day == 1 ? VoyageEventKind.Special : VoyageEventKind.Combat;
+                Assert.That(planned.kind, Is.EqualTo(expected));
+                Assert.That(planned.isFixed, Is.False);
+                var waves = planned.encounter?.waves
+                    .Select(wave => wave.enemies.Select(group => (group.prefab, group.count)).ToArray()).ToArray();
+
+                yield return DestroyForCrash();
+                CreateController();
+                Assert.That(controller.ResumeVoyage(), Is.True);
+                Assert.That(controller.RoutePath, Is.EqualTo(new[] { 0, rest }));
+                PlannedVoyageEvent restored = controller.EventPlan[1];
+                Assert.That(restored.kind, Is.EqualTo(expected));
+                Assert.That(restored.specialEvent, Is.SameAs(planned.specialEvent));
+                Assert.That(restored.encounter?.waves
+                    .Select(wave => wave.enemies.Select(group => (group.prefab, group.count)).ToArray()).ToArray(), Is.EqualTo(waves));
+
+                yield return CompleteLeg(2, _ => false);
+                Assert.That(controller.CurrentIsland, Is.EqualTo(VoyageIslandKind.Rest));
+                Assert.That(controller.IslandResolved, Is.False);
+                int coins = controller.AvailableCoins;
+                Assert.That(controller.ResolveIslandOption(1), Is.True);
+                Assert.That(controller.AvailableCoins, Is.EqualTo(coins + 40));
+            }
+        }
+
+        [UnityTest]
         public IEnumerator StoryWavesUnlockEnemiesAndGrowAcrossRounds()
         {
             var source = Resources.Load<VoyageDefinition>("Voyage/DefaultVoyage");
@@ -789,7 +872,14 @@ namespace Ferryman.Tests
                 }
                 for (int depth = 1; depth <= VoyageRouteMap.FinalDepth; depth++)
                 {
-                    var encounter = controller.EventPlan[depth * 2 - 1].encounter;
+                    PlannedVoyageEvent planned = controller.EventPlan[depth * 2 - 1];
+                    VoyageIslandKind kind = controller.RouteMap.Nodes[checkpoint.routePath[depth]].kind;
+                    if (kind == VoyageIslandKind.Battle || kind == VoyageIslandKind.Elite || kind == VoyageIslandKind.Destination)
+                    {
+                        Assert.That(planned.kind, Is.EqualTo(VoyageEventKind.Combat));
+                        Assert.That(planned.isFixed, Is.True);
+                    }
+                    var encounter = planned.encounter;
                     if (encounter == null)
                         continue;
                     int leg = (round - 1) * VoyageRouteMap.FinalDepth + depth;
