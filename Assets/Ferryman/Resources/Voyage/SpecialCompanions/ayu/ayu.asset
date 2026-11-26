@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e54b71bf547243b68082e9dd2e03cd03, type: 3}
+  m_Name: ayu
+  m_EditorClassIdentifier: 
+  id: ayu
+  displayName: "\u963F\u6986"
+  role: 0
+  prefab: {fileID: 7264658945044794949, guid: 028da29e5be6482fb93c0a18adb8e155, type: 3}
+  portrait: {fileID: 21300000, guid: 7b09598feef145929611fbad95009e98, type: 3}
+  deckSprite: {fileID: 21300000, guid: 4fd9f086b0ce4cc3bd9ddaa50680f99c, type: 3}
+  walkFrames:
+  - {fileID: 21300000, guid: 4fd9f086b0ce4cc3bd9ddaa50680f99c, type: 3}
+  - {fileID: 21300000, guid: de00aa0ff9b9423f9dc28184b2c835e2, type: 3}
+  - {fileID: 21300000, guid: 794a7be474b14693b6e91b6b92626041, type: 3}
+  - {fileID: 21300000, guid: 652bd4fc32f34b718a52c28c13eb80c4, type: 3}
+  skillFrames:
+  - {fileID: 21300000, guid: 6c89286d760c4c4c96666a40267ba713, type: 3}
+  - {fileID: 21300000, guid: 72000f035fe040b28fda0c6d2a123a71, type: 3}
+  - {fileID: 21300000, guid: 2b5609b758484ee589e5d1778f79c2ef, type: 3}
+  - {fileID: 21300000, guid: a5200a7a973f4f25a02cac60a571c8a2, type: 3}
+  deckSpriteScale: 0.49309665
+  moveSpeed: 2.2
+  repairSpeed: 0
+  repairRange: 0
+  simultaneousRepairs: 1
+  attackPower: 8
+  fireInterval: 0.95
+  coinsReward: 0
+  specialItemsReward: 0

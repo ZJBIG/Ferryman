@@ -16,41 +16,140 @@ namespace Ferryman.Voyage
 
         private int storyBoardingStop;
         private bool storyRescueOffer;
-        private CrewDefinition[] alarmProfiles = System.Array.Empty<CrewDefinition>();
-        private float alarmStartedAt;
-        private const float AlarmLineSeconds = 4f;
-
-        public CrewDefinition AlarmProfile
+        private static readonly string[][] CaptainEncounterLines =
         {
-            get
+            new[]
             {
-                if (!ActiveRun || Phase != VoyagePhase.Event)
-                    return null;
-                int index = Mathf.FloorToInt((Time.time - alarmStartedAt) / AlarmLineSeconds);
-                return index >= 0 && index < alarmProfiles.Length ? alarmProfiles[index] : null;
+                "前面的水在冒泡。先听我鸣笛，要是它还挡着船，再开枪。",
+                "礁边那几条鱼掉头了。大家站稳，先看清是从哪边来的。",
+                "又是从碎网那边过来的。枪口抬高些，别打到水面上的小鱼。",
+                "海鸥刚往下看了一眼。注意脚下，甲板上落东西就给我让条路。",
+                "右舷的水推得不一样。看好那个方向，我守住船头。",
+                "前头还有人在等船。分开站，一人盯一边。",
+                "灯塔已经看得见了。守住最后这段，先把乘客送上岸。"
+            },
+            new[]
+            {
+                "泡从旧网下面冒出来了。让它离开礁口，再迎上去。",
+                "那个方向是潮闸。避开漂来的桶，看准海怪再打。",
+                "小鱼先往礁缝里走。维持航向，给它们留地方。",
+                "留意冰蓝色的弹。要是手脚慢下来，就把近处的破口交给搭档。",
+                "船舷有砂粒。能修的人靠里面站，别都挤在上风口。",
+                "这段的水比刚才浑。看见冒泡的地方就报一声。",
+                "港口的闸轴还等着人去修。守住船，别追离航线的海怪。"
+            },
+            new[]
+            {
+                "今天海上漂的东西格外多。动起来，别让它们把路堵死。",
+                "灯笼鱼贴着礁石走。给它留出口，盯住挡在正前方的敌人。",
+                "甲板上腾出一块空地。落下来的东西我来清，你们守舷边。",
+                "外海的水开始往回拽。炮手守前面，补板的人留在船中。",
+                "这群是被卷过来的。只打还在袭船的，别把鱼群逼回去。",
+                "堤上的旗还没降。再护住这一程，岸上的人就能平安下船。",
+                "快到港了。把找回来的漂浮物留在船里，下船再交回收棚。"
             }
-        }
-        public string AlarmDialogue => AlarmProfile == null ? null : AlarmProfile.id switch
-        {
-            MonkeyId or "gunner" => "哎哎，怎么突然打起来了？我们只是送客，又没抢它们的鱼！船长，先护住船！",
-            RhinoId or "mechanic" => "这一下真够重的。我们好端端赶路，怎么就挨打了？你看前头，我先把船补好。",
-            OwlId => "它们的攻击有方向……可我们只是经过，为什么把我们当敌人？先躲开，我再看清楚。",
-            "cannoneer-boar" or "heavy-gunner" => "谁在朝咱们开火？过个海也要打架？来，躲我后头，让我顶住！",
-            "carpenter-beaver" or "engineer" => "哎呀，刚钉好的木板！到底出了什么事？我们又没拆它们的窝，我先把这儿加固。",
-            "caulker-otter" => "船长，先别慌！我们明明只是载客，它们为什么追着打？你掌舵，我去堵住漏水的地方。",
-            _ => AlarmProfile.role == CrewRole.Combat
-                ? "怎么突然朝我们开火？我们只是载客，哪里惹到它们了？船长，我来掩护！"
-                : "到底出了什么事？我们只是赶路，为什么会被攻击？先把船补好再说！"
         };
 
-        private void BeginPassengerAlarm()
+        private static readonly Dictionary<string, string[]> CrewEncounterLines = new Dictionary<string, string[]>
         {
-            ClearStoryDialogue();
-            alarmProfiles = vessel.GetComponentsInChildren<Passenger>()
-                .Select(passenger => passenger.Definition).Where(profile => profile != null).ToArray();
-            alarmStartedAt = Time.time;
-            if (alarmProfiles.Length > 0)
-                VoyageAudio.Play(Sound.Dialogue, 0.51f);
+            [MonkeyId] = new[]
+            {
+                "头一回在船上碰见这个阵仗……我守上舷，船长你看右边！",
+                "我听见水底在响，枪口已经对过去了。你喊一声我就打。",
+                "灯塔值夜也得听这种动静吧？到了我得给妹妹带副耳塞。",
+                "我记住了它们浮上来的样子，先忍一拍，等脑袋露全再打。",
+                "刚补完弹丸，一粒也没受潮。这回我把船头的空地留给你。",
+                "我认得这道礁。过了它就能看见灯塔，不用扯着嗓子喊，给个手势就够了。"
+            },
+            [RhinoId] = new[]
+            {
+                "船长，我把补板靠在舱门了。头一块裂了，叫我就行。",
+                "这回我先摸了船板，旧补丁都结实。要漏水我能听见。",
+                "靠外的两块板还空着，交给我。你别让废网钩住船。",
+                "这跟拆潮闸也差不多，先撑住受力的地方，再把缝堵实。",
+                "先别挪那叠木料。我按长度码好了，破哪个位置都能找到合用的一块。",
+                "前半段用掉了不少铆钉，舱底还有一盒。打完我再去拿。"
+            },
+            [OwlId] = new[]
+            {
+                "第一串泡在斜前方。我看水线，等它露头再开枪。",
+                "刚才水线往船尾压。等我站稳，第一枪从另一边过去。",
+                "风改了方向。别追飘过去的弹，看水纹就知道它在哪儿。",
+                "我把灯照到外侧了。那一线的鱼正往下游，让它们走。",
+                "左边是浪花，右边才是气泡。准备往右转，我跟着你的船头走。",
+                "云遮住了岛上的标灯。等它露出来，我就知道正对着哪个礁口。"
+            },
+            ["cannoneer-boar"] = new[]
+            {
+                "我这回算是头一次给渡船护航。开炮前会喊，捂好耳朵！",
+                "听见响声别回头，我守的是那片冒泡的水。",
+                "有船板要换就从我后面走。我打完这一发给你让路。",
+                "离得远就先等一等，我可不想把炮打在岸上的回收桶上。",
+                "炮架给浪晃松了。我已经拧牢，这回开炮甲板不会跟着跳。",
+                "前面是浅水，别往礁石里追。把它们赶开，我就收炮。"
+            },
+            ["carpenter-beaver"] = new[]
+            {
+                "我刚上船就轮到海怪来验榫？站稳，我把扳手收好了。",
+                "补过的地方不会先坏。等我看看这次哪块板响。",
+                "我要守船肋那边。你看见弹压下来，就把我叫开。",
+                "上次用掉一根短木，这次我换长的，能撑住两边的榫。",
+                "我把钉盒盖上了。这阵浪过去，甲板上就少一样东西可滚。",
+                "上一处补板留着呢，等靠港再磨平。先别踩着那根翘起来的钉子。"
+            },
+            ["caulker-otter"] = new[]
+            {
+                "这是我搭这条船遇到的第一次。船长，帮我留一条到船舷的路。",
+                "麻绳这回泡透了，只要听见漏水声，我马上去封缝。",
+                "有东西滚过来就喊我，我手里拿着填料看不见脚边。",
+                "你护住外侧就好，我从舱门绕过去，干完这边再换人。",
+                "这回我把填料分到两边了，从哪边开始漏就往哪边去。",
+                "放心，旧缝早封严了。现在船板响的是外侧，别往舱底跑。"
+            }
+        };
+
+        private IEnumerator ShowEncounterConversation()
+        {
+            var aboard = vessel.GetComponentsInChildren<Passenger>().Where(passenger => passenger.Definition != null).ToArray();
+            int leg = Mathf.Max(0, StopIndex / 2);
+            int day = Mathf.Clamp(StoryRound, 1, FinalStoryRound);
+            var lines = CaptainEncounterLines[day - 1];
+            string captain = "兔子船长：" + (IsBossLeg
+                ? "两短一长，灯塔在给我们指路。等那堆废料浮起来，守住船，别让它再堵水道。"
+                : lines[leg % lines.Length]);
+            string companionLine = FirstCompanionCombatLine();
+            if (aboard.Length == 0)
+            {
+                yield return ShowStoryConversation(companionLine, captain);
+                yield break;
+            }
+
+            // Give new passengers the first word. Later encounters rotate through the crew.
+            Passenger speaker = aboard.FirstOrDefault(passenger => passenger.EncountersAboard == 0)
+                ?? aboard[leg % aboard.Length];
+            int encounters = speaker.EncountersAboard;
+            CrewDefinition profile = speaker.Definition;
+            string id = RelationProfileId(profile.id);
+            string reaction;
+            if (IsBossLeg)
+                reaction = id switch
+                {
+                    RhinoId => "闸门那边已经开好了。甲板有破口我先补，打完我去接拖缆。",
+                    OwlId => "右边是鱼群的退路。我盯着聚起来的废料，船长，你让开那道水线。",
+                    _ => "灯塔那头有我妹守着。船长，咱们把挡在水道上的那一堆清干净！"
+                };
+            else if (CrewEncounterLines.TryGetValue(id, out string[] reactions))
+                reaction = reactions[encounters == 0 ? 0 : 1 + (encounters - 1) % (reactions.Length - 1)];
+            else if (profile.role == CrewRole.Combat)
+                reaction = encounters == 0 ? "我头一次在这条船上碰见海怪。船长，枪口交给我。"
+                    : "我站在上舷，你盯另一边。我们还是按上次的分工来。";
+            else
+                reaction = encounters == 0 ? "船长，我刚上船就赶上这阵泡。甲板我来守。"
+                    : "上回剩的补板还在，我就在工具箱旁边。";
+
+            foreach (Passenger passenger in aboard)
+                passenger.EncountersAboard = Mathf.Min(passenger.EncountersAboard, 999) + 1;
+            yield return ShowStoryConversation(profile.displayName + "：" + reaction, companionLine, captain);
         }
 
         public bool BoardingIsChoice => StoryRound > 0 && BoardingProfile != null;
@@ -66,7 +165,6 @@ namespace Ferryman.Voyage
             "caulker-otter" => "“和海狸搭档我修得更快；野猪的炮声会让我分心。”",
             _ => null
         };
-        public string StoryFarewell { get; private set; }
         private bool StoryDockOfferResolved { get; set; }
         private IEnumerable<CrewDefinition> StoryRescueProfiles =>
             definition.passengerPool.Where(profile => !IsStoryProfile(profile.id) && !HasPassenger(profile));

@@ -19,7 +19,6 @@ namespace Ferryman.Characters
 
         [SerializeField] private Sprite[] boardingWalkFrames;
         [SerializeField] private GameObject clawSwingEffectPrefab;
-        [SerializeField] private GameObject clawImpactEffectPrefab;
 
         private readonly List<RaycastHit2D> boardingHits = new List<RaycastHit2D>();
         private readonly List<Vector2> pursuitPath = new List<Vector2>();
@@ -99,10 +98,8 @@ namespace Ferryman.Characters
                 if (CanTarget(victim))
                 {
                     Vector2 direction = (Vector2)victim.Hitbox.bounds.center - boardingBody.position;
-                    if (Vector2.Dot(AimDirection, direction.normalized) >= ClawFacingDot && CanReachWithClaw(victim)
-                        && DamageSystem.ApplyDamage(this, victim, AttackPower, AttackStunDuration)
-                        && clawImpactEffectPrefab != null)
-                        Instantiate(clawImpactEffectPrefab, victim.Hitbox.ClosestPoint(boardingBody.position), AimRotation);
+                    if (Vector2.Dot(AimDirection, direction.normalized) >= ClawFacingDot && CanReachWithClaw(victim))
+                        DamageSystem.ApplyDamage(this, victim, AttackPower, AttackStunDuration);
                 }
             }
             if (ActionTime < clawEndsAt)

@@ -12,6 +12,7 @@ namespace Ferryman.Characters
         [SerializeField] private GameObject disembarkEffectPrefab;
         public CrewDefinition Definition { get; private set; }
         public int DestinationStopIndex { get; private set; }
+        internal int EncountersAboard { get; set; }
         public Character Actor => GetComponent<Character>();
 
         public void Initialize(CrewDefinition definition, int destinationStopIndex)

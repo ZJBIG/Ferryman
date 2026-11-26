@@ -16,6 +16,11 @@ MonoBehaviour:
   branchingRoutes: 1
   storyCampaign: 1
   finalBossEncounter: {fileID: 11400000, guid: 7dbdc4f507f74058995111259759f1be, type: 2}
+  specialCompanions:
+  - {fileID: 11400000, guid: 90db79f6b4e94a03a826b43f5104465a, type: 2}
+  - {fileID: 11400000, guid: dd6229ee48354833be643cc73255205c, type: 2}
+  - {fileID: 11400000, guid: fb7c0789b2f644f985bdef63571f9395, type: 2}
+  - {fileID: 11400000, guid: f74713fd9d4641f3b413f5ff707a6a98, type: 2}
   displayName: "\u8FD1\u6D77\u6446\u6E21\u822A\u7EBF"
   vesselPrefab: {fileID: 7173089943932599496, guid: 25c59fd46a9b0b84daac789e91482640, type: 3}
   stops:

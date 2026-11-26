@@ -1,4 +1,6 @@
+using System.Collections;
 using Ferryman.Combat;
+using Ferryman.Voyage;
 using Ferryman.World;
 using UnityEngine;
 
@@ -30,6 +32,7 @@ namespace Ferryman.Characters
         }
 
         [SerializeField] private PlayerCharacter target;
+        [SerializeField] private GameObject hitEffectPrefab;
         [SerializeField] private GameObject deathEffectPrefab;
         [SerializeField] private DestructibleObstacle deathObstaclePrefab;
         [SerializeField] private AttackKind attackKind;
@@ -41,6 +44,7 @@ namespace Ferryman.Characters
         [SerializeField] private BombPose[] bombPoses;
         [SerializeField] private Sprite[] attackFrames;
         [SerializeField, Min(0f)] private float projectileSlowSeconds;
+        [SerializeField, Min(0f)] private float projectilePushSpeed;
         [SerializeField, Min(0f)] private float attackStunDuration;
 
         private BoatHealth boat;
@@ -65,6 +69,9 @@ namespace Ferryman.Characters
         internal DestructibleObstacle DeathObstaclePrefab => deathObstaclePrefab;
         internal BoatHealth ProjectileHullTarget => targetPreference == TargetPreference.ShipFirst ? boat : null;
         internal float ProjectileSlowSeconds => projectileSlowSeconds;
+        internal float ProjectilePushSpeed => projectilePushSpeed;
+        internal bool IsPreparingThrow => attackKind == AttackKind.Bomb && (bossWindingUp || pendingBomb != null);
+        internal SpecialCompanion CompanionSpotter { get; set; }
         internal Bounds SpawnBounds
         {
             get
@@ -166,6 +173,32 @@ namespace Ferryman.Characters
                 return false;
             PlayVisualFrames(attackFrames, Mathf.Min(FireInterval, 0.48f));
             return true;
+        }
+
+        internal IEnumerator DiveTo(Vector2 destination)
+        {
+            if (Visual == null || Hitbox == null || deathEffectPrefab == null)
+                yield break;
+
+            StopVisualFrames();
+            Bounds body = VisualBounds;
+            Vector3 splash = new Vector3(body.center.x, body.min.y + body.size.y * 0.23f, body.center.z);
+            Vector2 travel = destination - (Vector2)transform.position;
+            SetActionsAllowed(false);
+            Hitbox.enabled = false;
+            Visual.enabled = false;
+            Instantiate(deathEffectPrefab, splash, Quaternion.identity);
+            VoyageAudio.Play(Sound.WaterSplash, 0.55f, splash);
+            yield return new WaitForSeconds(0.36f);
+            if (this == null || Health <= 0f)
+                yield break;
+
+            transform.position += (Vector3)travel;
+            Instantiate(deathEffectPrefab, splash + (Vector3)travel, Quaternion.identity);
+            VoyageAudio.Play(Sound.WaterSplash, 0.45f, transform.position);
+            Visual.enabled = true;
+            Hitbox.enabled = true;
+            SetActionsAllowed(true);
         }
 
         private void UpdateBombThrow()
@@ -328,29 +361,65 @@ namespace Ferryman.Characters
             }
         }
 
-        public override bool TryReceiveDamage(float damage, float attackStunDuration = 0f)
+        public override bool TryReceiveDamage(float damage, float attackStunDuration = 0f) => TryReceiveDamage(damage, critical: false);
+
+        internal bool TryReceiveDamage(float damage, bool critical)
         {
             if (damage <= 0f || Health <= 0f)
                 return false;
 
-            Health = Mathf.Max(0f, Health - damage);
+            float actualDamage = Mathf.Min(damage, Health);
+            Health -= actualDamage;
             hitFeedbackUntil = Time.time + 0.18f;
             SetHitFeedbackPoint();
-            ShowFeedback(Color.white, 0.1f);
+            Bounds bounds = VisualBounds;
+            Vector3 impactPoint = TryGetHitFeedbackPosition(out Vector3 visiblePoint) ? visiblePoint : bounds.center;
+            if (hitEffectPrefab != null)
+                Instantiate(hitEffectPrefab, impactPoint, Quaternion.Euler(0f, 0f, Random.Range(-35f, 35f)));
+            if (Visual != null)
+                EnemyDamagePopup.Play(actualDamage, bounds, impactPoint, RestingVisualMaterial, critical);
+            NotifyHit();
+
             if (Health <= 0f)
             {
-                Hitbox.enabled = false;
-                enabled = false;
                 bool leftRemains = LeaveBoardingRemains();
-                if (deathEffectPrefab != null && !leftRemains)
+                foreach (Collider2D collider in GetComponentsInChildren<Collider2D>())
+                    collider.enabled = false;
+                SetActionsAllowed(false);
+                if (TryGetComponent(out Rigidbody2D body))
+                    body.simulated = false;
+                if (leftRemains || Visual == null)
                 {
-                    var splash = Instantiate(deathEffectPrefab, transform.position, Quaternion.identity);
-                    if (IsBoss)
-                        splash.transform.localScale *= 2f;
+                    Destroy(gameObject);
+                    return true;
                 }
-                Destroy(gameObject);
+                if (deathEffectPrefab != null)
+                {
+                    var waterline = new Vector3(bounds.center.x, bounds.min.y + bounds.size.y * 0.23f, bounds.center.z);
+                    var splash = Instantiate(deathEffectPrefab, waterline, Quaternion.identity);
+                    splash.transform.localScale *= IsBoss ? 2f : 1f;
+                }
+                StartCoroutine(Sink(bounds.size.y));
             }
             return true;
+        }
+
+        private IEnumerator Sink(float height)
+        {
+            const float duration = 0.52f;
+            float started = Time.time;
+            Transform sprite = Visual.transform;
+            Vector3 origin = sprite.localPosition;
+            Color color = Visual.color;
+            while (Time.time - started < duration)
+            {
+                float elapsed = Time.time - started;
+                float depth = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((elapsed - 0.07f) / (duration - 0.07f)));
+                sprite.localPosition = origin + Vector3.down * (height * 0.55f * depth);
+                Visual.color = Color.Lerp(color, new Color(0.37f, 0.68f, 0.76f, 0f), depth);
+                yield return null;
+            }
+            Destroy(gameObject);
         }
     }
 }

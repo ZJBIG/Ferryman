@@ -22,6 +22,7 @@ namespace Ferryman.World
 
         public BoatHealth TargetBoat => targetBoat;
         public bool IsInFlight => obstacle != null && obstacle.IsInFlight;
+        internal float FuseRemaining => Mathf.Max(0f, detonateAt - Time.time);
 
         private void Awake()
         {
@@ -72,7 +73,7 @@ namespace Ferryman.World
 
         private void LateUpdate()
         {
-            if (IsInFlight || obstacle.IsCleared)
+            if (Time.timeScale == 0f || IsInFlight || obstacle.IsCleared)
                 return;
             if (fuseAudio == null)
                 fuseAudio = VoyageAudio.StartLoop(gameObject, Sound.Fuse, 0.245f, true);

@@ -88,9 +88,18 @@ namespace Ferryman.Editor
                 && vessel.Player.DamageSystem == vessel.DamageSystem, "Vessel/player combat or deck bindings differ.");
             Require(vessel.Player.ProjectilePrefab != null, "Player weapon has no projectile.");
             Sprite captainAmmo = vessel.Player.ProjectilePrefab.GetComponentInChildren<SpriteRenderer>().sprite;
-            Require(new SerializedObject(vessel.Player).FindProperty("shotEffectPrefab").objectReferenceValue
-                == AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Effects/MuzzleFlash.prefab"),
-                "Player ranged attack is not bound to the supplied muzzle effect.");
+            var captainArt = new SerializedObject(vessel.Player);
+            Require(captainArt.FindProperty("shotEffectPrefab").objectReferenceValue
+                == AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/Effects/CornMuzzleFlash.prefab")
+                && captainArt.FindProperty("cornGun").objectReferenceValue is SpriteRenderer gun && gun.sprite != null,
+                "The captain is missing the corn gun or its muzzle flash.");
+            foreach (string action in new[] { "captainWalkFrames", "captainShootFrames", "captainMeleeFrames" })
+            {
+                var frames = captainArt.FindProperty(action);
+                Require(frames.arraySize == 4, "Expected four frames for " + action);
+                for (int i = 0; i < frames.arraySize; i++)
+                    Require(frames.GetArrayElementAtIndex(i).objectReferenceValue is Sprite, "Missing captain frame for " + action);
+            }
             var bomb = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "Prefabs/TimedBomb.prefab");
             Require(bomb.GetComponentsInChildren<Collider2D>().Length == 0, "Bombs must not have collision boxes.");
             Require(new SerializedObject(bomb.GetComponent<TimedBomb>()).FindProperty("explosionEffectPrefab").objectReferenceValue
@@ -108,7 +117,7 @@ namespace Ferryman.Editor
             CheckFloat(vessel.Player, "moveSpeed", 4f);
             CheckFloat(vessel.Player, "attackPower", 10f);
             CheckFloat(vessel.Player, "fireInterval", 0.2f);
-            CheckFloat(vessel.Player, "repairSpeed", 50f);
+            CheckFloat(vessel.Player, "repairSpeed", 30f);
             Require(new SerializedObject(vessel.Boat).FindProperty("repairPointPrefab").objectReferenceValue != null, "Repair point reference is absent.");
             foreach (CrewDefinition crew in definition.initialPassengers.Concat(definition.passengerPool).Distinct())
             {

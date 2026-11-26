@@ -18,6 +18,7 @@ MonoBehaviour:
   oar: {fileID: 2800000, guid: b2dd90f4c3664e87b5c5509a56e6f9c4, type: 3}
   hull: {fileID: 2800000, guid: 004ee29dda4887448be362aa80427bd8, type: 3}
   parchment: {fileID: 2800000, guid: b24bf5fd18d5455f8d35ead2e00070c1, type: 3}
+  routeParchment: {fileID: 2800000, guid: 6ef783387a4441ada6d86f4d7f26d1a9, type: 3}
   departure: {fileID: 2800000, guid: 8783d4fbc2f846d89b31baca7d735f40, type: 3}
   combat: {fileID: 2800000, guid: a1768b4ceb9a4458aebd9402f1397cff, type: 3}
   special: {fileID: 2800000, guid: bc72a1deb1ce44c7baa8d24ac7345030, type: 3}
@@ -35,9 +36,23 @@ MonoBehaviour:
   settlement: {fileID: 2800000, guid: 396bbe0096ff45408923ab8acafecda5, type: 3}
   dialogue: {fileID: 2800000, guid: 9a011bade9ce4271870cf899dd62d5d4, type: 3}
   portrait: {fileID: 2800000, guid: 01a010faca28473b87b78c56b6f772c2, type: 3}
+  captainPortrait: {fileID: 2800000, guid: b54b0f5c84c342f1832dbdc8b5886e72, type: 3}
   upgradeRepairCount: {fileID: 2800000, guid: 8d73149466a640b4875b492f9b4b8811, type: 3}
   upgradeAttack: {fileID: 2800000, guid: d2394e1e57a34f52b59706cfccb5ce57, type: 3}
   upgradeAttackSpeed: {fileID: 2800000, guid: 35a485e4be0c46d6b09c952645057ee6, type: 3}
   upgradeCard: {fileID: 2800000, guid: 7b91f9f6fb184afd94c23ac3cbf40bb5, type: 3}
   upgradeDurability: {fileID: 2800000, guid: 80043dbf00cf499d80ad3b76ea5da147, type: 3}
   upgradeRepairSpeed: {fileID: 2800000, guid: abe8871123d04c0ab04e3f46c1c17b54, type: 3}
+  menuPanel: {fileID: 2800000, guid: 20f8c6298b9945029767b6627a6bd1d6, type: 3}
+  menuMusic: {fileID: 2800000, guid: b896960d769647d082962949ecafeff9, type: 3}
+  menuEffects: {fileID: 2800000, guid: 43904ac8e8b647a2a42d7d4dd62860bd, type: 3}
+  menuVolumeTrack: {fileID: 2800000, guid: b4964c99a2954ed4a46edb43121762e6, type: 3}
+  menuVolumeHandle: {fileID: 2800000, guid: bbd853dcd3874434a6c2b3f8f1d1c9c9, type: 3}
+  menuResume: {fileID: 2800000, guid: 064a8b672c9a43009bf7476d7fc4df99, type: 3}
+  menuResumeHover: {fileID: 2800000, guid: 67bfbf083e6540638a06fc237c200224, type: 3}
+  menuRestart: {fileID: 2800000, guid: bf4f4274ed1244cdaef26c6701a9ba97, type: 3}
+  menuRestartHover: {fileID: 2800000, guid: c05d47a730e7411d9e02489d9022ca04, type: 3}
+  menuQuit: {fileID: 2800000, guid: ff1e8350dc9c4385bd2cd5a6a3a4285c, type: 3}
+  menuQuitHover: {fileID: 2800000, guid: a00c5a8a0872476ea56fb869af4ba300, type: 3}
+  menuButton: {fileID: 2800000, guid: 9aab8a35491742be94161ce6fabee1ca, type: 3}
+  menuButtonHover: {fileID: 2800000, guid: 9d9e4d0e60154407a1bad33ce23bcf30, type: 3}

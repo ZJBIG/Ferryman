@@ -24,6 +24,18 @@ PrefabInstance:
       propertyPath: targetPreference
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: fireInterval
+      value: 2.05
+      objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: attackStunDuration
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4237392762737264246, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
+      propertyPath: projectilePushSpeed
+      value: 3.2
+      objectReference: {fileID: 0}
     - target: {fileID: 6736160314134693394, guid: 6ced8076e7185b247b4f5db2baa9ac61, type: 3}
       propertyPath: m_Sprite
       value:

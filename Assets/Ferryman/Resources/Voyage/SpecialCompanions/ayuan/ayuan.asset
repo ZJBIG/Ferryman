@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e54b71bf547243b68082e9dd2e03cd03, type: 3}
+  m_Name: ayuan
+  m_EditorClassIdentifier: 
+  id: ayuan
+  displayName: "\u963F\u6C85"
+  role: 0
+  prefab: {fileID: 7264658945044794949, guid: 028da29e5be6482fb93c0a18adb8e155, type: 3}
+  portrait: {fileID: 21300000, guid: 6717c88e2698495caf5a6cb176d3fe40, type: 3}
+  deckSprite: {fileID: 21300000, guid: 316d0be1ea594f41baa4e8a381e987e6, type: 3}
+  walkFrames:
+  - {fileID: 21300000, guid: 316d0be1ea594f41baa4e8a381e987e6, type: 3}
+  - {fileID: 21300000, guid: 206486b596b84a259ce7b7676f6df752, type: 3}
+  - {fileID: 21300000, guid: aa853e7079134c439a4a9c88ecd0c11d, type: 3}
+  - {fileID: 21300000, guid: ae0f853472424d1e878568613b37b198, type: 3}
+  skillFrames:
+  - {fileID: 21300000, guid: 88c9a42f88294707a5a3785f7895b640, type: 3}
+  - {fileID: 21300000, guid: e1ec0d9ee4a5427fb3a44ee0fabaaee7, type: 3}
+  - {fileID: 21300000, guid: 96b9eae5c25c4c84958d7a4005b2b816, type: 3}
+  - {fileID: 21300000, guid: cad4f9423d934cd9967afb0f995d786a, type: 3}
+  deckSpriteScale: 0.49309665
+  moveSpeed: 2.1
+  repairSpeed: 0
+  repairRange: 0
+  simultaneousRepairs: 1
+  attackPower: 6
+  fireInterval: 0.9
+  coinsReward: 0
+  specialItemsReward: 0

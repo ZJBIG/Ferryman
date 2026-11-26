@@ -293,7 +293,7 @@ namespace Ferryman.Tests
                 playerTime += Time.deltaTime;
             }
             Assert.That((first.Progress - firstBefore) - (second.Progress - secondBefore),
-                Is.EqualTo(50f * playerTime).Within(0.02f), "Player speed did not add to the crew's shared point.");
+                Is.EqualTo(player.RepairSpeed * playerTime).Within(0.02f), "Player speed did not add to the crew's shared point.");
             int heals = 0;
             boat.HealthChanged.AddListener((current, maximum) => heals++);
             until = Time.realtimeSinceStartup + 2f;

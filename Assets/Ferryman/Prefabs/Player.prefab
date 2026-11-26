@@ -124,7 +124,7 @@ MonoBehaviour:
   hitbox: {fileID: 8396627459064828513}
   stunDuration: 1
   visual: {fileID: 6497903352940673329}
-  usePlaceholderFeedback: 1
+  hitFlashMaterial: {fileID: 2100000, guid: 8071fb1ab5614e188720a74456d86de3, type: 2}
   hitReceived:
     m_PersistentCalls:
       m_Calls: []
@@ -136,13 +136,29 @@ MonoBehaviour:
   projectilePrefab: {fileID: 2760880200174586360, guid: ab2a39474a47c1641ad962c5f5b369b6, type: 3}
   fireInterval: 0.2
   muzzleDistance: 0.75
-  aimVisual: {fileID: 5082876501279003187}
+  aimVisual: {fileID: 8065217634921011601}
   damageSystem: {fileID: 0}
   muzzle: {fileID: 690258357062984658}
-  shotEffectPrefab: {fileID: 8280731793023676188, guid: 87ec343bc0e3b6d4591cff279f327e3f, type: 3}
+  shotEffectPrefab: {fileID: 8280731793023676188, guid: 4ce775435326471ca811a7636ae5892b, type: 3}
   shotFired:
     m_PersistentCalls:
       m_Calls: []
+  captainWalkFrames:
+  - {fileID: 17009171600000, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600001, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600002, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600003, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  captainShootFrames:
+  - {fileID: 17009171600004, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600005, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600006, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600007, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  captainMeleeFrames:
+  - {fileID: 17009171600008, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600009, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600010, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  - {fileID: 17009171600011, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  cornGun: {fileID: 4429103542453097942}
   movementDeck: {fileID: 0}
   meleeRange: 1.5
   meleeAngle: 90
@@ -153,7 +169,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   boatHealth: {fileID: 0}
-  repairSpeed: 50
+  repairSpeed: 30
   repairRange: 1
   simultaneousRepairs: 1
 --- !u!1 &489838944356327628
@@ -167,7 +183,7 @@ GameObject:
   - component: {fileID: 43081343123369939}
   - component: {fileID: 4429103542453097942}
   m_Layer: 0
-  m_Name: Aim Marker
+  m_Name: Corn Gun
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -182,11 +198,11 @@ Transform:
   m_GameObject: {fileID: 489838944356327628}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.45, y: 0, z: 0}
-  m_LocalScale: {x: 0.55, y: 0.1, z: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 5082876501279003187}
+  m_Father: {fileID: 8065217634921011601}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!212 &4429103542453097942
 SpriteRenderer:
@@ -229,7 +245,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 11
-  m_Sprite: {fileID: 21300000, guid: 27fbeef6f2e84b048b1aecfa5cff8e36, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 8f4eaab20f4a412e8e3833e2ebab9991, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -399,11 +415,11 @@ Transform:
   m_GameObject: {fileID: 7197560718389956481}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.75, y: 0, z: 0}
+  m_LocalPosition: {x: 0.58, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 5082876501279003187}
+  m_Father: {fileID: 8065217634921011601}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8095682631994805492
 GameObject:
@@ -435,8 +451,7 @@ Transform:
   m_LocalScale: {x: 1.56, y: 1.56, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 43081343123369939}
-  - {fileID: 690258357062984658}
+  - {fileID: 8065217634921011601}
   m_Father: {fileID: 3045961104111148900}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!212 &6497903352940673329
@@ -480,8 +495,8 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 10
-  m_Sprite: {fileID: 21300000, guid: 14188baa836c9264e957861c3b10f7b2, type: 3}
-  m_Color: {r: 0.08, g: 0.43, b: 0.67, a: 1}
+  m_Sprite: {fileID: 17009171600004, guid: cb8959b988dc4bb6bd51a3ebc9f9a181, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -491,3 +506,36 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
+--- !u!1 &8065217634921011602
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8065217634921011601}
+  m_Layer: 0
+  m_Name: Weapon Aim
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8065217634921011601
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8065217634921011602}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 43081343123369939}
+  - {fileID: 690258357062984658}
+  m_Father: {fileID: 5082876501279003187}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

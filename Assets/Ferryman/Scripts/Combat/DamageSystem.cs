@@ -14,11 +14,15 @@ namespace Ferryman.Combat
         public UnityEvent<Character, Character, float> DamageReceived => damageReceived;
         public UnityEvent<Character, Character, float> DamageSent => damageSent;
 
-        public bool ApplyDamage(Character instigator, Character target, float damage, float attackStunDuration = 0f)
+        public bool ApplyDamage(Character instigator, Character target, float damage, float attackStunDuration = 0f, bool critical = false)
         {
             if (target == null || target == instigator || damage <= 0f
-                || (instigator != null && instigator.IsHostile == target.IsHostile)
-                || !target.TryReceiveDamage(damage, attackStunDuration))
+                || (instigator != null && instigator.IsHostile == target.IsHostile))
+                return false;
+            bool accepted = critical && target is EnemyCharacter struckEnemy
+                ? struckEnemy.TryReceiveDamage(damage, critical: true)
+                : target.TryReceiveDamage(damage, attackStunDuration);
+            if (!accepted)
                 return false;
 
             if (target.IsHostile)

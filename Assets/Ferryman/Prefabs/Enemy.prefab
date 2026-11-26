@@ -236,7 +236,7 @@ MonoBehaviour:
   hitbox: {fileID: 8344003705530662006}
   stunDuration: 1
   visual: {fileID: 6736160314134693394}
-  usePlaceholderFeedback: 0
+  hitFlashMaterial: {fileID: 2100000, guid: 8071fb1ab5614e188720a74456d86de3, type: 2}
   hitReceived:
     m_PersistentCalls:
       m_Calls: []
@@ -256,6 +256,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   target: {fileID: 0}
+  hitEffectPrefab: {fileID: 5667738953813447188, guid: 9bbd514332db866448f4ae38565bec3a, type: 3}
   deathEffectPrefab: {fileID: 5982063135196900296, guid: 77e77cee009f4084e8db40ba6a0015ab, type: 3}
   attackKind: 0
   targetPreference: 0
@@ -268,6 +269,7 @@ MonoBehaviour:
   - {fileID: -3504833984532555874, guid: ce39d5f89f3351b49fb1b085fb873acc, type: 3}
   - {fileID: -3940353942794752878, guid: ce39d5f89f3351b49fb1b085fb873acc, type: 3}
   - {fileID: 2330033152130360465, guid: ce39d5f89f3351b49fb1b085fb873acc, type: 3}
+  attackStunDuration: 1
 --- !u!1 &7755010026339597380
 GameObject:
   m_ObjectHideFlags: 0

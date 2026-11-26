@@ -14,7 +14,7 @@ namespace Ferryman.Characters
         [SerializeField, Min(0f)] private float stunDuration = 1f;
         [Header("Presentation")]
         [SerializeField] private SpriteRenderer visual;
-        [SerializeField] private bool usePlaceholderFeedback = true;
+        [SerializeField] private Material hitFlashMaterial;
         [SerializeField] private UnityEvent hitReceived = new UnityEvent();
         [SerializeField] private UnityEvent stunRecovered = new UnityEvent();
 
@@ -27,7 +27,11 @@ namespace Ferryman.Characters
         private const float SlowedSpeed = 0.65f;
         private Color originalColor;
         private Quaternion originalVisualRotation;
-        private Coroutine feedback;
+        private Coroutine stunPose;
+        private Coroutine hitPose;
+        private SpriteRenderer[] visualParts;
+        private Material[] restingMaterials;
+        private Vector3 restingVisualScale;
         private bool actionsEnabled = true;
         private Rigidbody2D movementBody;
         private Vector2 knockbackVelocity;
@@ -56,6 +60,7 @@ namespace Ferryman.Characters
 
         public Collider2D Hitbox => hitbox;
         protected SpriteRenderer Visual => visual;
+        protected Material RestingVisualMaterial => restingMaterials?[0];
         protected Sprite[] SkillFrames { get; private set; }
         internal Bounds VisualBounds => visual != null ? visual.bounds : hitbox.bounds;
         public float MaxHealth { get; private set; }
@@ -69,7 +74,7 @@ namespace Ferryman.Characters
             : 0f;
         public bool ActionsEnabled => actionsEnabled;
         public virtual bool IsHostile => false;
-        protected virtual bool CanAct => actionsEnabled && !IsStunned && (!IsHostile || Health > 0f);
+        protected virtual bool CanAct => Time.timeScale > 0f && actionsEnabled && !IsStunned && (!IsHostile || Health > 0f);
         protected bool IsKnockedBack => Time.time < knockbackUntil;
 
         public virtual bool TryKnockBack(Vector2 velocity)
@@ -101,6 +106,7 @@ namespace Ferryman.Characters
                 slowStartedAt = Time.time;
             }
             slowUntil = Mathf.Max(slowUntil, Time.time + seconds);
+            PlayHitReaction();
         }
 
         protected Vector2 Wander(BoatDeck deck, float speed)
@@ -163,7 +169,7 @@ namespace Ferryman.Characters
             return bestStep.normalized * Mathf.Min(speed, bestStep.magnitude / Time.fixedDeltaTime);
         }
 
-        private bool CanWalkTo(BoatDeck deck, Vector2 candidate, Vector2 step)
+        protected bool CanWalkTo(BoatDeck deck, Vector2 candidate, Vector2 step)
         {
             return deck.CanPlace(candidate, (Vector2)hitbox.bounds.size + Vector2.one * 0.04f, hitbox)
                 && hitbox.Cast(step.normalized, new ContactFilter2D { useTriggers = false }, wanderHits, step.magnitude) == 0;
@@ -213,6 +219,8 @@ namespace Ferryman.Characters
                 Vector3 size = visual.transform.localScale;
                 visual.transform.localScale = new Vector3(size.x * profile.deckSpriteScale, size.y * profile.deckSpriteScale, size.z);
             }
+            if (visual != null)
+                restingVisualScale = visual.transform.localScale;
         }
 
         protected void PlayVisualFrames(Sprite[] frames, float duration, bool loop = false)
@@ -250,6 +258,7 @@ namespace Ferryman.Characters
             visual.transform.SetParent(transform, false);
             visual.transform.localScale = new Vector3(2.028f, 2.028f, 1f);
             originalVisualRotation = visual.transform.localRotation;
+            restingVisualScale = visual.transform.localScale;
             visual.sprite = sprite;
             staticSprite = sprite;
             originalColor = Color.white;
@@ -269,7 +278,12 @@ namespace Ferryman.Characters
             {
                 originalColor = visual.color;
                 originalVisualRotation = visual.transform.localRotation;
+                restingVisualScale = visual.transform.localScale;
                 staticSprite = visual.sprite;
+                visualParts = visual.GetComponentsInChildren<SpriteRenderer>(true);
+                restingMaterials = new Material[visualParts.Length];
+                for (int i = 0; i < visualParts.Length; i++)
+                    restingMaterials[i] = visualParts[i].sharedMaterial;
             }
         }
 
@@ -278,8 +292,7 @@ namespace Ferryman.Characters
             if (visual != null && showingSlow != IsSlowed)
             {
                 showingSlow = IsSlowed;
-                if (!(IsStunned && this is PlayerCharacter && usePlaceholderFeedback))
-                    visual.color = RestingColor;
+                visual.color = RestingColor;
             }
             if (CanAct && visual != null)
             {
@@ -341,7 +354,7 @@ namespace Ferryman.Characters
             var body = GetComponent<Rigidbody2D>();
             if (body != null)
                 body.velocity = Vector2.zero;
-            ShowFeedback(new Color(0.65f, 0.65f, 0.65f), activeStunDuration);
+            ShowStunFeedback();
             return true;
         }
 
@@ -355,39 +368,84 @@ namespace Ferryman.Characters
             stunnedUntil = Mathf.Max(stunnedUntil, Time.time + stunDuration / 3f);
             if (movementBody != null)
                 movementBody.velocity = Vector2.zero;
-            ShowFeedback(new Color(0.65f, 0.65f, 0.65f), Mathf.Max(0f, stunnedUntil - Time.time));
+            ShowStunFeedback();
             return true;
         }
 
-        protected void ShowFeedback(Color color, float duration)
+        private void ShowStunFeedback()
         {
-            if (feedback != null)
-                StopCoroutine(feedback);
-            feedback = StartCoroutine(RestoreColor(color, duration));
+            if (stunPose == null && IsStunned)
+                stunPose = StartCoroutine(HoldStunPose());
+            NotifyHit();
+        }
+
+        protected void NotifyHit()
+        {
+            PlayHitReaction();
             hitReceived.Invoke();
         }
 
-        private IEnumerator RestoreColor(Color color, float duration)
+        private IEnumerator HoldStunPose()
         {
-            bool knockedDown = !IsHostile && !(this is PlayerCharacter);
             if (visual != null)
             {
-                if (knockedDown)
-                    visual.transform.localRotation = originalVisualRotation * Quaternion.Euler(0f, 0f, 90f);
-                else if (usePlaceholderFeedback)
-                    visual.color = color;
+                StopVisualFrames();
+                visual.sprite = staticSprite;
+                visual.transform.localRotation = originalVisualRotation * Quaternion.Euler(0f, 0f, 90f);
             }
-            yield return new WaitForSeconds(duration);
+            while (IsStunned)
+                yield return null;
             if (visual != null)
+                visual.transform.localRotation = originalVisualRotation;
+            stunPose = null;
+            stunRecovered.Invoke();
+        }
+
+        internal void PlayHitReaction()
+        {
+            if (visual == null || !gameObject.activeInHierarchy)
+                return;
+            if (hitPose != null)
+                StopCoroutine(hitPose);
+            hitPose = StartCoroutine(FlashAndSquash());
+        }
+
+        private IEnumerator FlashAndSquash()
+        {
+            const float duration = 0.2f;
+            float start = Time.time;
+            bool flashing = true;
+            SetFlash(true);
+            while (Time.time - start < duration)
             {
-                if (knockedDown)
-                    visual.transform.localRotation = originalVisualRotation;
-                else if (usePlaceholderFeedback)
-                    visual.color = RestingColor;
+                float elapsed = Time.time - start;
+                if (flashing && elapsed >= 0.075f)
+                {
+                    SetFlash(false);
+                    flashing = false;
+                }
+                float progress = elapsed / duration;
+                float pulse = Mathf.Cos(progress * Mathf.PI * 2f) * (1f - progress) * 0.16f;
+                visual.transform.localScale = Vector3.Scale(restingVisualScale, new Vector3(1f + pulse, 1f - pulse, 1f));
+                yield return null;
             }
-            feedback = null;
-            if (!IsHostile)
-                stunRecovered.Invoke();
+            RestoreHitPose();
+            hitPose = null;
+        }
+
+        private void SetFlash(bool flash)
+        {
+            if (hitFlashMaterial == null || visualParts == null)
+                return;
+            for (int i = 0; i < visualParts.Length; i++)
+                visualParts[i].sharedMaterial = flash ? hitFlashMaterial : restingMaterials[i];
+        }
+
+        private void RestoreHitPose()
+        {
+            if (visual != null)
+                visual.transform.localScale = restingVisualScale;
+            SetFlash(false);
         }
 
         private Color RestingColor => IsSlowed ? Color.Lerp(originalColor, new Color(0.47f, 0.79f, 1f, originalColor.a), 0.47f)
@@ -397,14 +455,17 @@ namespace Ferryman.Characters
         {
             knockbackUntil = 0f;
             wandering = false;
-            if (feedback != null)
-                StopCoroutine(feedback);
-            feedback = null;
+            if (stunPose != null)
+                StopCoroutine(stunPose);
+            if (hitPose != null)
+                StopCoroutine(hitPose);
+            stunPose = hitPose = null;
+            RestoreHitPose();
             if (visual != null)
             {
-                if (!IsHostile && !(this is PlayerCharacter))
+                if (!IsHostile)
                     visual.transform.localRotation = originalVisualRotation;
-                if (usePlaceholderFeedback || showingSlow)
+                if (!IsHostile || Health > 0f)
                     visual.color = originalColor;
             }
             showingSlow = false;

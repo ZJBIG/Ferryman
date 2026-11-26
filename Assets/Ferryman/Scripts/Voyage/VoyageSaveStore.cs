@@ -21,6 +21,7 @@ namespace Ferryman.Voyage
     {
         public string profileId;
         public int destinationStopIndex;
+        public int encountersAboard;
         public Vector2 localPosition;
     }
 
@@ -30,6 +31,14 @@ namespace Ferryman.Voyage
         public string eventId;
         public Vector2 localPosition;
         public int appearanceIndex;
+    }
+
+    [Serializable]
+    public sealed class SpecialCompanionState
+    {
+        public string profileId;
+        public bool hasDeckPosition;
+        public Vector2 localPosition;
     }
 
     [Serializable]
@@ -43,6 +52,8 @@ namespace Ferryman.Voyage
         public int storyRound;
         public string[] deliveredStoryProfiles;
         public bool storyDockOfferResolved;
+        public string[] specialCompanionOrder;
+        public SpecialCompanionState[] specialCompanions;
         public int pendingCoins;
         public int pendingSpecialItems;
         public int deliveredPassengers;

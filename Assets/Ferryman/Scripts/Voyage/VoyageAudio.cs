@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace Ferryman.Voyage
 {
@@ -34,6 +35,21 @@ namespace Ferryman.Voyage
         private AudioSource outgoing;
         private Score score;
         private Score outgoingScore;
+        private AudioMixer mixer;
+        private AudioMixerGroup musicGroup;
+        private AudioMixerGroup effectsGroup;
+
+        internal static float MusicVolume
+        {
+            get => Mathf.Clamp01(PlayerPrefs.GetFloat("Ferryman.MusicVolume", 1f));
+            set => SetVolume("Ferryman.MusicVolume", "MusicVolume", value);
+        }
+
+        internal static float EffectsVolume
+        {
+            get => Mathf.Clamp01(PlayerPrefs.GetFloat("Ferryman.EffectsVolume", 1f));
+            set => SetVolume("Ferryman.EffectsVolume", "EffectsVolume", value);
+        }
 
         private struct Voice
         {
@@ -46,6 +62,9 @@ namespace Ferryman.Voyage
         {
             instance = this;
             controller = GetComponent<VoyageController>();
+            mixer = Resources.Load<AudioMixer>("Audio/Voyage");
+            musicGroup = mixer.FindMatchingGroups("Music")[0];
+            effectsGroup = mixer.FindMatchingGroups("Effects")[0];
             foreach (Sound sound in Enum.GetValues(typeof(Sound)))
                 sounds[sound] = Resources.Load<AudioClip>("Audio/Sfx/" + sound);
             foreach (Score track in Enum.GetValues(typeof(Score)))
@@ -54,11 +73,31 @@ namespace Ferryman.Voyage
 
             foreground = CreateSource(gameObject);
             outgoing = CreateSource(gameObject);
+            foreground.outputAudioMixerGroup = outgoing.outputAudioMixerGroup = musicGroup;
             foreground.priority = outgoing.priority = 16;
             ocean = StartLoop(gameObject, Sound.Ocean, 0f);
             harborWater = StartLoop(gameObject, Sound.HarborWater, 0f);
             for (int i = 0; i < voices.Length; i++)
                 voices[i].source = CreateSource(gameObject);
+        }
+
+        private void Start()
+        {
+            ApplyVolume("MusicVolume", MusicVolume);
+            ApplyVolume("EffectsVolume", EffectsVolume);
+        }
+
+        private static void SetVolume(string key, string parameter, float value)
+        {
+            value = Mathf.Clamp01(value);
+            PlayerPrefs.SetFloat(key, value);
+            if (instance != null)
+                instance.ApplyVolume(parameter, value);
+        }
+
+        private void ApplyVolume(string parameter, float value)
+        {
+            mixer.SetFloat(parameter, value > 0f ? 20f * Mathf.Log10(value) : -80f);
         }
 
         private void OnDestroy()
@@ -219,6 +258,7 @@ namespace Ferryman.Voyage
         private static AudioSource CreateSource(GameObject owner)
         {
             AudioSource source = owner.AddComponent<AudioSource>();
+            source.outputAudioMixerGroup = instance.effectsGroup;
             source.playOnAwake = false;
             source.spatialBlend = 0f;
             source.volume = 0f;

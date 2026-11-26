@@ -124,7 +124,7 @@ MonoBehaviour:
   hitbox: {fileID: 1980524262375664015}
   stunDuration: 1
   visual: {fileID: 6137904828283995920}
-  usePlaceholderFeedback: 1
+  hitFlashMaterial: {fileID: 2100000, guid: 8071fb1ab5614e188720a74456d86de3, type: 2}
   hitReceived:
     m_PersistentCalls:
       m_Calls: []

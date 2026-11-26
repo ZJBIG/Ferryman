@@ -17,8 +17,33 @@ namespace Ferryman.Voyage
         private VoyageController controller;
 
         public bool IsUnifiedScene => islandStops != null;
-        public float CameraSize => IsUnifiedScene && islandStops.gameObject.activeSelf ? islandCameraSize : cameraSize;
-        public float CameraHeight => IsUnifiedScene && islandStops.gameObject.activeSelf ? islandCameraHeight : 0f;
+        public float GetCameraHeight(float viewSize) => IsUnifiedScene && islandStops.gameObject.activeSelf
+            ? islandCameraHeight + islandCameraSize - viewSize
+            : 0f;
+
+        public float GetCameraSize(Camera camera)
+        {
+            if (!IsUnifiedScene)
+                return cameraSize;
+            float size = islandStops.gameObject.activeSelf ? islandCameraSize : cameraSize;
+            // Show the entire hull and its surrounding water even in a narrow Game view.
+            return Mathf.Max(size, 15.5f / Mathf.Max(0.1f, camera.aspect));
+        }
+
+        private void Awake()
+        {
+            if (!IsUnifiedScene || seaMotion == null)
+                return;
+            // Mirror the existing upper row below the ship for wider and narrow-aspect framing.
+            foreach (SpriteRenderer tile in seaMotion.GetComponentsInChildren<SpriteRenderer>())
+            {
+                Vector3 position = tile.transform.localPosition;
+                if (position.y <= 0f)
+                    continue;
+                SpriteRenderer lower = Instantiate(tile, seaMotion);
+                lower.transform.localPosition = new Vector3(position.x, -position.y, position.z);
+            }
+        }
 
         public bool CanPresentStop(VoyageStop stop)
         {
@@ -45,10 +70,11 @@ namespace Ferryman.Voyage
                 sailingWake.SetActive(false);
 
             Camera camera = GetComponent<Camera>();
+            float size = GetCameraSize(camera);
             Vector3 cameraPosition = camera.transform.position;
-            cameraPosition.y = CameraHeight;
+            cameraPosition.y = GetCameraHeight(size);
             camera.transform.position = cameraPosition;
-            camera.orthographicSize = CameraSize;
+            camera.orthographicSize = size;
         }
 
         private void Update()

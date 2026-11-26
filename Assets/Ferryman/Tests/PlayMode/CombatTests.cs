@@ -54,7 +54,7 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
-        public IEnumerator KicksShowImpactOnSolidEntitiesAndEnemiesKeepOnlyRedFeedback()
+        public IEnumerator KicksAndProjectilesShowEnemyImpactAndDamageNumbers()
         {
             var stone = FindStones()[0];
             var bomb = Object.FindObjectsOfType<TimedBomb>(true).First();
@@ -79,7 +79,7 @@ namespace Ferryman.Tests
                 entity.SetActive(true);
                 Physics2D.SyncTransforms();
                 Assert.That(player.TryMelee(Vector2.right), Is.True);
-                int expected = entity == trigger ? 0 : 1;
+                int expected = entity == trigger || entity == crewObject ? 0 : 1;
                 Assert.That(ImpactCount(), Is.EqualTo(expected), "Wrong impact count for " + entity.name);
                 var swings = Object.FindObjectsOfType<SpriteEffect>().Where(effect => effect.name == "MeleeSwing(Clone)").ToArray();
                 Assert.That(swings, Has.Length.EqualTo(1), "The existing kick effect must play once per attack.");
@@ -95,21 +95,33 @@ namespace Ferryman.Tests
             enemy.transform.position = Vector2.right;
             Physics2D.SyncTransforms();
             float health = enemy.Health;
+            var enemyVisual = enemy.GetComponentInChildren<SpriteRenderer>();
+            Vector3 restingScale = enemyVisual.transform.localScale;
             Assert.That(player.TryMelee(Vector2.right), Is.True);
             Assert.That(enemy.Health, Is.LessThan(health));
-            Assert.That(ImpactCount(), Is.Zero, "Melee added yellow feedback to an enemy.");
+            Assert.That(ImpactCount(), Is.EqualTo(1));
+            var firstPopup = GameObject.Find("Enemy Damage Popup");
+            Assert.That(firstPopup, Is.Not.Null);
+            Assert.That(firstPopup.GetComponent<ParticleSystem>().particleCount, Is.GreaterThan(0));
+            string damageText = (health - enemy.Health).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+            Assert.That(firstPopup.GetComponentsInChildren<TextMesh>().Select(label => label.text),
+                Is.EqualTo(new[] { damageText, damageText }));
+            Assert.That(enemyVisual.sharedMaterial.shader.name, Is.EqualTo("Ferryman/Character Flash"));
+            Assert.That(enemyVisual.transform.localScale.x, Is.GreaterThan(restingScale.x));
+            Assert.That(enemyVisual.transform.localScale.y, Is.LessThan(restingScale.y));
             var feedback = typeof(EnemyCharacter).GetMethod("TryGetHitFeedbackPosition", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(feedback.Invoke(enemy, new object[] { Vector3.zero }), Is.True);
             var shot = FireFrom(player, enemy.transform.position, Vector2.up, 1f);
             yield return WaitFor(() => shot == null, 0.3f, "The projectile did not hit the enemy.");
-            Assert.That(ImpactCount(), Is.Zero, "Projectile added yellow feedback to an enemy.");
+            Assert.That(Object.FindObjectsOfType<TextMesh>().Count(label => label.text == "1"), Is.EqualTo(2));
             Assert.That(player.TryFire(Vector2.up), Is.True);
-            var flashes = Object.FindObjectsOfType<SpriteEffect>().Where(effect => effect.name == "MuzzleFlash(Clone)").ToArray();
-            Assert.That(flashes, Has.Length.EqualTo(1), "A shot must show one supplied muzzle effect.");
+            int CaptainFlashes() => Object.FindObjectsOfType<SpriteEffect>().Count(effect =>
+                effect.GetComponentInChildren<SpriteRenderer>()?.sprite?.name == "CornMuzzleFlash");
+            Assert.That(CaptainFlashes(), Is.EqualTo(1), "A shot must show one corn muzzle flash.");
             Assert.That(player.TryFire(Vector2.up), Is.False);
-            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name == "MuzzleFlash(Clone)"), Is.EqualTo(1));
+            Assert.That(CaptainFlashes(), Is.EqualTo(1));
             yield return new WaitForSeconds(0.15f);
-            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Any(effect => effect.name == "MuzzleFlash(Clone)"), Is.False);
+            Assert.That(CaptainFlashes(), Is.Zero);
             Object.Destroy(crewObject);
             Object.Destroy(solid);
             Object.Destroy(trigger);
@@ -254,10 +266,12 @@ namespace Ferryman.Tests
                 Vector3 rootScale = crew.transform.localScale;
                 Vector2 footprint = ((BoxCollider2D)crew.Hitbox).size;
                 Color color = visual.color;
+                Material standingMaterial = visual.sharedMaterial;
                 Assert.That(visual.transform.localScale, Is.EqualTo(new Vector3(2.028f, 2.028f, 1f)));
 
                 Assert.That(crew.TryReceiveDamage(1f), Is.True);
                 Assert.That(Quaternion.Angle(visual.transform.localRotation, standing), Is.EqualTo(90f).Within(0.01f));
+                Assert.That(visual.sharedMaterial.shader.name, Is.EqualTo("Ferryman/Character Flash"));
                 Assert.That(visual.color, Is.EqualTo(color));
                 Assert.That(crew.transform.rotation, Is.EqualTo(rootRotation));
                 Assert.That(crew.transform.localScale, Is.EqualTo(rootScale));
@@ -266,10 +280,12 @@ namespace Ferryman.Tests
                 Assert.That(crew.TryReceivePlayerKick(Vector2.up), Is.True);
                 Assert.That(Quaternion.Angle(visual.transform.localRotation, standing), Is.EqualTo(90f).Within(0.01f),
                     "A repeated kick accumulated the lying rotation.");
+                Assert.That(visual.sharedMaterial.shader.name, Is.EqualTo("Ferryman/Character Flash"));
                 Assert.That(visual.color, Is.EqualTo(color));
                 yield return new WaitForSeconds(0.36f);
                 Assert.That(crew.IsStunned, Is.False);
                 Assert.That(visual.transform.localRotation, Is.EqualTo(standing));
+                Assert.That(visual.sharedMaterial, Is.EqualTo(standingMaterial));
                 Assert.That(visual.color, Is.EqualTo(color));
 
                 Assert.That(crew.TryReceiveDamage(1f), Is.True);
@@ -441,7 +457,13 @@ namespace Ferryman.Tests
             Assert.That(sent, Is.EqualTo(1));
 
             FireFrom(player, player.transform.position, Vector2.up, enemy.Health);
-            yield return WaitFor(() => enemy == null, 2f, "Lethal projectile did not remove the enemy.");
+            yield return WaitFor(() => enemy.Health == 0f, 1.5f, "Lethal projectile did not defeat the enemy.");
+            Assert.That(enemy.Hitbox.enabled, Is.False);
+            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Any(effect => effect.name == "EnemyDeath(Clone)"), Is.True);
+            Transform sinkingVisual = enemy.GetComponentInChildren<SpriteRenderer>().transform;
+            float oldHeight = sinkingVisual.position.y;
+            yield return WaitFor(() => sinkingVisual.position.y < oldHeight - 0.08f, 0.3f, "The enemy did not sink through its splash.");
+            yield return WaitFor(() => enemy == null, 1f, "The sinking enemy did not clean up.");
             Assert.That(received, Is.EqualTo(2));
             Assert.That(sent, Is.EqualTo(2));
             // An already stunned NPC lets enemy fire reach the player behind it.
@@ -486,6 +508,8 @@ namespace Ferryman.Tests
             int received = 0;
             damageSystem.DamageReceived.AddListener((source, target, amount) => received++);
             var body = player.GetComponent<Rigidbody2D>();
+            var visual = player.transform.Find("Visual");
+            Quaternion standing = visual.localRotation;
             player.Move(Vector2.right);
             Assert.That(body.velocity.x, Is.EqualTo(player.MoveSpeed));
             FireFrom(enemy, player.transform.position, Vector2.down, enemy.AttackPower);
@@ -493,6 +517,7 @@ namespace Ferryman.Tests
 
             Assert.That(player.Health, Is.EqualTo(100f));
             Assert.That(player.StunRemainingRatio, Is.InRange(0.9f, 1f));
+            Assert.That(Quaternion.Angle(visual.localRotation, standing), Is.EqualTo(90f).Within(0.01f));
             Assert.That(body.velocity, Is.EqualTo(Vector2.zero));
             player.Move(Vector2.right);
             Assert.That(body.velocity, Is.EqualTo(Vector2.zero));
@@ -509,6 +534,7 @@ namespace Ferryman.Tests
             yield return new WaitForSeconds(0.7f);
             Assert.That(player.IsStunned, Is.False, "A second hit extended the stun.");
             Assert.That(player.StunRemainingRatio, Is.Zero);
+            Assert.That(visual.localRotation, Is.EqualTo(standing));
 
             player.Move(Vector2.right);
             Assert.That(body.velocity.x, Is.EqualTo(player.MoveSpeed));
@@ -579,6 +605,7 @@ namespace Ferryman.Tests
             Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name.StartsWith("ProjectileImpact")),
                 Is.EqualTo(1), "A hull shot must create exactly one impact at the ship.");
             Assert.That(boat.RepairPoints, Is.Empty);
+            Assert.That(GameObject.Find("Enemy Damage Popup"), Is.Null, "A hull hit created a monster damage number.");
             yield return WaitFor(() => boat.CurrentHealth == boat.MaxHealth - 100f, 3f, "The fourth hull shot did not arrive.");
             Assert.That(boat.RepairPoints, Has.Count.EqualTo(1));
             Assert.That(boat.Deck.ContainsCell(boat.RepairPoints.Single().Cell), Is.True);
@@ -623,6 +650,27 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
+        public IEnumerator LanternfishShotsLookLargerAndPushWithoutStunning()
+        {
+            var encounter = Resources.Load<EncounterDefinition>("Voyage/Events/CoastalRaid");
+            var fish = Object.Instantiate(encounter.waves.SelectMany(wave => wave.enemies).Select(group => group.prefab)
+                .First(actor => actor.PreferredTarget == EnemyCharacter.TargetPreference.CrewFirst),
+                new Vector2(20f, 20f), Quaternion.identity);
+            fish.enabled = false;
+            Assert.That(fish.FireInterval, Is.EqualTo(2.05f));
+            var friendly = FireFrom(player, player.transform.position + Vector3.up * 6f, Vector2.right, 1f);
+            var hostile = FireFrom(fish, player.transform.position, Vector2.right, fish.AttackPower);
+            Transform friendlyArt = friendly.GetComponentInChildren<SpriteRenderer>().transform.parent;
+            Transform hostileArt = hostile.GetComponentInChildren<SpriteRenderer>().transform.parent;
+            Assert.That(hostileArt.localScale, Is.EqualTo(friendlyArt.localScale * 2f));
+            Assert.That(((CircleCollider2D)hostile.Hitbox).radius, Is.EqualTo(((CircleCollider2D)friendly.Hitbox).radius));
+            yield return WaitFor(() => hostile == null, 0.35f, "The lanternfish shot did not reach the captain.");
+            player.Move(Vector2.zero);
+            Assert.That(player.GetComponent<Rigidbody2D>().velocity.x, Is.GreaterThan(0.5f));
+            Assert.That(player.IsStunned || player.IsSlowed, Is.False);
+        }
+
+        [UnityTest]
         public IEnumerator BoardingCrabClimbsAboardAndStunsCrewBeforeCaptain()
         {
             var raid = Resources.Load<EncounterDefinition>("Voyage/Events/BoardingRaid");
@@ -642,7 +690,7 @@ namespace Ferryman.Tests
                 "The crab did not land inside the rails.");
             yield return WaitFor(() => crew.IsStunned, 4f, "The crab did not stun the crew member.");
             Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name.StartsWith("MeleeSwing")), Is.EqualTo(1));
-            Assert.That(Object.FindObjectsOfType<SpriteEffect>().Count(effect => effect.name.StartsWith("ProjectileImpact")), Is.EqualTo(1));
+            Assert.That(ImpactCount(), Is.Zero);
             Assert.That(player.IsStunned, Is.False);
             Assert.That(crew.Health, Is.EqualTo(crew.MaxHealth));
             Object.Destroy(crew.gameObject);

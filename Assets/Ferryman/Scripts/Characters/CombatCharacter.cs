@@ -26,6 +26,7 @@ namespace Ferryman.Characters
         public Projectile ProjectilePrefab => projectilePrefab;
         public DamageSystem DamageSystem => damageSystem;
         public virtual float FireInterval => fireInterval;
+        protected bool IsFireReady => ActionTime >= nextFireAt;
         protected Vector2 AimDirection { get; private set; } = Vector2.right;
         protected Quaternion AimRotation { get; private set; } = Quaternion.identity;
 
@@ -50,7 +51,7 @@ namespace Ferryman.Characters
 
         public virtual bool TryFire(Vector2 direction)
         {
-            if (!CanAct || ActionTime < nextFireAt || direction.sqrMagnitude < 0.0001f
+            if (!CanAct || !IsFireReady || direction.sqrMagnitude < 0.0001f
                 || projectilePrefab == null || damageSystem == null)
                 return false;
 
@@ -59,7 +60,9 @@ namespace Ferryman.Characters
             Vector2 origin = muzzle != null ? (Vector2)muzzle.position
                 : (Vector2)transform.position + AimDirection * muzzleDistance;
             var projectile = Instantiate(projectilePrefab, origin, Quaternion.identity);
-            projectile.Launch(AimDirection, AttackPower, this, damageSystem);
+            bool critical = this is CombatCrewMember && Random.value < 0.1f;
+            float damage = critical ? Mathf.Round(AttackPower * 1.8f) : AttackPower;
+            projectile.Launch(AimDirection, damage, this, damageSystem, critical);
             if (shotEffectPrefab != null)
                 Instantiate(shotEffectPrefab, origin, AimRotation);
             VoyageAudio.Play(IsHostile ? Sound.EnemyShot : Sound.CornShot,

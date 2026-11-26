@@ -25,9 +25,11 @@ namespace Ferryman.Combat
         private BoatHealth hullTarget;
         private float slowSeconds;
         private float stunSeconds;
+        private float pushSpeed;
         private bool hostile;
         private bool launched;
         private bool consumed;
+        private bool critical;
         private float expiresAt;
 
         public float FlightSpeed => flightSpeed;
@@ -49,7 +51,7 @@ namespace Ferryman.Combat
                 visualRoot = visual.transform;
         }
 
-        public void Launch(Vector2 direction, float damage, Character instigator, DamageSystem damageSystem)
+        public void Launch(Vector2 direction, float damage, Character instigator, DamageSystem damageSystem, bool critical = false)
         {
             if (direction.sqrMagnitude < 0.0001f || instigator == null || damageSystem == null)
             {
@@ -61,6 +63,7 @@ namespace Ferryman.Combat
             this.damage = damage;
             this.instigator = instigator;
             this.damageSystem = damageSystem;
+            this.critical = critical;
             // Keep allegiance after the shooter dies while this projectile is still in flight.
             hostile = instigator.IsHostile;
             if (instigator is EnemyCharacter enemy)
@@ -68,19 +71,26 @@ namespace Ferryman.Combat
                 hullTarget = enemy.ProjectileHullTarget;
                 slowSeconds = enemy.ProjectileSlowSeconds;
                 stunSeconds = enemy.AttackStunDuration;
+                pushSpeed = enemy.ProjectilePushSpeed;
             }
             launched = true;
             expiresAt = Time.time + lifetime;
             if (instigator.Hitbox != null)
                 Physics2D.IgnoreCollision(hitbox, instigator.Hitbox);
             if (visualRoot != null)
+            {
                 visualRoot.rotation = Quaternion.Euler(0f, 0f,
                     Mathf.Atan2(this.direction.y, this.direction.x) * Mathf.Rad2Deg);
+                if (hostile)
+                    visualRoot.localScale *= 2f;
+            }
             if (useFactionTint && visual != null)
             {
                 visual.color = !hostile ? new Color(1f, 0.85f, 0.15f)
                     : slowSeconds > 0f ? new Color(0.52f, 0.84f, 1f)
                     : hullTarget != null ? new Color(0.95f, 0.55f, 0.28f)
+                    : pushSpeed > 0f ? new Color(0.85f, 1f, 0.36f)
+                    : stunSeconds > 1f ? new Color(1f, 0.51f, 0.72f)
                     : new Color(1f, 0.25f, 0.15f);
             }
         }
@@ -115,22 +125,39 @@ namespace Ferryman.Combat
             }
 
             var target = other.GetComponentInParent<Character>();
-            if (target == null || target == instigator || target.IsHostile == hostile)
+            if (target == null || target == instigator || target.IsHostile == hostile || target.Health <= 0f)
                 return;
-            if (slowSeconds <= 0f && target.IsStunned && !target.IsHostile && !(target is PlayerCharacter))
+            if (target.IsStunned && !target.IsHostile && !(target is PlayerCharacter))
                 return;
 
             Consume();
-            if (impactEffectPrefab != null && !target.IsHostile)
-                Instantiate(impactEffectPrefab, transform.position, Quaternion.identity);
+            if (target.IsStunned)
+                return;
             if (slowSeconds > 0f)
             {
                 target.ApplySlow(slowSeconds);
                 VoyageAudio.Play(Sound.WaterBubbles, 0.34f, transform.position);
                 return;
             }
-            if (damageSystem != null)
-                damageSystem.ApplyDamage(instigator, target, damage, stunSeconds);
+            if (pushSpeed > 0f)
+            {
+                if (target.TryKnockBack(direction * pushSpeed))
+                    target.PlayHitReaction();
+                return;
+            }
+            if (damageSystem == null || hostile && stunSeconds <= 0f)
+                return;
+
+            EnemyCharacter enemy = target as EnemyCharacter;
+            SpecialCompanion marker = enemy != null ? enemy.CompanionSpotter : null;
+            float markBonus = damage > 0f && marker != null && instigator is PlayerCharacter captain
+                ? marker.GetMarkBonus(enemy, captain) : 0f;
+            if (!damageSystem.ApplyDamage(instigator, target, damage + markBonus, stunSeconds, critical))
+                return;
+            if (markBonus > 0f && marker != null)
+                marker.ConsumeMark(enemy);
+            if (enemy != null && instigator is SpecialCompanion spotter && spotter != null)
+                spotter.OnProjectileHit(enemy);
         }
 
         private void Consume()

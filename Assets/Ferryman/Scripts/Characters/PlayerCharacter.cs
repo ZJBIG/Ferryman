@@ -17,9 +17,14 @@ namespace Ferryman.Characters
         [SerializeField] private GameObject meleeEffectPrefab;
         [SerializeField] private GameObject meleeImpactEffectPrefab;
         [SerializeField] private UnityEvent meleePerformed = new UnityEvent();
+        [Header("Captain Presentation")]
+        [SerializeField] private Sprite[] captainWalkFrames;
+        [SerializeField] private Sprite[] captainShootFrames;
+        [SerializeField] private Sprite[] captainMeleeFrames;
+        [SerializeField] private SpriteRenderer cornGun;
         [Header("Repair")]
         [SerializeField] private BoatHealth boatHealth;
-        [SerializeField, Min(0f)] private float repairSpeed = 50f;
+        [SerializeField, Min(0f)] private float repairSpeed = 30f;
         [SerializeField, Min(0)] private int repairRange = 1;
         [SerializeField, Min(1)] private int simultaneousRepairs = 1;
 
@@ -44,6 +49,9 @@ namespace Ferryman.Characters
         private Vector2 moveInput;
         private Camera aimCamera;
         private float nextMeleeAt;
+        private float shotStartedAt = float.NegativeInfinity;
+        private float meleePoseUntil;
+        private float shotPoseUntil;
 
         protected override void Awake()
         {
@@ -61,10 +69,16 @@ namespace Ferryman.Characters
 
         private void Update()
         {
+            if (Time.timeScale == 0f)
+            {
+                moveInput = Vector2.zero;
+                return;
+            }
             moveInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
             if (!CanAct)
             {
                 StopRepairing();
+                ResetCaptainPose();
                 return;
             }
 
@@ -92,6 +106,8 @@ namespace Ferryman.Characters
                 TryRepair(Time.deltaTime);
             else
                 StopRepairing();
+
+            UpdateCaptainPose();
         }
 
         private void FixedUpdate()
@@ -110,7 +126,58 @@ namespace Ferryman.Characters
         public override bool TryFire(Vector2 direction)
         {
             StopRepairing();
-            return base.TryFire(direction);
+            if (!base.TryFire(direction))
+                return false;
+
+            shotStartedAt = ActionTime;
+            float duration = Mathf.Min(FireInterval, 0.22f);
+            shotPoseUntil = shotStartedAt + duration;
+            meleePoseUntil = 0f;
+            PlayVisualFrames(captainShootFrames, duration);
+            UpdateCaptainPose();
+            return true;
+        }
+
+        private void UpdateCaptainPose()
+        {
+            if (cornGun == null || Visual == null)
+                return;
+
+            bool swinging = ActionTime < meleePoseUntil;
+            bool shooting = ActionTime < shotPoseUntil;
+            bool walking = !swinging && !shooting && body.simulated && !IsKnockedBack
+                && body.velocity.sqrMagnitude > 0.01f;
+            if (walking)
+            {
+                if (Mathf.Abs(body.velocity.x) > 0.05f)
+                    Visual.flipX = body.velocity.x < 0f;
+                PlayVisualFrames(captainWalkFrames, 0.5f, loop: true);
+            }
+            else if (!swinging)
+            {
+                Visual.flipX = AimDirection.x < 0f;
+                if (!shooting)
+                    StopVisualFrames();
+            }
+
+            cornGun.enabled = !walking && !swinging;
+            cornGun.flipY = AimDirection.x < 0f;
+            cornGun.sortingOrder = AimDirection.y > 0.7f ? Visual.sortingOrder - 1 : Visual.sortingOrder + 1;
+            float recoil = 1f - Mathf.Clamp01((ActionTime - shotStartedAt) / 0.14f);
+            cornGun.transform.localPosition = Vector3.left * (0.13f * recoil * recoil);
+            cornGun.transform.localRotation = Quaternion.Euler(0f, 0f, (cornGun.flipY ? -1f : 1f) * 10f * recoil);
+        }
+
+        private void ResetCaptainPose()
+        {
+            StopVisualFrames();
+            shotStartedAt = float.NegativeInfinity;
+            shotPoseUntil = meleePoseUntil = 0f;
+            if (cornGun == null)
+                return;
+            cornGun.enabled = true;
+            cornGun.transform.localPosition = Vector3.zero;
+            cornGun.transform.localRotation = Quaternion.identity;
         }
 
         public bool TryMelee(Vector2 direction)
@@ -122,6 +189,13 @@ namespace Ferryman.Characters
 
             Face(direction);
             nextMeleeAt = ActionTime + meleeCooldown;
+            const float meleePoseDuration = 0.30f;
+            shotPoseUntil = 0f;
+            meleePoseUntil = ActionTime + meleePoseDuration;
+            if (Visual != null)
+                Visual.flipX = AimDirection.x < 0f;
+            PlayVisualFrames(captainMeleeFrames, meleePoseDuration);
+            UpdateCaptainPose();
             Vector2 origin = body.position;
             VoyageAudio.Play(Sound.KickSwing, 0.66f, origin);
             var hits = new HashSet<Collider2D>();
@@ -170,7 +244,7 @@ namespace Ferryman.Characters
                 }
                 else
                     VoyageAudio.Play(Sound.KickWood, position: contact);
-                if (meleeImpactEffectPrefab != null && (character == null || !character.IsHostile))
+                if (meleeImpactEffectPrefab != null && character == null)
                     Instantiate(meleeImpactEffectPrefab, contact, AimRotation);
             }
 
@@ -251,6 +325,7 @@ namespace Ferryman.Characters
             if (!allowed)
             {
                 StopRepairing();
+                ResetCaptainPose();
                 moveInput = Vector2.zero;
             }
         }
@@ -294,6 +369,7 @@ namespace Ferryman.Characters
         {
             base.OnDisable();
             StopRepairing();
+            ResetCaptainPose();
             moveInput = Vector2.zero;
             if (body != null)
                 body.velocity = Vector2.zero;

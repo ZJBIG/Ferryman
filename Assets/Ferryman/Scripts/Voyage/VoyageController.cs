@@ -103,6 +103,7 @@ namespace Ferryman.Voyage
             LoadStory(definition.branchingRoutes && definition.storyCampaign ? 1 : 0);
             InitializeExpedition(definition.branchingRoutes, null);
             CreateVessel();
+            RestoreSpecialCompanions(null);
             vessel.SetActionsAllowed(false, true);
             ActiveRun = true;
             StopIndex = 0;
@@ -150,8 +151,10 @@ namespace Ferryman.Voyage
                 if (HasPassenger(FindProfile(saved.profileId)))
                     continue;
                 Passenger passenger = BoardPassenger(FindProfile(saved.profileId), saved.destinationStopIndex, false);
+                passenger.EncountersAboard = Mathf.Max(0, saved.encountersAboard);
                 RestoreActorPosition(passenger.Actor, saved.localPosition);
             }
+            RestoreSpecialCompanions(checkpoint);
             vessel.SetActionsAllowed(false, true);
             ActiveRun = true;
             Message = "已恢复区域检查点。";
@@ -165,6 +168,11 @@ namespace Ferryman.Voyage
             pending.Push(operation);
             while (pending.Count > 0)
             {
+                if (Time.timeScale == 0f)
+                {
+                    yield return null;
+                    continue;
+                }
                 object current = null;
                 Exception failure = null;
                 bool moved = false;
@@ -278,13 +286,21 @@ namespace Ferryman.Voyage
                     SaveCheckpoint();
                     Phase = VoyagePhase.Sailing;
                     Message = "自动航行中";
+                    if (index == 1 && specialCompanionOrder.Length > 0)
+                        yield return IntroduceSpecialCompanion();
+                    if (!ActiveRun)
+                        yield break;
                     if (StoryRound > 0 && !IsBossLeg)
                         StartCoroutine(ShowSeaConversation());
                     yield return Sail(definition.sailingSeconds * 0.5f);
+                    ClearStoryDialogue();
                     if (!ActiveRun)
                         yield break;
                     if (IsBossLeg)
+                    {
                         BoardFinalAllies();
+                        yield return ShowSpecialCompanionBriefing();
+                    }
                     if (eventPlan[index].kind != VoyageEventKind.None)
                         yield return ExecuteEvent(eventPlan[index]);
                     if (IsBossLeg && ActiveRun)
@@ -300,7 +316,9 @@ namespace Ferryman.Voyage
                         VoyageAudio.Play(Sound.BattleClear, 0.72f);
                     if (IsBossLeg)
                     {
-                        FinishRun(true);
+                        yield return ShowFinalReturn();
+                        if (ActiveRun)
+                            FinishRun(true);
                         yield break;
                     }
                     Phase = VoyagePhase.Sailing;
@@ -365,8 +383,15 @@ namespace Ferryman.Voyage
 
         private IEnumerator ExecuteEvent(PlannedVoyageEvent planned)
         {
+            if (planned.kind == VoyageEventKind.Combat)
+            {
+                vessel.Player.BlockMouseAttacks = true;
+                yield return ShowEncounterConversation();
+                if (!ActiveRun)
+                    yield break;
+                vessel.Player.BlockMouseAttacks = false;
+            }
             Phase = VoyagePhase.Event;
-            BeginPassengerAlarm();
             if (planned.kind == VoyageEventKind.Combat)
             {
                 EncounterDefinition encounter = planned.encounter;
@@ -386,8 +411,17 @@ namespace Ferryman.Voyage
                     yield return SpawnWave(encounter.waves[waveIndex]);
                     int waveDrops = 0;
                     float nextDropAt = Time.time + Mathf.Min(1.2f, encounter.waveInterval * 0.5f);
+                    var movementRandom = new Random(seed ^ StopIndex * 733 ^ waveIndex * 6271);
+                    float diveAt = StoryRound >= 2 && !IsBossLeg
+                        ? Time.time + Mathf.Lerp(7f, 10f, (float)movementRandom.NextDouble())
+                        : float.PositiveInfinity;
                     while (ActiveRun && enemies.Any(enemy => enemy != null && enemy.Health > 0f))
                     {
+                        if (Time.time >= diveAt)
+                        {
+                            diveAt = float.PositiveInfinity;
+                            yield return RepositionSeaMonster(encounter.waves[waveIndex], movementRandom);
+                        }
                         if (falling.Length > 0 && waveDrops < dropLimit && Time.time >= nextDropAt)
                         {
                             var dropRandom = new Random(seed ^ StopIndex * 3571 ^ drops * 9973);
@@ -422,7 +456,8 @@ namespace Ferryman.Voyage
             Bounds deck = vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
             Vector2 half = WaveFootprint(wave, out int count);
             Vector2 viewHalf = new Vector2(camera.orthographicSize * camera.aspect, camera.orthographicSize);
-            var positions = FindWavePositions(deck, half, camera.transform.position, viewHalf);
+            var random = IsBossLeg ? null : new Random(seed ^ StopIndex * 397 ^ waveIndex * 3571);
+            var positions = FindWavePositions(deck, half, camera.transform.position, viewHalf, random);
             if (positions.Count < count)
                 throw new InvalidOperationException("船的上侧和右侧没有足够的海怪生成空间。");
             if (IsBossLeg)
@@ -432,7 +467,6 @@ namespace Ferryman.Voyage
             }
             else
             {
-                var random = new Random(seed ^ StopIndex * 397 ^ waveIndex * 3571);
                 for (int i = positions.Count - 1; i > 0; i--)
                 {
                     int other = random.Next(i + 1);
@@ -462,6 +496,31 @@ namespace Ferryman.Voyage
             }
         }
 
+        private IEnumerator RepositionSeaMonster(WaveDefinition wave, Random random)
+        {
+            Camera camera = Camera.main;
+            if (camera == null)
+                yield break;
+            var shooters = enemies.Where(enemy => enemy != null && enemy.isActiveAndEnabled && enemy.Health > 0f
+                && enemy.ActionsEnabled && enemy.AttackType == EnemyCharacter.AttackKind.Projectile).ToArray();
+            if (shooters.Length == 0)
+                yield break;
+            EnemyCharacter shooter = shooters[random.Next(shooters.Length)];
+            Bounds deck = vessel.Boat.Deck.GetComponent<EdgeCollider2D>().bounds;
+            Vector2 half = WaveFootprint(wave, out _);
+            Vector2 viewHalf = new Vector2(camera.orthographicSize * camera.aspect, camera.orthographicSize);
+            Vector2 origin = shooter.transform.position;
+            Vector2 separation = half * 2f + Vector2.one * 0.8f;
+            var openings = FindWavePositions(deck, half, camera.transform.position, viewHalf, random)
+                .Where(at => (at.x > deck.max.x) == (origin.x > deck.max.x)
+                    && (at - origin).sqrMagnitude >= 4f && (at - origin).sqrMagnitude <= 81f
+                    && !enemies.Any(other => other != null && other != shooter && other.Health > 0f
+                        && Mathf.Abs(other.transform.position.x - at.x) < separation.x
+                        && Mathf.Abs(other.transform.position.y - at.y) < separation.y)).ToArray();
+            if (openings.Length > 0)
+                yield return shooter.DiveTo(openings[random.Next(openings.Length)]);
+        }
+
         private static Vector2 WaveFootprint(WaveDefinition wave, out int count)
         {
             Vector2 half = Vector2.zero;
@@ -477,11 +536,13 @@ namespace Ferryman.Voyage
             return half;
         }
 
-        private static List<Vector2> FindWavePositions(Bounds deck, Vector2 half, Vector2 viewCenter, Vector2 viewHalf)
+        private static List<Vector2> FindWavePositions(Bounds deck, Vector2 half, Vector2 viewCenter, Vector2 viewHalf,
+            Random random = null)
         {
             const float spacing = 0.6f;
+            const float jitter = 0.62f;
             const float shipClearance = 2f;
-            Vector2 step = half * 2f + Vector2.one * (spacing + 0.1f);
+            Vector2 step = half * 2f + Vector2.one * (spacing + jitter);
             Vector2 min = Vector2.Max(viewCenter - viewHalf + half + Vector2.one * 0.3f,
                 (Vector2)deck.min + half);
             Vector2 max = viewCenter + viewHalf - half - Vector2.one * 0.3f;
@@ -493,8 +554,15 @@ namespace Ferryman.Voyage
                     : new Vector2(Mathf.Max(min.x, deck.max.x + half.x + shipClearance), min.y);
                 Vector2 regionMax = side == 0 ? max : new Vector2(max.x, Mathf.Min(max.y, top - step.y));
                 for (float y = regionMin.y; y <= regionMax.y; y += step.y)
+                {
                     for (float x = regionMin.x; x <= regionMax.x; x += step.x)
-                        positions.Add(new Vector2(x, y));
+                    {
+                        // A slot has at least the reserved spacing even when adjacent offsets differ.
+                        float shiftX = random == null ? 0f : (float)random.NextDouble() * Mathf.Min(jitter, regionMax.x - x);
+                        float shiftY = random == null ? 0f : (float)random.NextDouble() * Mathf.Min(jitter, regionMax.y - y);
+                        positions.Add(new Vector2(x + shiftX, y + shiftY));
+                    }
+                }
             }
             return positions;
         }
@@ -634,10 +702,11 @@ namespace Ferryman.Voyage
             return passenger;
         }
 
-        private Passenger SpawnCrew(CrewDefinition profile, int destination)
+        private Passenger SpawnCrew(CrewDefinition profile, int destination, Vector2? position = null)
         {
             var footprint = profile.prefab.GetComponent<BoxCollider2D>();
-            Character actor = Instantiate(profile.prefab, FindBoardingPosition(footprint), Quaternion.identity, vessel.transform);
+            Character actor = Instantiate(profile.prefab, position ?? FindBoardingPosition(footprint),
+                Quaternion.identity, vessel.transform);
             actor.ApplyCrewAppearance(profile);
             var passenger = actor.GetComponent<Passenger>() ?? actor.gameObject.AddComponent<Passenger>();
             passenger.Initialize(profile, destination);
@@ -775,6 +844,8 @@ namespace Ferryman.Voyage
                 deliveredStoryProfiles = StoryRound > 0
                     ? deliveredStoryProfiles.OrderBy(id => id, StringComparer.Ordinal).ToArray() : null,
                 storyDockOfferResolved = StoryDockOfferResolved,
+                specialCompanionOrder = specialCompanionOrder.Length > 0 ? specialCompanionOrder : null,
+                specialCompanions = CaptureSpecialCompanions(),
                 pendingCoins = pendingReward.coins,
                 pendingSpecialItems = pendingReward.specialItems,
                 deliveredPassengers = deliveredPassengers,
@@ -795,6 +866,7 @@ namespace Ferryman.Voyage
                 {
                     profileId = passenger.Definition.id,
                     destinationStopIndex = passenger.DestinationStopIndex,
+                    encountersAboard = passenger.EncountersAboard,
                     localPosition = passenger.transform.localPosition
                 }).ToArray()
             });
@@ -953,6 +1025,10 @@ namespace Ferryman.Voyage
         {
             CleanupHazards();
             passengers.Clear();
+            specialCompanionOrder = Array.Empty<string>();
+            specialCompanions.Clear();
+            companionActors.Clear();
+            waitingFinalAllies.Clear();
             if (vessel == null)
                 return;
             vessel.Boat.Destroyed.RemoveListener(OnBoatDestroyed);
@@ -1068,14 +1144,15 @@ namespace Ferryman.Voyage
 
         private void Update()
         {
+            PlaceWaitingCompanions();
             Camera camera = Camera.main;
             if (camera == null || definition == null)
                 return;
             VoyageScenePresentation presentation = camera.GetComponent<VoyageScenePresentation>();
-            float size = presentation != null ? presentation.CameraSize
+            float size = presentation != null ? presentation.GetCameraSize(camera)
                 : Phase == VoyagePhase.Island || Phase == VoyagePhase.Departure ? 5f : 6f;
             Vector3 position = camera.transform.position;
-            float height = presentation != null && presentation.IsUnifiedScene ? presentation.CameraHeight : position.y;
+            float height = presentation != null && presentation.IsUnifiedScene ? presentation.GetCameraHeight(size) : position.y;
             if (Phase == VoyagePhase.Event && eventPlan[StopIndex].kind == VoyageEventKind.Combat)
             {
                 size = CombatCameraSize(camera, eventPlan[StopIndex].encounter);

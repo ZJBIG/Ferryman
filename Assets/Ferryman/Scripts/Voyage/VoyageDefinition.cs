@@ -38,6 +38,7 @@ namespace Ferryman.Voyage
         public bool branchingRoutes;
         public bool storyCampaign;
         public EncounterDefinition finalBossEncounter;
+        public CrewDefinition[] specialCompanions;
         public VoyageStop[] stops = Array.Empty<VoyageStop>();
         public CrewDefinition[] initialPassengers = Array.Empty<CrewDefinition>();
         public CrewDefinition[] passengerPool = Array.Empty<CrewDefinition>();

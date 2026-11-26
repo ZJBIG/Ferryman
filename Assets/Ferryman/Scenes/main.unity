@@ -335,7 +335,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 8.6
+  orthographic size: 11.8
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -360,7 +360,7 @@ Transform:
   m_GameObject: {fileID: 74287326}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.306, y: 3.3, z: -10}
+  m_LocalPosition: {x: 2.306, y: 1.9, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -382,10 +382,10 @@ MonoBehaviour:
   sailingWake: {fileID: 555474643}
   scrollSpeed: 1.2
   scrollLoopWidth: 106.666664
-  cameraSize: 6
+  cameraSize: 8.8
   islandStops: {fileID: 633633176}
-  islandCameraSize: 8.6
-  islandCameraHeight: 3.3
+  islandCameraSize: 11.8
+  islandCameraHeight: 1.9
 --- !u!1 &124932717
 GameObject:
   m_ObjectHideFlags: 0
@@ -951,7 +951,7 @@ Transform:
   m_GameObject: {fileID: 633633175}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 2.35, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

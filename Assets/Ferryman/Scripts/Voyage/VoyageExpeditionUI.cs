@@ -11,12 +11,19 @@ namespace Ferryman.Voyage
         private static readonly Color Ink = new Color(0.20f, 0.13f, 0.08f);
         private static readonly Color Paper = new Color(0.98f, 0.89f, 0.70f);
         private static readonly Color Explored = new Color(0.12f, 0.32f, 0.24f);
+        private static readonly Color Reachable = new Color(0.13f, 0.36f, 0.43f);
+        private static readonly Color FaintInk = new Color(0.35f, 0.22f, 0.12f, 0.6f);
+        private static readonly Color LabelBackground = new Color(0.04f, 0.10f, 0.13f, 0.90f);
         private static VoyageRouteMap previewMap;
         private static int previewMapSeed;
         private static VoyageRouteMap scrollMap;
         private static Vector2 mapScroll;
         private static int scrollNode = -1;
         private static bool draggingMap;
+        private static VoyageRouteMap inkMap;
+        private static int inkNode = -1;
+        private static bool inkReachable;
+        private static Texture2D chartInk;
 
         public static void Draw(VoyageController c, VoyageUIArt art, int previewSeed, bool preview,
             GUIStyle title, GUIStyle text, GUIStyle button)
@@ -67,8 +74,9 @@ namespace Ferryman.Voyage
         {
             if (map == null)
                 return;
-            const float mapWidth = 1850f;
-            var viewport = new Rect(80f, 45f, 1120f, 555f);
+            const int mapWidth = 1850;
+            const int mapHeight = 555;
+            var viewport = new Rect(80f, 45f, 1120f, mapHeight);
             int currentNode = preview ? 0 : c.CurrentNodeId;
             if (scrollMap != map || scrollNode != currentNode)
             {
@@ -99,22 +107,20 @@ namespace Ferryman.Voyage
             mapScroll.y = 0f;
             mapScroll = GUI.BeginScrollView(viewport, mapScroll, new Rect(0f, 0f, mapWidth, viewport.height),
                 false, false, GUIStyle.none, GUIStyle.none);
-            DrawMapPaper(art.parchment, mapWidth, viewport.height);
+            var paperArea = new Rect(0f, 0f, mapWidth, viewport.height);
+            if (art.routeParchment != null)
+                GUI.DrawTexture(paperArea, art.routeParchment, ScaleMode.StretchToFill);
+            else if (art.parchment != null)
+                GUI.DrawTexture(paperArea, art.parchment, ScaleMode.StretchToFill);
+            else
+                Fill(paperArea, Paper);
             var passengerBadges = preview || c.Passengers.Count == 0 ? null : PassengerBadgesByIsland(map, c);
-            foreach (var node in map.Nodes)
+            if (input.type == EventType.Repaint)
             {
-                Vector2 start = Position(node);
-                foreach (int nextId in node.next)
-                {
-                    foreach (var next in map.Nodes)
-                    {
-                        if (next.id != nextId)
-                            continue;
-                        bool walked = !preview && map.IsExploredEdge(node.id, next.id, c.RoutePath);
-                        DrawCurve(start, Position(next), walked);
-                        break;
-                    }
-                }
+                bool choosing = !preview && c.AwaitingRouteChoice;
+                if (chartInk == null || inkMap != map || inkNode != currentNode || inkReachable != choosing)
+                    PaintChartInk(map, preview ? null : c.RoutePath, currentNode, choosing, mapWidth, mapHeight);
+                GUI.DrawTexture(paperArea, chartInk, ScaleMode.StretchToFill);
             }
 
             foreach (var node in map.Nodes)
@@ -145,8 +151,12 @@ namespace Ferryman.Voyage
             }
             GUI.EndScrollView();
             if (!string.IsNullOrEmpty(GUI.tooltip))
-                GUI.Label(new Rect(180f, 600f, 920f, 46f), GUI.tooltip,
-                    new GUIStyle(text) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperCenter, normal = { textColor = Ink } });
+            {
+                var hintArea = new Rect(180f, 584f, 920f, 38f);
+                Fill(hintArea, LabelBackground);
+                GUI.Label(hintArea, GUI.tooltip,
+                    new GUIStyle(text) { fontSize = 16, wordWrap = true, alignment = TextAnchor.MiddleCenter, normal = { textColor = Paper } });
+            }
         }
 
         private static Dictionary<int, CrewDefinition[]> PassengerBadgesByIsland(VoyageRouteMap map, VoyageController controller)
@@ -205,86 +215,78 @@ namespace Ferryman.Voyage
                 return new Vector2(140f, 345f);
             if (node.depth == VoyageRouteMap.FinalDepth)
                 return new Vector2(1680f, 290f);
-            return new Vector2(140f + node.depth * 220f + ((node.id * 37 + node.depth * 13) % 5 - 2) * 16f,
+            return new Vector2(140f + node.depth * 220f,
                 130f + node.lane * 145f + (node.id * 53 % 5 - 2) * 13f);
         }
 
-        private static void DrawMapPaper(Texture2D parchment, float width, float height)
+        private static void PaintChartInk(VoyageRouteMap map, IReadOnlyList<int> path, int current, bool choosing,
+            int width, int height)
         {
-            if (parchment == null)
+            // Drawing rotated GUI rectangles inside a scaled ScrollView offsets the route strokes.
+            // Paint the ink in map coordinates and let the paper and ink share one scroll transform.
+            if (chartInk == null)
+                chartInk = new Texture2D(width, height, TextureFormat.RGBA32, false)
+                {
+                    hideFlags = HideFlags.HideAndDontSave,
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Clamp
+                };
+            var pixels = new Color32[width * height];
+            foreach (var node in map.Nodes)
             {
-                Fill(new Rect(0f, 0f, width, height), Paper);
-                return;
+                Vector2 start = Position(node);
+                foreach (int next in node.next)
+                {
+                    bool walked = path != null && map.IsExploredEdge(node.id, next, path);
+                    PaintCurve(start, Position(map.Nodes[next]), walked, choosing && node.id == current);
+                }
             }
-            // Preserve the two taped ends; the middle slice has matching top and bottom edges.
-            const float first = 380f / 1690f;
-            const float second = 790f / 1690f;
-            float scale = height / parchment.height;
-            float left = parchment.width * first * scale;
-            float right = parchment.width * (1f - second) * scale;
-            float middle = width - left - right;
-            int tiles = Mathf.CeilToInt(middle / (parchment.width * (second - first) * scale));
-            float tileWidth = middle / tiles;
-            GUI.DrawTextureWithTexCoords(new Rect(0f, 0f, left, height), parchment, new Rect(0f, 0f, first, 1f));
-            for (int i = 0; i < tiles; i++)
-                DrawPaperSlice(parchment, new Rect(left + i * tileWidth - 24f, 0f, tileWidth + 24f, height),
-                    new Rect(first, 0f, second - first, 1f));
-            DrawPaperSlice(parchment, new Rect(width - right - 24f, 0f, right + 24f, height),
-                new Rect(second, 0f, 1f - second, 1f));
-        }
+            chartInk.SetPixels32(pixels);
+            chartInk.Apply(false);
+            inkMap = map;
+            inkNode = current;
+            inkReachable = choosing;
 
-        private static void DrawPaperSlice(Texture2D parchment, Rect area, Rect uv)
-        {
-            Color previous = GUI.color;
-            // Fade the overlapping edge so the original paper colours do not form a hard seam.
-            for (int strip = 0; strip < 12; strip++)
+            void PaintCurve(Vector2 start, Vector2 end, bool explored, bool reachable)
             {
-                GUI.color = new Color(previous.r, previous.g, previous.b, previous.a * (strip + 0.5f) / 12f);
-                GUI.DrawTextureWithTexCoords(new Rect(area.x + strip * 2f, area.y, 2f, area.height), parchment,
-                    new Rect(uv.x + uv.width * strip * 2f / area.width, uv.y, uv.width * 2f / area.width, uv.height));
+                // A common X and easing at any t keeps routes in lane order between columns.
+                Vector2 Point(float t) => new Vector2(Mathf.Lerp(start.x, end.x, t),
+                    Mathf.SmoothStep(start.y, end.y, t) - 36f * t * (1f - t));
+                float trim = 26f / (end.x - start.x);
+                Color color = explored ? Explored : reachable ? Reachable : FaintInk;
+                float radius = explored ? 2.1f : reachable ? 1.8f : 1.1f;
+                int dashCount = Mathf.Max(1, Mathf.RoundToInt((Vector2.Distance(start, end) - 52f) / 21f));
+                int segments = dashCount * 6 - 2;
+                Vector2 previous = Point(trim);
+                for (int segment = 1; segment <= segments; segment++)
+                {
+                    Vector2 point = Point(Mathf.Lerp(trim, 1f - trim, (float)segment / segments));
+                    if (explored || (segment - 1) % 6 < 4)
+                        PaintStroke(previous, point, color, radius);
+                    previous = point;
+                }
             }
-            GUI.color = previous;
-            float fade = 24f / area.width;
-            GUI.DrawTextureWithTexCoords(new Rect(area.x + 24f, area.y, area.width - 24f, area.height), parchment,
-                new Rect(uv.x + uv.width * fade, uv.y, uv.width * (1f - fade), uv.height));
-        }
 
-        private static void DrawCurve(Vector2 start, Vector2 end, bool explored)
-        {
-            Vector2 direction = (end - start).normalized;
-            start += direction * 34f;
-            end -= direction * 34f;
-            float bend = (end.x - start.x) * 0.45f;
-            Vector2 first = start + Vector2.right * bend;
-            Vector2 second = end - Vector2.right * bend;
-            if (Mathf.Abs(start.y - end.y) < 0.01f)
+            void PaintStroke(Vector2 start, Vector2 end, Color color, float radius)
             {
-                first.y -= 18f;
-                second.y -= 18f;
+                Vector2 delta = end - start;
+                float lengthSquared = delta.sqrMagnitude;
+                int left = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(start.x, end.x) - radius));
+                int right = Mathf.Min(width - 1, Mathf.CeilToInt(Mathf.Max(start.x, end.x) + radius));
+                int top = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(start.y, end.y) - radius));
+                int bottom = Mathf.Min(height - 1, Mathf.CeilToInt(Mathf.Max(start.y, end.y) + radius));
+                for (int y = top; y <= bottom; y++)
+                for (int x = left; x <= right; x++)
+                {
+                    Vector2 sample = new Vector2(x + 0.5f, y + 0.5f);
+                    float t = Mathf.Clamp01(Vector2.Dot(sample - start, delta) / lengthSquared);
+                    float coverage = Mathf.Clamp01(radius + 0.5f - Vector2.Distance(sample, start + t * delta));
+                    int i = (height - y - 1) * width + x;
+                    Color32 ink = new Color(color.r, color.g, color.b, color.a * coverage);
+                    if (ink.a > pixels[i].a)
+                        pixels[i] = ink;
+                }
             }
-            Vector2 previous = start;
-            for (int segment = 1; segment <= 64; segment++)
-            {
-                float t = segment / 64f;
-                float inverse = 1f - t;
-                Vector2 point = inverse * inverse * inverse * start + 3f * inverse * inverse * t * first
-                    + 3f * inverse * t * t * second + t * t * t * end;
-                if (explored || ((segment - 1) / 4) % 2 == 0)
-                    DrawLine(previous, point, explored ? Explored : new Color(Ink.r, Ink.g, Ink.b, 0.65f), explored ? 2f : 1.3f);
-                previous = point;
-            }
-        }
-
-        private static void DrawLine(Vector2 start, Vector2 end, Color color, float thickness)
-        {
-            Matrix4x4 previous = GUI.matrix;
-            Color previousColor = GUI.color;
-            Vector2 delta = end - start;
-            GUIUtility.RotateAroundPivot(Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg, start);
-            GUI.color = color;
-            GUI.DrawTexture(new Rect(start.x, start.y - thickness * 0.5f, delta.magnitude, thickness), Texture2D.whiteTexture);
-            GUI.matrix = previous;
-            GUI.color = previousColor;
         }
 
         private static Texture2D NodeIcon(VoyageUIArt art, VoyageIslandKind kind)
@@ -376,6 +378,19 @@ namespace Ferryman.Voyage
                 Act(c, () => c.ResolveIslandOption(4));
                 return;
             }
+            var marketLabel = new GUIStyle(text)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 19,
+                normal = { textColor = Paper }
+            };
+            var balance = new Rect(430f, 96f, 420f, 42f);
+            Fill(balance, LabelBackground);
+            GUI.Label(balance, $"海上集市 · 本轮金币 {c.AvailableCoins}", marketLabel);
+            var leave = new Rect(528f, 586f, 224f, 35f);
+            Fill(leave, LabelBackground);
+            if (GUI.Button(leave, "离开集市", marketLabel))
+                Act(c, () => c.ResolveIslandOption(4));
             for (int i = 0; i < available.Length; i++)
             {
                 VoyageUpgradeKind kind = available[i];
@@ -383,8 +398,10 @@ namespace Ferryman.Voyage
                 int rank = runRanks[(int)kind];
                 int price = VoyageUpgrades.Price(kind, rank);
                 bool previous = GUI.enabled;
-                GUI.enabled = previous && c.AvailableCoins >= price;
-                if (DrawCard(CardArea(i, available.Length, art.upgradeCard), art, kind, text))
+                bool affordable = c.AvailableCoins >= price;
+                GUI.enabled = previous && affordable;
+                string purchase = affordable ? $"{price} 金币购买" : $"需 {price} 金币 · 不足";
+                if (DrawCard(CardArea(i, available.Length, art.upgradeCard), art, kind, text, purchase))
                     Act(c, () => c.ResolveIslandOption(option));
                 GUI.enabled = previous;
             }
@@ -421,7 +438,7 @@ namespace Ferryman.Voyage
             return new Rect((1280f - totalWidth) * 0.5f + index * (width + gap), (720f - height) * 0.5f, width, height);
         }
 
-        private static bool DrawCard(Rect area, VoyageUIArt art, VoyageUpgradeKind kind, GUIStyle text)
+        private static bool DrawCard(Rect area, VoyageUIArt art, VoyageUpgradeKind kind, GUIStyle text, string purchase = null)
         {
             GUI.DrawTexture(area, art.upgradeCard, ScaleMode.StretchToFill);
             Texture2D icon = UpgradeIcon(art, kind);
@@ -436,8 +453,17 @@ namespace Ferryman.Voyage
                 wordWrap = true
             };
             effect.normal.textColor = Ink;
-            GUI.Label(new Rect(area.x + area.width * 0.18f, area.y + area.height * 0.625f,
-                area.width * 0.64f, area.height * 0.18f), VoyageUpgrades.Description(kind), effect);
+            bool market = purchase != null;
+            GUI.Label(new Rect(area.x + area.width * 0.18f, area.y + area.height * (market ? 0.6f : 0.625f),
+                area.width * 0.64f, area.height * (market ? 0.12f : 0.18f)), VoyageUpgrades.Description(kind), effect);
+            if (market)
+            {
+                effect.fontStyle = FontStyle.Bold;
+                effect.fontSize = 16;
+                effect.normal.textColor = GUI.enabled ? Explored : new Color(0.49f, 0.17f, 0.10f);
+                GUI.Label(new Rect(area.x + area.width * 0.18f, area.y + area.height * 0.725f,
+                    area.width * 0.64f, area.height * 0.075f), purchase, effect);
+            }
             return GUI.Button(area, GUIContent.none, GUIStyle.none);
         }
 

@@ -466,7 +466,11 @@ namespace Ferryman.Tests
             definition.storyCampaign = true;
             Assert.That(Resources.Load<VoyageDefinition>("Voyage/DefaultVoyage").storyCampaign, Is.True);
             Assert.That(controller.StartVoyage(7), Is.True);
-            string runId = store.LoadCheckpoint(definition.id).runId;
+            VoyageCheckpoint departure = store.LoadCheckpoint(definition.id);
+            string runId = departure.runId;
+            string[] companions = departure.specialCompanionOrder;
+            Assert.That(companions, Has.Length.EqualTo(3));
+            Assert.That(companions, Is.Unique);
             string monkeyId = "gunner-monkey";
             string rhinoId = "mechanic-rhino";
             string owlId = "sharpshooter-owl";
@@ -491,6 +495,21 @@ namespace Ferryman.Tests
                 for (int depth = 1; depth <= VoyageRouteMap.FinalDepth; depth++)
                 {
                     Assert.That(controller.SelectDestination(controller.RouteMap.Nodes[controller.CurrentNodeId].next[0]), Is.True);
+                    if (round == 1 && depth == 1)
+                    {
+                        yield return WaitFor(() => controller.AwaitingStoryDialogue, "first companion introduction");
+                        string introduction = controller.StoryDialogueLine;
+                        Assert.That(store.LoadCheckpoint(definition.id).specialCompanions, Is.Empty);
+                        yield return DestroyForCrash();
+                        CreateController();
+                        Assert.That(controller.ResumeVoyage(), Is.True);
+                        yield return WaitFor(() => controller.AwaitingStoryDialogue, "restored companion introduction");
+                        Assert.That(controller.StoryDialogueLine, Is.EqualTo(introduction));
+                        Assert.That(controller.SkipStoryDialogue(), Is.True);
+                        yield return WaitFor(() => controller.Vessel.GetComponentInChildren<SpecialCompanion>() != null,
+                            "companion after skipping the introduction");
+                        Assert.That(store.LoadCheckpoint(definition.id).specialCompanions.Single().profileId, Is.EqualTo(companions[0]));
+                    }
                     yield return CompleteLeg(depth * 2, Answer);
                     if (depth == VoyageRouteMap.FinalDepth)
                         break;
@@ -513,6 +532,9 @@ namespace Ferryman.Tests
                 Assert.That(port.runId, Is.EqualTo(runId));
                 Assert.That(port.storyRound, Is.EqualTo(round));
                 Assert.That(port.stopIndex, Is.EqualTo(14));
+                Assert.That(port.specialCompanionOrder, Is.EqualTo(companions));
+                Assert.That(port.specialCompanions.Select(state => state.profileId), Is.EqualTo(companions.Take(round)));
+                Assert.That(controller.Vessel.GetComponentsInChildren<SpecialCompanion>(), Has.Length.EqualTo(round));
                 if (round < VoyageController.FinalStoryRound)
                 {
                     controller.Vessel.Boat.ApplyDamage(23f, Vector2.zero);
@@ -529,6 +551,7 @@ namespace Ferryman.Tests
                     CreateController();
                     Assert.That(controller.ResumeVoyage(), Is.True);
                     Assert.That(controller.Vessel.Boat.CurrentHealth, Is.EqualTo(health));
+                    Assert.That(controller.Vessel.GetComponentsInChildren<SpecialCompanion>(), Has.Length.EqualTo(round));
                 }
             }
 
@@ -550,8 +573,18 @@ namespace Ferryman.Tests
             yield return WaitFor(() => controller.Enemies.Any(enemy => enemy != null), "restored Boss");
             string[] allies = controller.Vessel.GetComponentsInChildren<Passenger>().Select(crew => crew.Definition.id).ToArray();
             Assert.That(allies, Is.EquivalentTo(storyOffers));
+            Assert.That(controller.Vessel.GetComponentsInChildren<SpecialCompanion>(), Has.Length.EqualTo(3));
             EnemyCharacter boss = controller.Enemies.Single();
             Assert.That(controller.Vessel.DamageSystem.ApplyDamage(controller.Vessel.Player, boss, boss.Health), Is.True);
+            yield return WaitFor(() => controller.AwaitingStoryDialogue && controller.Phase == VoyagePhase.Sailing,
+                "recovery dialogue at sea");
+            Assert.That(controller.StopIndex, Is.EqualTo(15));
+            Assert.That(store.LoadCheckpoint(definition.id).stopIndex, Is.EqualTo(15));
+            yield return WaitFor(() => controller.AwaitingStoryDialogue && controller.Phase == VoyagePhase.Island,
+                "the captain returned to port");
+            Assert.That(controller.StopIndex, Is.EqualTo(14));
+            Assert.That(controller.AwaitingStoryDeparture, Is.False);
+            Assert.That(store.HasCheckpoint, Is.True);
             yield return WaitFor(() => controller.Phase == VoyagePhase.Success, "campaign settlement");
             Assert.That(store.HasCheckpoint, Is.False);
             Assert.That(store.Progress.lastSettledRunId, Is.EqualTo(runId));
@@ -572,7 +605,7 @@ namespace Ferryman.Tests
             yield return DestroyForCrash();
             CreateController();
             Assert.That(controller.ResumeVoyage(), Is.True);
-            yield return WaitFor(() => controller.Phase == VoyagePhase.Island, "rescue island");
+            yield return WaitFor(() => controller.Phase == VoyagePhase.Island && !controller.AwaitingStoryDialogue, "rescue island");
             Assert.That(controller.CurrentIsland, Is.EqualTo(VoyageIslandKind.Rescue));
             Assert.That(controller.ResolveIslandOption(0), Is.True);
             Assert.That(controller.BoardingIsChoice, Is.True);
@@ -604,6 +637,7 @@ namespace Ferryman.Tests
 
             PlayerCharacter captain = controller.Vessel.Player;
             EnemyCharacter boss = controller.Enemies.Single();
+            captain.ConfigureCombat(captain.DamageSystem, captain.ProjectilePrefab, boss.Health / 8f, captain.FireInterval);
             boss.enabled = true;
             bool sawBomb = false;
             float until = Time.realtimeSinceStartup + 24f;
@@ -613,7 +647,9 @@ namespace Ferryman.Tests
                 Assert.That(controller.Phase, Is.Not.EqualTo(VoyagePhase.Failure));
                 Assert.That(Time.realtimeSinceStartup, Is.LessThan(until), "The captain could not defeat the boss with normal projectiles.");
                 sawBomb |= Object.FindObjectsOfType<TimedBomb>().Length > 0;
-                if (sawBomb && boss != null && boss.Health > 0f)
+                if (controller.AwaitingStoryDialogue)
+                    controller.ContinueStoryDialogue();
+                else if (sawBomb && boss != null && boss.Health > 0f)
                     captain.TryFire(boss.Hitbox.bounds.center - captain.transform.position);
                 yield return null;
             }
@@ -681,10 +717,13 @@ namespace Ferryman.Tests
         {
             bool checkedMotion = false;
             float until = Time.realtimeSinceStartup + 20f;
-            while (!(controller.StopIndex == destinationStop && controller.Phase == VoyagePhase.Island && controller.BoardingProfile == null)
+            while (!(controller.StopIndex == destinationStop && controller.Phase == VoyagePhase.Island
+                && controller.BoardingProfile == null && (answer == null || controller.Message.StartsWith("抵达 ", StringComparison.Ordinal)))
                 && controller.Phase != VoyagePhase.Success)
             {
                 QuiesceActors();
+                if (controller.AwaitingStoryDialogue)
+                    Assert.That(controller.ContinueStoryDialogue(), Is.True);
                 if (answer != null && controller.BoardingIsChoice)
                     Assert.That(controller.ResolveBoardingOffer(answer(controller.BoardingProfile)), Is.True);
                 Assert.That(controller.Phase, Is.Not.EqualTo(VoyagePhase.Error), controller.Message);

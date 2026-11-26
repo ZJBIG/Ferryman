@@ -5,7 +5,8 @@ using UnityEngine;
 namespace Ferryman.Voyage
 {
     [RequireComponent(typeof(VoyageController))]
-    public sealed class VoyageView : MonoBehaviour
+    [DefaultExecutionOrder(-100)]
+    public sealed partial class VoyageView : MonoBehaviour
     {
         private enum DeparturePage
         {
@@ -48,6 +49,7 @@ namespace Ferryman.Voyage
 
         private void OnGUI()
         {
+            HandleDialogueKeys(Event.current);
             if (text == null)
             {
                 text = new GUIStyle(GUI.skin.label) { font = font, fontSize = 21, wordWrap = true };
@@ -70,7 +72,9 @@ namespace Ferryman.Voyage
             GUI.matrix = Matrix4x4.TRS(offset, Quaternion.identity, Vector3.one * scale);
             var screen = new Rect(-offset.x / scale, -offset.y / scale, Screen.width / scale, Screen.height / scale);
 
-            if (controller.Phase == VoyagePhase.Error || art == null)
+            if (menuOpen)
+                DrawPauseMenu(screen);
+            else if (controller.Phase == VoyagePhase.Error || art == null)
                 DrawError(screen);
             else if (controller.Phase == VoyagePhase.Departure)
                 DrawDeparture(screen);
@@ -79,17 +83,15 @@ namespace Ferryman.Voyage
             else if (controller.Vessel != null)
             {
                 bool upgradeCards = controller.IsExpedition && controller.Phase == VoyagePhase.Island
-                    && controller.BoardingProfile == null && !controller.HasStoryDialogue && (controller.UpgradeChoices.Length > 0
+                    && controller.BoardingProfile == null && !controller.AwaitingStoryDialogue && (controller.UpgradeChoices.Length > 0
                         || !controller.IslandResolved && (controller.CurrentIsland == VoyageIslandKind.Market
                             || controller.CurrentIsland == VoyageIslandKind.Shipyard
                             || controller.CurrentIsland == VoyageIslandKind.Battle
                             || controller.CurrentIsland == VoyageIslandKind.Elite));
                 if (!upgradeCards)
                     DrawCombat(screen, scale, offset);
-                if (controller.HasStoryDialogue)
-                    DrawStoryPort(controller.StoryFarewell, controller.AwaitingStoryDialogue ? "继续" : null);
-                else if (controller.AlarmProfile != null)
-                    DrawPassengerAlarm();
+                if (controller.AwaitingStoryDialogue)
+                    DrawStoryDialogue();
                 else if (controller.Phase == VoyagePhase.Island && controller.BoardingProfile != null)
                     DrawDialogue();
                 else if (controller.AwaitingStoryDeparture)
@@ -104,7 +106,7 @@ namespace Ferryman.Voyage
                         $"第{controller.StoryRound}/{VoyageController.FinalStoryRound}日", text);
             }
 
-            if (controller.Fade > 0f)
+            if (!menuOpen && controller.Fade > 0f)
                 Fill(screen, new Color(0.03f, 0.08f, 0.11f, controller.Fade));
             GUI.matrix = previous;
         }
@@ -165,13 +167,34 @@ namespace Ferryman.Voyage
                 Act(controller.QuitGame);
         }
 
-        private void Update()
+        private void HandleDialogueKeys(Event input)
         {
-            if (Input.GetKeyDown(KeyCode.Escape) && controller.IsExpedition && controller.ActiveRun
-                && controller.Phase == VoyagePhase.Island && !controller.IslandResolved
-                && controller.CurrentIsland == VoyageIslandKind.Market && controller.BoardingProfile == null
-                && controller.UpgradeChoices.Length == 0)
-                Act(() => controller.ResolveIslandOption(4));
+            if ((input.type == EventType.KeyDown || input.type == EventType.KeyUp) && input.keyCode == KeyCode.Escape)
+            {
+                HandleEscapeInput(input.type == EventType.KeyDown, input.type == EventType.KeyUp);
+                input.Use();
+                return;
+            }
+            if (menuOpen)
+                return;
+            if (input.type != EventType.KeyDown)
+                return;
+            bool advance = input.keyCode == KeyCode.Space || input.keyCode == KeyCode.Return
+                || input.keyCode == KeyCode.KeypadEnter;
+            if (controller.AwaitingStoryDialogue)
+            {
+                if (advance)
+                {
+                    input.Use();
+                    Act(() => controller.ContinueStoryDialogue());
+                }
+                return;
+            }
+            if (advance && controller.AwaitingStoryDeparture)
+            {
+                input.Use();
+                Act(() => controller.ContinueStoryVoyage());
+            }
         }
 
         private bool Oar(Rect area, string label, bool enabled)
@@ -424,27 +447,36 @@ namespace Ferryman.Voyage
             GUI.Label(new Rect(354f, 600f, 616f, 36f), $"送达报酬 · {profile.coinsReward} 金币", ink);
         }
 
-        private void DrawPassengerAlarm()
+        private void DrawStoryDialogue()
         {
-            CrewDefinition profile = controller.AlarmProfile;
+            string line = controller.StoryDialogueLine;
+            int colon = line.IndexOf('：');
+            string speaker = colon >= 0 ? line.Substring(0, colon) : string.Empty;
+            string words = colon >= 0 ? line.Substring(colon + 1) : line;
+            var portrait = new Rect(162f, 422f, 166f, 226f);
             GUI.DrawTexture(new Rect(90f, 492f, 1138f, 191f), art.dialogue);
-            DrawPortrait(profile, new Rect(162f, 422f, 166f, 226f));
-            GUI.Label(new Rect(354f, 516f, 740f, 36f), profile.displayName, storyInk);
-            GUI.Label(new Rect(354f, 560f, 740f, 78f), controller.AlarmDialogue, storyInk);
+            if (speaker == "兔子船长" && art.captainPortrait != null)
+            {
+                GUI.DrawTexture(portrait, art.portrait, ScaleMode.ScaleToFit);
+                GUI.DrawTexture(Within(portrait, 0.10f, 0.09f, 0.80f, 0.80f), art.captainPortrait, ScaleMode.ScaleToFit);
+            }
+            else if (controller.FindDialogueProfile(speaker) is CrewDefinition profile)
+                DrawPortrait(profile, portrait);
+            GUI.Label(new Rect(354f, 513f, 740f, 30f), speaker, storyInk);
+            GUI.Label(new Rect(354f, 549f, 740f, 62f), words, storyInk);
+            GUI.Label(new Rect(354f, 622f, 520f, 33f),
+                escapeHeld && !escapeHandled ? $"长按 Esc 跳过  {Mathf.Clamp01((Time.unscaledTime - escapeStartedAt) / EscapeHoldSeconds):P0}"
+                    : "空格 / Enter 继续 · 长按 Esc 跳过", storyInk);
+            if (GUI.Button(new Rect(883f, 613f, 176f, 38f), "继续", button))
+                Act(() => controller.ContinueStoryDialogue());
         }
 
-        private void DrawStoryPort(string line, string action = null)
+        private void DrawStoryPort(string line, string action)
         {
             GUI.DrawTexture(new Rect(90f, 492f, 1138f, 191f), art.dialogue);
             GUI.Label(new Rect(262f, 525f, 756f, 72f), line, centeredInk);
-            if (action != null && GUI.Button(new Rect(540f, 609f, 200f, 42f), action, button))
-                Act(() =>
-                {
-                    if (controller.AwaitingStoryDialogue)
-                        controller.ContinueStoryDialogue();
-                    else
-                        controller.ContinueStoryVoyage();
-                });
+            if (GUI.Button(new Rect(540f, 609f, 200f, 42f), action, button))
+                Act(() => controller.ContinueStoryVoyage());
         }
 
         private void DrawPortrait(CrewDefinition profile, Rect area)

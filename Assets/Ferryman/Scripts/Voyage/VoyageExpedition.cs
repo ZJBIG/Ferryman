@@ -35,7 +35,7 @@ namespace Ferryman.Voyage
         public int AvailableCoins => pendingReward.coins;
         public int AvailableSpecialItems => pendingReward.specialItems;
         public bool AwaitingRouteChoice => IsExpedition && ActiveRun && Phase == VoyagePhase.Island
-            && BoardingProfile == null && !HasStoryDialogue && StopIndex % 2 == 0 && IslandResolved && UpgradeChoices.Length == 0
+            && BoardingProfile == null && !AwaitingStoryDialogue && StopIndex % 2 == 0 && IslandResolved && UpgradeChoices.Length == 0
             && RouteMap.Nodes[CurrentNodeId].depth < VoyageRouteMap.FinalDepth;
 
         private void InitializeExpedition(bool enabled, VoyageCheckpoint checkpoint)
@@ -189,7 +189,7 @@ namespace Ferryman.Voyage
         public bool ResolveIslandOption(int option)
         {
             if (!IsExpedition || !ActiveRun || Phase != VoyagePhase.Island || BoardingProfile != null || StopIndex % 2 != 0
-                || HasStoryDialogue || IslandResolved || UpgradeChoices.Length > 0 || option < 0)
+                || AwaitingStoryDialogue || IslandResolved || UpgradeChoices.Length > 0 || option < 0)
                 return false;
             int coinsBefore = pendingReward.coins;
             switch (CurrentIsland)

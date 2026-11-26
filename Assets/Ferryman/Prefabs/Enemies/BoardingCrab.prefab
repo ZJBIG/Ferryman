@@ -215,7 +215,7 @@ MonoBehaviour:
   hitbox: {fileID: 8344003705530662006}
   stunDuration: 1
   visual: {fileID: 6736160314134693394}
-  usePlaceholderFeedback: 0
+  hitFlashMaterial: {fileID: 2100000, guid: 8071fb1ab5614e188720a74456d86de3, type: 2}
   hitReceived:
     m_PersistentCalls:
       m_Calls: []
@@ -235,10 +235,10 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   target: {fileID: 0}
+  hitEffectPrefab: {fileID: 5667738953813447188, guid: 9bbd514332db866448f4ae38565bec3a, type: 3}
   deathEffectPrefab: {fileID: 5982063135196900296, guid: 77e77cee009f4084e8db40ba6a0015ab, type: 3}
   deathObstaclePrefab: {fileID: 2733365542521707796, guid: 34e146e04c084577a1b6157e4f9847c8, type: 3}
   clawSwingEffectPrefab: {fileID: 4182560539180930044, guid: 3a751be38e31cea4e83df0f05de51693, type: 3}
-  clawImpactEffectPrefab: {fileID: 5667738953813447188, guid: 9bbd514332db866448f4ae38565bec3a, type: 3}
   attackKind: 2
   targetPreference: 1
   displayName: "\u7ffb\u8237\u87f9"

@@ -523,6 +523,8 @@ namespace Ferryman.Tests
                 Is.GreaterThanOrEqualTo(encounter.cameraSize * (16f / 9f) - 0.001f));
             WaveBubbles[] warnings = Object.FindObjectsOfType<WaveBubbles>();
             Vector3[] origins = warnings.Select(item => item.transform.position).ToArray();
+            Assert.That(origins.Select(origin => origin.y).Distinct().Count(), Is.GreaterThan(8),
+                "Crowded wave warnings formed straight rows.");
             Assert.That(LiveEnemies(), Is.Empty);
             Assert.That(FindCue(controller.gameObject, "WaterBubbles"), Is.Not.Null);
             Assert.That(warnings.All(item => item.GetComponentsInChildren<SpriteRenderer>()
@@ -532,12 +534,20 @@ namespace Ferryman.Tests
             EnemyCharacter[] firstWave = LiveEnemies();
             Assert.That(firstWave.Select(enemy => enemy.transform.position), Is.EquivalentTo(origins));
             Assert.That(Object.FindObjectsOfType<WaveBubbles>(), Is.Empty);
+            var sinkingSprite = firstWave[0].GetComponentInChildren<SpriteRenderer>();
+            Bounds monster = sinkingSprite.bounds;
+            float aboveWater = sinkingSprite.transform.position.y;
             Kill(firstWave[0]);
             Assert.That(controller.Vessel.DamageSystem.ApplyDamage(controller.Vessel.Player, firstWave[0], 5f), Is.False);
             SpriteEffect splash = Object.FindObjectsOfType<SpriteEffect>().Single(effect => effect.name == "EnemyDeath(Clone)");
-            Assert.That(splash.transform.position, Is.EqualTo(firstWave[0].transform.position));
+            Assert.That(splash.transform.position.x, Is.EqualTo(monster.center.x).Within(0.001f));
+            Assert.That(splash.transform.position.y, Is.InRange(monster.min.y, monster.center.y));
             Assert.That(splash.GetComponentInChildren<SpriteRenderer>().sprite.name, Is.EqualTo("WaterSplash"));
             Assert.That(FindCue(controller.gameObject, "WaterSplash"), Is.Not.Null);
+            yield return new WaitForSeconds(0.22f);
+            Assert.That(firstWave[0] != null, Is.True);
+            Assert.That(sinkingSprite.transform.position.y, Is.LessThan(aboveWater));
+            Assert.That(firstWave[0].Hitbox.enabled, Is.False);
             foreach (EnemyCharacter enemy in firstWave.Skip(1).Take(10))
                 Kill(enemy);
             yield return new WaitForSeconds(encounter.waveInterval + 0.08f);
@@ -554,31 +564,30 @@ namespace Ferryman.Tests
         }
 
         [UnityTest]
-        public IEnumerator PassengerAlarmUsesTheirOwnVoicesAndKeepsBattleRunning()
+        public IEnumerator EncountersWaitForDialogueAndChangeAfterTheFirstFight()
         {
             escort.id = "gunner-monkey";
-            joining = Clone(Resources.Load<CrewDefinition>("Voyage/Crew/mechanic-rhino"));
-            definition.passengerPool = new[] { joining };
+            definition.stops[2].boardingChance = 0f;
+            definition.stops[3].fixedSpecialEvent = null;
+            definition.stops[3].fixedEncounter = encounter;
+            definition.enemyEncounterCount = 2;
             yield return StartVoyageWithLegacyPassenger(104);
-            yield return WaitFor(() => AtEvent(1) && LiveEnemies().Length > 0, "the passenger reacts to an attack");
-            QuiesceActors();
-            Assert.That(controller.AlarmProfile, Is.SameAs(escort));
-            Assert.That(controller.AlarmDialogue, Does.Contain("哎哎"));
-            MethodInfo board = typeof(VoyageController).GetMethod("BoardPassenger", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(board.Invoke(controller, new object[] { joining, 4, false }), Is.Not.Null);
-            typeof(VoyageController).GetMethod("BeginPassengerAlarm", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(controller, null);
-            QuiesceActors();
-            float started = Time.time;
-            Transform sea = GameObject.Find("Environment/Sea Motion").transform;
-            Vector3 seaPosition = sea.localPosition;
-            yield return WaitFor(() => controller.AlarmProfile == joining, "the next passenger's reaction");
-            Assert.That(controller.AlarmDialogue, Does.Contain("把船补好"));
-            Assert.That(Time.time - started, Is.GreaterThanOrEqualTo(4f));
-            Assert.That(Time.timeScale, Is.EqualTo(1f));
-            Assert.That(controller.Phase, Is.EqualTo(VoyagePhase.Event));
-            Assert.That(sea.localPosition, Is.Not.EqualTo(seaPosition));
-            Assert.That(LiveEnemies(), Has.Length.EqualTo(2));
+            yield return WaitFor(() => controller.AwaitingStoryDialogue, "first encounter dialogue");
+            string firstReaction = controller.StoryDialogueLine;
+            Assert.That(firstReaction, Does.StartWith(escort.displayName + "：").And.Contain("头一回"));
+            Assert.That(controller.ContinueStoryDialogue(), Is.True);
+            Assert.That(controller.StoryDialogueLine, Does.StartWith("兔子船长："));
+            yield return new WaitForSeconds(0.24f);
+            Assert.That(controller.Phase, Is.EqualTo(VoyagePhase.Sailing));
+            Assert.That(Object.FindObjectsOfType<WaveBubbles>(), Is.Empty);
+            Assert.That(LiveEnemies(), Is.Empty);
+            Assert.That(controller.ContinueStoryDialogue(), Is.True);
+            yield return VerifyCombatWaves(1);
+            yield return WaitFor(() => controller.AwaitingStoryDialogue, "second encounter dialogue");
+            Assert.That(store.LoadCheckpoint(definition.id).passengers.Single().encountersAboard, Is.EqualTo(1));
+            Assert.That(controller.StoryDialogueLine, Does.StartWith(escort.displayName + "：").And.Not.EqualTo(firstReaction));
+            Assert.That(controller.SkipStoryDialogue(), Is.True);
+            yield return WaitFor(() => AtEvent(3) && LiveEnemies().Length > 0, "combat after skipping");
         }
 
         [UnityTest]
@@ -821,6 +830,8 @@ namespace Ferryman.Tests
             while (!condition())
             {
                 QuiesceActors();
+                if (controller != null && controller.AwaitingStoryDialogue)
+                    controller.SkipStoryDialogue();
                 if (controller != null && controller.Phase == VoyagePhase.Error)
                     Assert.Fail("Waiting for " + description + ": " + DescribeState());
                 if (Time.realtimeSinceStartup >= until)

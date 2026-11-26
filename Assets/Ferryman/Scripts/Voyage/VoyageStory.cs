@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using Ferryman.Characters;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Ferryman.Voyage
 {
@@ -21,22 +22,47 @@ namespace Ferryman.Voyage
 
         public int StoryRound { get; private set; }
         public bool AwaitingStoryDeparture => ActiveRun && Phase == VoyagePhase.Island && storyPortReady && !advanceStoryPort
-            && !HasStoryDialogue;
-        public bool HasStoryDialogue => ActiveRun && !string.IsNullOrEmpty(StoryFarewell);
-        public bool AwaitingStoryDialogue => HasStoryDialogue && storyDialogueLines.Length > 0;
+            && !AwaitingStoryDialogue;
+        public bool AwaitingStoryDialogue => ActiveRun && storyDialogueLines.Length > 0;
+        public string StoryDialogueLine => AwaitingStoryDialogue ? storyDialogueLines[storyDialogueIndex] : null;
         internal bool IsBossLeg => StoryRound == FinalStoryRound && StopIndex == BossStop;
         private int ExpeditionSeed => VoyageSaveStore.RouteSeed(seed, StoryRound);
 
-        public bool ContinueStoryDialogue()
+        public bool ContinueStoryDialogue() => AdvanceStoryDialogue(true);
+
+        public bool SkipStoryDialogue()
+        {
+            if (!AwaitingStoryDialogue)
+                return false;
+            ClearStoryDialogue();
+            VoyageAudio.Play(Sound.Confirm, 0.43f);
+            return true;
+        }
+
+        internal CrewDefinition FindDialogueProfile(string name)
+        {
+            string id = name switch
+            {
+                "枪手猴" => MonkeyId,
+                "神枪手猫头鹰" => OwlId,
+                "捻缝师水獭" => "caulker-otter",
+                _ => null
+            };
+            return definition.passengerPool.Concat(definition.initialPassengers)
+                .Concat(definition.specialCompanions ?? Array.Empty<CrewDefinition>())
+                .FirstOrDefault(profile => profile != null && (profile.displayName == name
+                    || id != null && RelationProfileId(profile.id) == id));
+        }
+
+        private bool AdvanceStoryDialogue(bool playSound)
         {
             if (!AwaitingStoryDialogue)
                 return false;
             storyDialogueIndex++;
             if (storyDialogueIndex >= storyDialogueLines.Length)
                 ClearStoryDialogue();
-            else
-                StoryFarewell = storyDialogueLines[storyDialogueIndex];
-            VoyageAudio.Play(Sound.Confirm, 0.43f);
+            if (playSound)
+                VoyageAudio.Play(Sound.Confirm, 0.43f);
             return true;
         }
 
@@ -44,8 +70,7 @@ namespace Ferryman.Voyage
         {
             storyDialogueLines = lines.Where(line => !string.IsNullOrEmpty(line)).ToArray();
             storyDialogueIndex = 0;
-            StoryFarewell = storyDialogueLines.FirstOrDefault();
-            if (StoryFarewell != null)
+            if (storyDialogueLines.Length > 0)
                 VoyageAudio.Play(Sound.Dialogue, 0.51f);
         }
 
@@ -53,7 +78,6 @@ namespace Ferryman.Voyage
         {
             storyDialogueLines = Array.Empty<string>();
             storyDialogueIndex = 0;
-            StoryFarewell = null;
         }
 
         private IEnumerator ShowStoryConversation(params string[] lines)
@@ -71,9 +95,10 @@ namespace Ferryman.Voyage
             {
                 (1, 0) => new[]
                 {
-                    "兔子船长：票价写好了，备用木板也数过了。今天先把第一趟平安跑完。",
-                    "码头阿姨：外海这几天不太安生。别光顾着开枪，船漏了就先补，甲板上的炸弹也别留。",
-                    "兔子船长：知道啦。乘客是来坐船的，我得把他们好好送到岸上。"
+                    "码头阿姨：小船长，你的价目牌贴倒了。头回载客，紧张也正常。",
+                    "兔子船长：我练了三遍鸣笛，还是把牌贴倒了。幸好备用木板没数错。",
+                    "码头阿姨：外海最近常有船带着破网回来。玉米枪保船，萝卜刀清甲板，漏水了就赶紧补。",
+                    "兔子船长：日志第一页先写上到站时间。等第一个人平安下船，我再签名。"
                 },
                 (2, 0) => new[]
                 {
@@ -84,8 +109,8 @@ namespace Ferryman.Voyage
                 (3, 0) => new[]
                 {
                     "守港人：潮闸修好了，垃圾却一直往同一个黑影里聚。它正堵在终点港外面。",
-                    "兔子船长：今天最后一趟，先把大家送到岸上，再去处理它。",
-                    "守港人：把一路救过的人记在日志上。他们听见灯塔的号角，就会来帮你。"
+                    "兔子船长：昨天买船票的孩子还问我，下周能不能坐船去看姥姥。我答应给她留座了。",
+                    "守港人：灯塔会备好号角。你先照常送客。两短一长，所有来帮忙的人都知道往哪儿走。"
                 },
                 (1, 2) => new[]
                 {
@@ -95,9 +120,16 @@ namespace Ferryman.Voyage
                 },
                 (1, 6) => new[]
                 {
-                    "码头工：你船底刮下来的桶片上有港口货号。昨夜撞堤的东西也带这个号。",
-                    "兔子船长：所以它们把我们当成那种船了？难怪连载客的小船也拦。",
-                    "码头工：光说不是你没用。把废料带回来，它们看得见。"
+                    "码头工：这行浅印是港口货号。仓库换过货箱，这批旧桶早该送回收场了。",
+                    "兔子船长：我在礁缝里见过一样的号码。那只海怪一直挡在船和礁石之间。",
+                    "码头工：它从水底往上看，每条船都从这些桶漂来的方向驶进去。换成是我，也会守在礁口。",
+                    "兔子船长：那我在日志上记个货号，也记一下它拦船的位置。到终点港翻翻夜间巡检簿。"
+                },
+                (1, 10) => new[]
+                {
+                    "港口信使：老灯塔捎来一张纸，昨夜三次撞堤都赶在涨潮头上。第三次后，铁桶自己往外海跑。",
+                    "兔子船长：退潮该往另一头走。是什么东西在把桶拽回去？",
+                    "港口信使：夜里没看清。你到港后问值班的人，顺便看看堤脚留下的轮胎痕。"
                 },
                 (2, 6) => new[]
                 {
@@ -107,15 +139,24 @@ namespace Ferryman.Voyage
                 },
                 (2, 10) => new[]
                 {
-                    "守港人：灯塔看见一条灯笼鱼从你船边拉走了同伴，没再往甲板上开火。",
-                    "兔子船长：我只是割断了它身上的网。它还照出水底的废桶，让我收走。",
-                    "守港人：这比喊一百遍‘我们不是坏船’都管用。再往前，港口就看得见了。"
+                    "灯塔守望员：你的船靠锚休息时，有条灯笼鱼拖着同伴游过来。它尾巴一直拍同一个地方。",
+                    "兔子船长：是网绳卡住了。我趴下去用萝卜刀割断，吓得它一下钻进水里。",
+                    "灯塔守望员：它后来又回来了，绕着你捞上来的那只桶照了两圈。",
+                    "兔子船长：我把网和桶都留在舱里了。它下回再来，就知道这条船能把东西带走。"
                 },
                 (3, 6) => new[]
                 {
-                    "巡海员：外海的海怪越来越多，海鸥也一趟接一趟地搬东西。你船上还有多少能站脚的地方？",
-                    "兔子船长：石头和残骸能踢走，炸弹要先处理。把甲板腾出来，船员才有路去补漏。",
-                    "巡海员：等终点港的号角一响，能出海的船都会往你那边赶。撑到港口。"
+                    "巡海员：产卵礁那边的海怪退了。它们守的那群小鱼，正被黑影卷起的浪往外推。",
+                    "兔子船长：只把那堆东西打散，一个潮头过后，岂不是还得漂回礁里？",
+                    "巡海员：码头备了粗拖缆和回收袋。记得给船尾腾条路，打散之后还要把东西带回去。"
+                },
+                (3, 10) => new[]
+                {
+                    "灯塔守望员：收到信号了。潮闸开着，西侧留了一条活水道，灯笼鱼在那里一直亮着灯。",
+                    "兔子船长：上回我顺着它的灯找桶。这次顺着它的灯，把小鱼和废料分开。",
+                    deliveredStoryProfiles.Count > 0
+                        ? "灯塔守望员：你送到港的朋友已经来领工具了。等乘客都下船，他们会回来帮你。"
+                        : "灯塔守望员：港务班把回收袋留给了海鸥。你照顾好甲板，岸上会接住拖缆。"
                 },
                 (1, DestinationStop) => new[]
                 {
@@ -123,7 +164,8 @@ namespace Ferryman.Voyage
                     deliveredStoryProfiles.Contains(MonkeyId)
                         ? "枪手猴：我妹说，昨晚的黑影会把废桶吸回身上。撞堤的不是一条鱼，是一整堆会动的垃圾！"
                         : "守港人：灯塔的巡检记录写着，黑影会把废桶吸回身上。撞堤的是一整堆会动的垃圾。",
-                    "兔子船长：难怪海怪总从垃圾漂来的方向攻击。明天我想再看看，不能让这条路一直关着。"
+                    "守港人：这里还留着一排船票。终点港一封，想回家的人就得等潮，绕两座岛。",
+                    "兔子船长：日志上先记‘准时到了’。明早空船回来，我想看看那些桶最后漂到哪儿。"
                 },
                 (2, DestinationStop) => new[]
                 {
@@ -201,10 +243,8 @@ namespace Ferryman.Voyage
 
         private IEnumerator ShowSeaConversation()
         {
-            if (StoryRound <= 0 || IsBossLeg || HasStoryDialogue)
+            if (StoryRound <= 0 || IsBossLeg || AwaitingStoryDialogue)
                 yield break;
-            string chatterRunId = runId;
-            int chatterStop = StopIndex;
             string[] lines = (StoryRound, (StopIndex / 2) % 3) switch
             {
                 (1, 0) when HasStoryCrew(MonkeyId) => new[]
@@ -255,15 +295,19 @@ namespace Ferryman.Voyage
                     "兔子船长：等下一站靠岸，我得问问这些废桶原来是谁家的。"
                 }
             };
-            foreach (string line in lines)
+            BeginStoryConversation(lines);
+            // A skip or an encounter can replace this conversation while the timer is waiting.
+            string[] conversation = storyDialogueLines;
+            while (ActiveRun && conversation == storyDialogueLines)
             {
-                if (!ActiveRun || Phase != VoyagePhase.Sailing || runId != chatterRunId || StopIndex != chatterStop)
-                    yield break;
-                StoryFarewell = line;
-                yield return WaitActive(3.5f);
+                int line = storyDialogueIndex;
+                float until = Time.time + 3.5f;
+                while (ActiveRun && (Time.time < until || Time.timeScale == 0f)
+                    && conversation == storyDialogueLines && line == storyDialogueIndex)
+                    yield return null;
+                if (ActiveRun && conversation == storyDialogueLines && line == storyDialogueIndex)
+                    AdvanceStoryDialogue(false);
             }
-            if (Phase == VoyagePhase.Sailing && runId == chatterRunId && StopIndex == chatterStop)
-                ClearStoryDialogue();
         }
 
         private bool HasStoryCrew(string id) => vessel != null && vessel.GetComponentsInChildren<Passenger>()
@@ -314,9 +358,66 @@ namespace Ferryman.Voyage
                 return;
             VoyageAudio.Play(Sound.AllyHorn, 0.74f);
             foreach (string id in deliveredStoryProfiles.OrderBy(id => id, StringComparer.Ordinal))
-                SpawnCrew(FindStoryProfile(id), DestinationStop);
-            RefreshPassengerConflict();
+                waitingFinalAllies.Add(FindStoryProfile(id));
+            PlaceFinalAllies();
             VoyageAudio.Play(Sound.SeaAlly, 0.62f, vessel.Boat.Deck.transform.position);
+        }
+
+        private IEnumerator ShowFinalReturn()
+        {
+            // The saved stop remains the boss entrance until settlement succeeds.
+            waitingFinalAllies.Clear();
+            CleanupHazards(true);
+            vessel.Player.BlockMouseAttacks = true;
+            Phase = VoyagePhase.Sailing;
+            Message = "回收水道里的残骸";
+            VoyageAudio.Play(Sound.Gull, 0.55f);
+            yield return ShowStoryConversation(
+                "兔子船长：黑影散了。灯笼鱼把废料往船尾引，那只寄居蟹在帮它扯开废网。",
+                deliveredStoryProfiles.Contains(OwlId)
+                    ? "神枪手猫头鹰：冷雾里有水母的蓝光，鱼群都在那边。我的潮线图上标了另一条拖运水道。"
+                    : "灯塔守望员：冷雾里有水母的蓝光，鱼群都在那边。你们沿灯塔照的另一道光拖回来。",
+                "灯塔守望员：海鸥把回收袋送到船尾了。先收拢大件，碎片让水流带进袋口。",
+                deliveredStoryProfiles.Contains(RhinoId)
+                    ? "维修师犀牛：袋口扎好了，拖缆挂船尾。我扶着绳，你让船慢慢吃上力。"
+                    : "兔子船长：袋口扎好了。把拖缆系在船尾的铁环上，慢慢起步。"
+            );
+            if (!ActiveRun)
+                yield break;
+
+            if (specialCompanions.Count > 0)
+                yield return ShowStoryConversation(SpecialCompanionFarewells());
+            if (!ActiveRun)
+                yield break;
+
+            Message = "沿清出的水道返港";
+            yield return Sail(definition.sailingSeconds * 0.5f);
+            vessel.SetActionsAllowed(false, true);
+            Phase = VoyagePhase.Leaving;
+            yield return AnimateExit();
+            if (!ActiveRun)
+                yield break;
+
+            Phase = VoyagePhase.Transition;
+            StopIndex = DestinationStop;
+            VoyageStop port = ActiveStops[DestinationStop];
+            if (!TryPresentStop(port))
+                yield return SceneManager.LoadSceneAsync(port.sceneName);
+            Phase = VoyagePhase.Entering;
+            yield return AnimateEntry();
+            if (!ActiveRun)
+                yield break;
+
+            vessel.SetActionsAllowed(true);
+            Phase = VoyagePhase.Island;
+            Message = "航线重新开放";
+            VoyageAudio.Play(Sound.Dock, 0.64f);
+            yield return ShowStoryConversation(
+                "港务师傅：拖缆接稳了！网、铁桶和塑料分开卸。明天起，返航的船都来这里登记回收。",
+                "码头孩子：船长，今天我能坐船去看姥姥了吗？我把那张票留到现在。",
+                "兔子船长：能。我们刚从那条水道回来，灯笼鱼一路给船照到了礁口。",
+                "兔子船长：来，上船吧。我给你留了靠外的位置。今天这条路好走。"
+            );
         }
     }
 }

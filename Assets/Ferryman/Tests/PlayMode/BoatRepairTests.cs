@@ -157,7 +157,7 @@ namespace Ferryman.Tests
             yield return RepairFor(0.12f);
             Assert.That(high.Progress - previousHigh, Is.EqualTo(closer.Progress).Within(0.001f),
                 "Each parallel task should receive the full repair speed.");
-            Assert.That(closer.Progress, Is.GreaterThan(5f));
+            Assert.That(closer.Progress, Is.GreaterThanOrEqualTo(player.RepairSpeed * 0.12f - 0.01f));
             Assert.That(ProgressBar(closer).activeSelf, Is.True);
             Assert.That(ProgressBar(high).activeSelf, Is.True);
             player.Move(Vector2.right);
@@ -319,7 +319,8 @@ namespace Ferryman.Tests
 
             body.position = landing;
             Assert.That(player.TryRepair(0.5f), Is.True);
-            Assert.That(point.Progress, Is.EqualTo(25f));
+            float repaired = player.RepairSpeed * 0.5f;
+            Assert.That(point.Progress, Is.EqualTo(repaired));
             player.StopRepairing();
 
             BoatHealth.State checkpoint = boat.CaptureState();
@@ -329,15 +330,15 @@ namespace Ferryman.Tests
                 Is.LessThan(0.0001f));
             var restored = boat.RepairPoints.Single(item => item.Cell == bowCell);
             Assert.That(Vector2.Distance(restored.transform.position, landing), Is.LessThan(0.0001f));
-            Assert.That(restored.Progress, Is.EqualTo(25f));
+            Assert.That(restored.Progress, Is.EqualTo(repaired));
 
             BoatHealth.PointState legacy = checkpoint.points.Single(item => item.cell == oldEdge);
             legacy.cell = new Vector2Int(11, 0);
             legacy.localPosition = new Vector2(6f, -2.5f);
-            legacy.progress = 15f;
+            legacy.progress = repaired + 1f;
             Assert.That(deck.ContainsFloor(deck.transform.TransformPoint(legacy.localPosition)), Is.False);
             boat.RestoreState(checkpoint);
-            var relocated = boat.RepairPoints.Single(item => item.Progress == 15f);
+            var relocated = boat.RepairPoints.Single(item => item.Progress == legacy.progress);
             Assert.That(deck.HasClearFloor(relocated.transform.position, new Vector2(0.92f, 0.72f)), Is.True);
         }
 
