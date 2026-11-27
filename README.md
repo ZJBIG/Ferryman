@@ -4,8 +4,8 @@
 
 ## 打开试玩
 
-- **Windows 64 位**　解压整个 ZIP 后双击 `Ferryman.exe`。[下载 Windows 包](https://github.com/ZJBIG/Ferryman/releases/download/v0.3-playtest.2/Ferryman-Windows-x64.zip)
-- **Web / HTML5**　将解压内容部署到静态网站，或在解压目录运行 `python -m http.server 8000` 后访问 `localhost:8000`。[下载 WebGL 包](https://github.com/ZJBIG/Ferryman/releases/download/v0.3-playtest.2/Ferryman-WebGL.zip)
+- **Windows 64 位**　下载后双击 EXE，游戏会自动解包并启动。[下载单文件 EXE](https://github.com/ZJBIG/Ferryman/releases/download/v0.3-playtest.3/Ferryman-Windows-x64.exe)
+- **Web / HTML5**　下载后双击 HTML，用最新版 Edge 或 Chrome 打开。[下载单文件 HTML](https://github.com/ZJBIG/Ferryman/releases/download/v0.3-playtest.3/Ferryman-WebGL.html)
 - **开发项目（Unity）**　克隆仓库或从 GitHub 的 `Code → Download ZIP` 下载源码。在 Unity Hub 中添加项目根目录，使用 **Unity 2022.3.62f3c1** 打开，双击 [main 场景](Assets/Ferryman/Scenes/main.unity)，点击顶部 ▶ Play。
 
 ![甲板上的物品与维修](Docs/Images/Gameplay.png)

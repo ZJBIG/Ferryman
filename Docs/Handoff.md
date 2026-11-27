@@ -53,6 +53,6 @@ New-Item -ItemType Directory -Path '.local' -Force | Out-Null
 & $ferrymanUnity -batchmode -projectPath . -buildTarget WebGL -executeMethod Ferryman.Editor.PrototypeValidation.BuildWeb -quit -logFile .local/build-web.log | Out-Null
 ```
 
-Windows 产物位于 `.local/build-prototype`，WebGL 位于 `.local/build-web`。WebGL 通过静态 HTTP 服务器运行，浏览器存档用 IndexedDB 同步。打包时把 `Assets/Ferryman/Resources/Voyage/NotoSansSC-OFL.txt` 附在 ZIP 中。
+Windows 原始构建位于 `.local/build-prototype`，WebGL 原始构建位于 `.local/build-web`。完成两项构建后，运行 `python Tools/package-portable.py all`，将 `.local/portable-release` 下的单文件 EXE 和 HTML 上传到 GitHub Releases。EXE 将游戏解包到独立的系统临时目录，正常退出后清理。HTML 内嵌 WebGL 数据，可直接用 Edge 或 Chrome 打开。两个文件均附带 Noto Sans SC 字体许可证。
 
 特殊岗位能力和未交付人物、武器、特效继续等待定义或素材；独立岛屿地面交付后可替换，现行尺寸与挂点以 ArtIntegration 为准。

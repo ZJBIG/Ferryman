@@ -303,7 +303,7 @@ namespace Ferryman.Editor
             WebGLCompressionFormat compression = PlayerSettings.WebGL.compressionFormat;
             try
             {
-                // Make the ZIP deployable to a static host with standard MIME types.
+                // The single HTML file compresses the embedded build files.
                 PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
                 BuildPlayer(BuildTarget.WebGL, output, "web");
                 string index = Path.Combine(output, "index.html");
